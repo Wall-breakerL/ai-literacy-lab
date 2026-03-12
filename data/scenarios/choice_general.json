@@ -1,0 +1,7 @@
+{
+  "id": "choice_general",
+  "profileTags": ["general"],
+  "visibleTask": "在若干选项中做一个选择，例如：选方案、选工具、选出行方式等。在对话中说明你的需求即可。",
+  "hiddenChecks": ["是否说明约束或偏好", "是否要求重新比较", "是否核验信息", "是否注意边界"],
+  "hiddenProbes": ["ambiguity", "revision", "verification", "boundary"]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "message_general",
+  "profileTags": ["general"],
+  "visibleTask": "规划一次旅行方案（如目的地、行程、预算等）。在对话中说明你的需求与偏好即可。",
+  "hiddenChecks": ["是否说明时间/人数/偏好等约束", "是否要求调整行程或方案", "是否核验信息或追问细节", "是否注意安全与边界"],
+  "hiddenProbes": ["ambiguity", "revision", "verification", "boundary"]
+}
