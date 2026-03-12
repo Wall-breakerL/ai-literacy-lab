@@ -207,7 +207,7 @@ export async function callJudgeApi(
       },
       body: JSON.stringify(body),
     });
-    const data = (await res.json()) as Record<string, unknown>;
+    const data = (await res.json()) as { choices?: unknown[] };
     if (process.env.DEBUG_JUDGE === "1") {
       if (!res.ok) {
         console.error("[Judge] API not ok:", res.status, JSON.stringify(data).slice(0, 500));
