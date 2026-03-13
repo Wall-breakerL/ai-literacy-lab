@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { DIMENSION_KEYS, DIMENSION_LABELS } from "@/lib/constants";
+import { DIMENSION_KEYS, DIMENSION_LABELS, RUBRIC_WEIGHTS } from "@/lib/constants";
+import { copy } from "@/lib/copy";
 
 const RESULT_STORAGE_KEY = "ai-literacy-last-result";
 
@@ -41,21 +42,11 @@ export default function ResultPage() {
 
   if (data === null) {
     return (
-      <main style={{ padding: "2rem", maxWidth: 560, margin: "0 auto" }}>
-        <h1 style={{ marginBottom: "0.5rem" }}>评估结果</h1>
-        <p style={{ color: "#555" }}>
-          未找到本次评估数据，请从首页重新开始。
-        </p>
-        <Link
-          href="/"
-          style={{
-            display: "inline-block",
-            marginTop: "1rem",
-            color: "#111",
-            textDecoration: "underline",
-          }}
-        >
-          返回首页
+      <main className="page-main">
+        <h1 style={{ marginBottom: "var(--space-sm)", fontSize: "var(--text-2xl)", fontWeight: 700 }}>{copy.result.title}</h1>
+        <p style={{ color: "var(--color-text-muted)" }}>{copy.result.noData}</p>
+        <Link href="/" style={{ marginTop: "var(--space-md)", display: "inline-block", color: "var(--color-primary)", textDecoration: "underline" }}>
+          {copy.result.backHome}
         </Link>
       </main>
     );
@@ -68,26 +59,25 @@ export default function ResultPage() {
   const flags = data.flags ?? [];
 
   return (
-    <main style={{ padding: "2rem", maxWidth: 560, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: "0.5rem" }}>评估结果</h1>
+    <main className="page-main">
+      <h1 style={{ marginBottom: "var(--space-sm)", fontSize: "var(--text-2xl)", fontWeight: 700 }}>{copy.result.title}</h1>
 
       <section
+        className="card"
         style={{
-          padding: "1rem",
-          background: "#f5f5f5",
-          borderRadius: 8,
-          marginBottom: "1.5rem",
+          padding: "var(--space-md)",
+          marginBottom: "var(--space-lg)",
         }}
       >
-        <p style={{ marginBottom: "0.25rem", color: "#555" }}>总分（加权）</p>
-        <p style={{ fontSize: "1.75rem", fontWeight: 700 }}>
+        <p style={{ marginBottom: "var(--space-xs)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>{copy.result.totalLabel}</p>
+        <p style={{ fontSize: "var(--text-2xl)", fontWeight: 700 }}>
           {data.weightedScore ?? "—"}
         </p>
-        <p style={{ fontSize: "0.85rem", color: "#888" }}>满分 100，按五维权重换算</p>
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-subtle)" }}>{copy.result.totalHint}</p>
       </section>
 
-      <section style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>五维得分</h2>
+      <section style={{ marginBottom: "var(--space-lg)" }}>
+        <h2 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.result.dimensionsTitle}</h2>
         {dimensionsRich ? (
           <ul style={{ listStyle: "none" }}>
             {DIMENSION_KEYS.map((key) => {
@@ -99,18 +89,21 @@ export default function ResultPage() {
                 <li
                   key={key}
                   style={{
-                    padding: "0.75rem 0",
-                    borderBottom: "1px solid #eee",
+                    padding: "var(--space-sm) 0",
+                    borderBottom: "1px solid var(--color-border)",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: reason ? "0.25rem" : 0 }}>
-                    <span>{DIMENSION_LABELS[key]}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: reason ? "var(--space-xs)" : 0 }}>
+                    <span>
+                      {DIMENSION_LABELS[key]}
+                      <span style={{ color: "var(--color-text-subtle)", fontWeight: 400, marginLeft: "var(--space-xs)" }}>（{RUBRIC_WEIGHTS[key]}%）</span>
+                    </span>
                     <span style={{ fontWeight: 600 }}>{level != null ? level : "—"}</span>
                   </div>
-                  {reason && <p style={{ fontSize: "0.85rem", color: "#666", margin: 0 }}>{reason}</p>}
+                  {reason && <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", margin: 0 }}>{reason}</p>}
                   {evList?.length > 0 && (
-                    <p style={{ fontSize: "0.8rem", color: "#888", marginTop: "0.25rem" }}>
-                      证据：{evList.join("；")}
+                    <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-subtle)", marginTop: "var(--space-xs)" }}>
+                      {copy.result.evidenceLabel}：{evList.join("；")}
                     </p>
                   )}
                 </li>
@@ -120,17 +113,20 @@ export default function ResultPage() {
         ) : (
           <ul style={{ listStyle: "none" }}>
             {DIMENSION_KEYS.map((key) => (
-              <li
-                key={key}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "0.5rem 0",
-                  borderBottom: "1px solid #eee",
-                }}
-              >
-                <span>{DIMENSION_LABELS[key]}</span>
+            <li
+              key={key}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "var(--space-sm) 0",
+                borderBottom: "1px solid var(--color-border)",
+              }}
+            >
+                <span>
+                  {DIMENSION_LABELS[key]}
+                  <span style={{ color: "var(--color-text-subtle)", fontWeight: 400, marginLeft: "var(--space-xs)" }}>（{RUBRIC_WEIGHTS[key]}%）</span>
+                </span>
                 <span style={{ fontWeight: 600 }}>{scores[key] != null ? scores[key] : "—"}</span>
               </li>
             ))}
@@ -139,9 +135,9 @@ export default function ResultPage() {
       </section>
 
       {flags.length > 0 && (
-        <section style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>标记</h2>
-          <ul style={{ paddingLeft: "1.25rem", color: "#c00", fontSize: "0.9rem" }}>
+        <section style={{ marginBottom: "var(--space-lg)" }}>
+          <h2 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.result.flagsTitle}</h2>
+          <ul style={{ paddingLeft: "1.25rem", color: "var(--color-text)", fontSize: "var(--text-sm)" }}>
             {flags.map((f, i) => (
               <li key={i}>{f}</li>
             ))}
@@ -150,9 +146,9 @@ export default function ResultPage() {
       )}
 
       {!dimensionsRich && Object.keys(evidence).length > 0 && (
-        <section style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>证据（事件）</h2>
-          <ul style={{ paddingLeft: "1.25rem", color: "#555", fontSize: "0.9rem" }}>
+        <section style={{ marginBottom: "var(--space-lg)" }}>
+          <h2 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.result.evidenceLabel}（事件）</h2>
+          <ul style={{ paddingLeft: "1.25rem", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
             {DIMENSION_KEYS.filter((k) => evidence[k]?.length).map((key) => (
               <li key={key} style={{ marginBottom: "0.25rem" }}>
                 <strong>{DIMENSION_LABELS[key]}</strong>：{evidence[key].join("、")}
@@ -163,9 +159,9 @@ export default function ResultPage() {
       )}
 
       {suggestions.length > 0 && (
-        <section style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>建议</h2>
-          <ul style={{ paddingLeft: "1.25rem", color: "#333" }}>
+        <section style={{ marginBottom: "var(--space-lg)" }}>
+          <h2 style={{ fontSize: "var(--text-base)", fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.result.suggestionsTitle}</h2>
+          <ul style={{ paddingLeft: "1.25rem", color: "var(--color-text)" }}>
             {suggestions.map((s, i) => (
               <li key={i} style={{ marginBottom: "0.25rem" }}>
                 {s}
@@ -175,30 +171,30 @@ export default function ResultPage() {
         </section>
       )}
 
-      <section style={{ marginBottom: "1.5rem" }}>
+      <section style={{ marginBottom: "var(--space-lg)" }}>
         <button
           type="button"
           onClick={() => setShowMeta((v) => !v)}
           style={{
             background: "none",
             border: "none",
-            color: "#666",
-            fontSize: "0.9rem",
+            color: "var(--color-text-muted)",
+            fontSize: "var(--text-sm)",
             textDecoration: "underline",
             cursor: "pointer",
           }}
         >
-          {showMeta ? "收起" : "关于本次评估（版本信息）"}
+          {showMeta ? copy.result.metaCollapse : copy.result.metaToggle}
         </button>
         {showMeta && (
           <dl
             style={{
-              marginTop: "0.5rem",
-              padding: "0.75rem",
-              background: "#f9f9f9",
-              borderRadius: 6,
-              fontSize: "0.85rem",
-              color: "#666",
+              marginTop: "var(--space-sm)",
+              padding: "var(--space-sm)",
+              background: "var(--color-surface-muted)",
+              borderRadius: "var(--radius-sm)",
+              fontSize: "var(--text-sm)",
+              color: "var(--color-text-muted)",
             }}
           >
             <dt style={{ fontWeight: 600 }}>rubricVersion</dt>
@@ -217,17 +213,8 @@ export default function ResultPage() {
         )}
       </section>
 
-      <Link
-        href="/profile"
-        style={{
-          display: "inline-block",
-          padding: "0.6rem 1.2rem",
-          background: "#111",
-          color: "#fff",
-          borderRadius: 6,
-        }}
-      >
-        再测一次
+      <Link href="/profile" className="btn-primary">
+        {copy.result.cta}
       </Link>
     </main>
   );

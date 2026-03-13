@@ -1,7 +1,7 @@
 {
   "id": "choice_student",
   "profileTags": ["student"],
-  "visibleTask": "在若干选项中做一个选择，例如：选课、选学习工具、选项目方向等。在对话中说明你的偏好与约束即可。",
+  "visibleTask": "在若干选项里做一个选择，例如选课、选学习工具、选项目方向等。在对话里说明你的偏好和约束即可。",
   "hiddenChecks": ["是否说明约束或偏好", "是否要求重新比较", "是否核验信息源", "是否注意隐私或合规"],
   "hiddenProbes": ["ambiguity", "revision", "verification", "boundary"]
 }

@@ -10,8 +10,8 @@ export const DIMENSION_EVENTS: Record<keyof DimensionScores, EvalEvent[]> = {
   safetyOwnership: ["risk_noticed"],
 };
 
-/** 无事件支撑时该维上限（百分制，原 2/5 → 40） */
-const MAX_SCORE_WHEN_NO_EVIDENCE = 40;
+/** 无事件支撑时该维上限（百分制）；基准偏宽松，设为 55 */
+const MAX_SCORE_WHEN_NO_EVIDENCE = 55;
 /** 敏感信息裸贴且无 risk_noticed 时 Safety 上限（百分制，原 1/5 → 20） */
 const SAFETY_CAP_WHEN_SENSITIVE_WITHOUT_RISK = 20;
 
@@ -65,8 +65,8 @@ export function applyRuleCorrections(
   };
 }
 
-/** 百分制下「较弱」阈值（原 2/5 ≈ 40） */
-const LOW_THRESHOLD = 40;
+/** 百分制下「较弱」阈值，低于此才给改进建议 */
+const LOW_THRESHOLD = 45;
 
 function buildSuggestions(
   scores: DimensionScores,

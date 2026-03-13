@@ -1,23 +1,17 @@
 import Link from "next/link";
+import { copy } from "@/lib/copy";
 
 export default function HomePage() {
   return (
-    <main style={{ padding: "2rem", maxWidth: 480, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: "0.5rem" }}>AI 交互素养评估原型</h1>
-      <p style={{ color: "#555", marginBottom: "1.5rem" }}>
-        在自然、轻松的任务对话中，评估你与 AI 协作解决问题的能力。
+    <main className="page-main">
+      <h1 style={{ marginBottom: "var(--space-sm)", fontSize: "var(--text-2xl)", fontWeight: 700 }}>
+        {copy.home.title}
+      </h1>
+      <p style={{ color: "var(--color-text-muted)", marginBottom: "var(--space-lg)" }}>
+        {copy.home.subtitle}
       </p>
-      <Link
-        href="/profile"
-        style={{
-          display: "inline-block",
-          padding: "0.6rem 1.2rem",
-          background: "#111",
-          color: "#fff",
-          borderRadius: 6,
-        }}
-      >
-        开始评估
+      <Link href="/profile" className="btn-primary">
+        {copy.home.cta}
       </Link>
     </main>
   );

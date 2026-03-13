@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
+import { Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
 
+const notoSans = Noto_Sans_SC({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
 export const metadata: Metadata = {
-  title: "AI 交互素养评估原型",
-  description: "在自然对话中评估与 Agent 协作解决问题的能力",
+  title: "AI 交互素养评估",
+  description: "在自然对话中评估与 AI 协作解决问题的能力",
 };
 
 export default function RootLayout({
@@ -12,8 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
-      <body>{children}</body>
+    <html lang="zh-CN" className={notoSans.variable}>
+      <body className={notoSans.className}>
+        <div className="body-bg" aria-hidden="true">
+          <span className="bg-orb-3" />
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

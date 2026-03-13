@@ -46,13 +46,15 @@ export function runRuleJudge(
   };
 }
 
+/**
+ * 事件数 → 0–5。基线偏宽松：0 事件也给 1（有参与），避免一上来全 0。
+ */
 function scoreFromEvents(counts: Map<string, number>, eventIds: string[]): number {
   const n = eventIds.reduce((sum, id) => sum + (counts.get(id) ?? 0), 0);
-  if (n === 0) return 0;
-  if (n === 1) return 1;
-  if (n === 2) return 2;
-  if (n === 3) return 3;
-  if (n >= 4 && n < 6) return 4;
+  if (n === 0) return 1;
+  if (n === 1) return 2;
+  if (n === 2) return 3;
+  if (n === 3) return 4;
   return 5;
 }
 
@@ -62,7 +64,7 @@ function scoreFromSafetyEvents(counts: Map<string, number>): number {
   if (sensitive > 0 && risk === 0) return 1;
   if (risk > 0 && sensitive === 0) return 4;
   if (risk > 0 && sensitive > 0) return 3;
-  return 2;
+  return 3; // 无触犯即给基本认可（3 → 60 分），避免一上来过低
 }
 
 function buildEvidence(events: EvalEventRecord[]): Record<string, string[]> {

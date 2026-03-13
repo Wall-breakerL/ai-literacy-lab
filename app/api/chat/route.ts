@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getScenarioById } from "@/lib/scenario-loader";
 import { callChatApi } from "@/lib/llm/chat";
 import { parseAssistantResponse } from "@/lib/parse-think";
+import type { UserProfile } from "@/lib/types";
 
 const MOCK_REPLIES = [
   "好的，我根据你的需求整理了一下，你可以看看这样写是否合适。",
@@ -17,9 +18,10 @@ function getMockReply(turnIndex: number): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, scenarioId } = body as {
+    const { messages, scenarioId, profile } = body as {
       messages: { role: string; content: string }[];
       scenarioId?: string;
+      profile?: UserProfile;
     };
 
     if (!Array.isArray(messages)) {
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
         (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
     );
 
-    const raw = await callChatApi(typedMessages, scenarioId, scenario);
+    const raw = await callChatApi(typedMessages, scenarioId, scenario, profile ?? null);
     const rawContent = raw?.trim() || getMockReply(messages.length);
     const { content, thinking } = parseAssistantResponse(rawContent);
 

@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import type { UserProfile, ChatMessage, Scenario } from "@/lib/types";
 import { SCENARIO_IDS } from "@/lib/constants";
+import { copy } from "@/lib/copy";
 
 const markdownStyles: React.CSSProperties = {
   margin: 0,
@@ -41,12 +42,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         style={{
           display: "inline-block",
           padding: "0.6rem 0.85rem",
-          borderRadius: 8,
+          borderRadius: "var(--radius-md)",
           maxWidth: "85%",
-          background: isUser ? "#111" : "#eee",
-          color: isUser ? "#fff" : "#111",
+          background: isUser ? "var(--color-primary)" : "var(--color-surface-muted)",
+          color: isUser ? "var(--color-on-primary)" : "var(--color-text)",
           textAlign: "left",
-          fontSize: "0.9375rem",
+          fontSize: "var(--text-sm)",
         }}
       >
         <ReactMarkdown
@@ -80,25 +81,25 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             style={{
               background: "none",
               border: "none",
-              color: "#666",
-              fontSize: "0.8rem",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--text-sm)",
               cursor: "pointer",
               padding: 0,
               textDecoration: "underline",
             }}
           >
-            {showThinking ? "收起思考过程" : "展开思考过程"}
+            {showThinking ? copy.chat.collapseThinking : copy.chat.expandThinking}
           </button>
           {showThinking && (
             <div
-              style={{
-                marginTop: "0.25rem",
-                padding: "0.5rem",
-                background: "#f9f9f9",
-                borderRadius: 6,
-                fontSize: "0.8rem",
-                color: "#555",
-              }}
+            style={{
+              marginTop: "var(--space-xs)",
+              padding: "var(--space-sm)",
+              background: "var(--color-surface-muted)",
+              borderRadius: "var(--radius-sm)",
+              fontSize: "var(--text-sm)",
+              color: "var(--color-text-muted)",
+            }}
             >
               <ReactMarkdown>{message.thinking}</ReactMarkdown>
             </div>
@@ -169,8 +170,8 @@ export default function ChatPage() {
 
   const visibleTask =
     scenario === undefined
-      ? "加载中…"
-      : scenario?.visibleTask ?? "加载失败，请刷新重试";
+      ? copy.chat.loading
+      : scenario?.visibleTask ?? copy.chat.loadFailed;
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -189,6 +190,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           messages: [...messages, userMessage],
           scenarioId,
+          profile,
         }),
       });
       const data = await res.json();
@@ -199,7 +201,7 @@ export default function ChatPage() {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "抱歉，暂时无法回复，请稍后再试。" },
+        { role: "assistant", content: copy.chat.errorFallback },
       ]);
     } finally {
       setLoading(false);
@@ -240,109 +242,86 @@ export default function ChatPage() {
 
   if (!profile || !scenarioId) {
     return (
-      <main style={{ padding: "2rem", textAlign: "center" }}>
-        <p>正在跳转...</p>
+      <main className="page-main page-main--wide" style={{ textAlign: "center" }}>
+        <p style={{ color: "var(--color-text-muted)" }}>{copy.common.redirecting}</p>
       </main>
     );
   }
 
   return (
-    <main style={{ padding: "2rem", maxWidth: 640, margin: "0 auto" }}>
+    <main className="page-main page-main--wide">
       <div
+        className="card"
         style={{
-          padding: "1rem",
-          background: "#f5f5f5",
-          borderRadius: 8,
-          marginBottom: "1.5rem",
+          padding: "var(--space-md)",
+          marginBottom: "var(--space-lg)",
         }}
       >
-        <strong>本关任务</strong>
-        <p style={{ marginTop: "0.25rem" }}>{visibleTask}</p>
+        <strong style={{ fontSize: "var(--text-sm)" }}>{copy.chat.taskLabel}</strong>
+        <p style={{ marginTop: "var(--space-xs)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>{visibleTask}</p>
       </div>
 
       <div
+        className="card"
         style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
           minHeight: 280,
-          padding: "1rem",
-          marginBottom: "1rem",
+          padding: "var(--space-md)",
+          marginBottom: "var(--space-md)",
           display: "flex",
           flexDirection: "column",
         }}
       >
-        <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem" }}>
+        <div style={{ flex: 1, overflowY: "auto", marginBottom: "var(--space-md)" }}>
           {messages.length === 0 && (
-            <p style={{ color: "#888", fontSize: "0.9rem" }}>
-              在下方输入消息，与助手自然对话完成任务。
+            <p style={{ color: "var(--color-text-subtle)", fontSize: "var(--text-sm)" }}>
+              {copy.chat.taskPlaceholder}
             </p>
           )}
           {messages.map((m, i) => (
             <MessageBubble key={i} message={m} />
           ))}
           {loading && (
-            <p style={{ color: "#888", fontSize: "0.9rem" }} className="typing-dots">
-              助手思考中<span>.</span><span>.</span><span>.</span>
+            <p style={{ color: "var(--color-text-subtle)", fontSize: "var(--text-sm)" }} className="typing-dots">
+              {copy.chat.loading}<span>.</span><span>.</span><span>.</span>
             </p>
           )}
         </div>
 
         <form onSubmit={handleSend}>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <input
               type="text"
-              placeholder="输入消息..."
+              placeholder={copy.chat.inputPlaceholder}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
               style={{
                 flex: 1,
-                padding: "0.5rem",
-                border: "1px solid #ccc",
-                borderRadius: 6,
+                padding: "var(--space-sm) var(--space-md)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--color-surface)",
               }}
             />
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: "0.5rem 1rem",
-                background: "#111",
-                color: "#fff",
-                border: "none",
-                borderRadius: 6,
-              }}
-            >
-              发送
+            <button type="submit" disabled={loading} className="btn-primary" style={{ padding: "var(--space-sm) var(--space-md)" }}>
+              {copy.chat.send}
             </button>
           </div>
         </form>
       </div>
 
       {ending && (
-        <p
-          style={{
-            marginBottom: "0.75rem",
-            color: "#666",
-            fontSize: "0.9rem",
-          }}
-        >
-          正在评分，请稍候…（约需 10–30 秒）
+        <p style={{ marginBottom: "var(--space-sm)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
+          {copy.chat.endingHint}
         </p>
       )}
       <button
         type="button"
         onClick={handleEndConversation}
         disabled={ending}
-        style={{
-          padding: "0.6rem 1.2rem",
-          background: ending ? "#999" : "#333",
-          color: "#fff",
-          border: "none",
-          borderRadius: 6,
-        }}
+        className="btn-primary"
       >
-        {ending ? "正在提交…" : "结束并查看结果"}
+        {ending ? copy.chat.ending : copy.chat.endConversation}
       </button>
     </main>
   );

@@ -1,7 +1,7 @@
 {
   "id": "message_student",
   "profileTags": ["student"],
-  "visibleTask": "与导师或同学一起规划一次短途出游/旅行方案。在对话中说明你的时间、人数、偏好或预算等需求即可。",
+  "visibleTask": "和导师或同学一起规划一次短途出游。在对话里说明你的时间、人数、偏好或预算等需求即可。",
   "hiddenChecks": ["是否说明时间/人数/偏好等约束", "是否要求调整行程或方案", "是否核验信息或追问细节", "是否注意安全与边界"],
   "hiddenProbes": ["ambiguity", "revision", "verification", "boundary"]
 }

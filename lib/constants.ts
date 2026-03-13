@@ -1,12 +1,13 @@
 /**
  * Rubric weights (sum = 100). 每维 0–100，加权总分 = sum(score * weight) / 100.
+ * 说清任务 40%，补足上下文 15%，推进对话 20%，判断结果 15%，守住边界 10%.
  */
 export const RUBRIC_WEIGHTS = {
-  clarity: 20,
-  context: 25,
+  clarity: 40,
+  context: 15,
   steering: 20,
-  judgment: 20,
-  safetyOwnership: 15,
+  judgment: 15,
+  safetyOwnership: 10,
 } as const;
 
 export const DIMENSION_KEYS = [
@@ -22,7 +23,7 @@ export const DIMENSION_LABELS: Record<(typeof DIMENSION_KEYS)[number], string> =
   context: "补足上下文",
   steering: "推进对话",
   judgment: "判断结果",
-  safetyOwnership: "守住边界并落地",
+  safetyOwnership: "守住边界",
 };
 
 export const VERSION = {

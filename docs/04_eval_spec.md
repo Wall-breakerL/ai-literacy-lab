@@ -60,7 +60,7 @@ type JudgeOutput = {
 在 Judge 原始输出之上做确定性校正，再产出最终评估与反馈：
 
 - **缺项降级**：某维度完全无事件支撑时，该维分数上限封顶（如不超过 2）。
-- **敏感行为扣分**：出现 `sensitive_info_shared` 且无 `risk_noticed` 时，对 Safety & Ownership 或总分做扣分/降级。
+- **敏感行为扣分**：出现 `sensitive_info_shared` 且无 `risk_noticed` 时，对守住边界或总分做扣分/降级。
 - **输出**：校正后的五维分、最终加权分、以及面向用户的反馈措辞（可按 UserProfile 选版）。
 
 校正规则需在代码/配置中明确定义，便于后续迭代与离线校准。

@@ -49,27 +49,34 @@ export function buildJudgePrompt(
 ## 场景 ID
 ${scenarioId}
 
-## 本场景隐性考察点 (hidden checks)
+## 本场景隐性考察点（仅作评分参考，勿泄露给用户）
 ${hiddenChecks}
 
-## 对话全文 (transcript)
+## 对话全文
 ${transcript}
 
-## 事件摘要 (event summary，由规则从用户发言中识别)
+## 事件摘要（由规则从用户发言中识别）
 ${eventSummary}
 
-## 五维定义与百分制（0-100）
-- Clarity 说清任务：目标、约束、受众是否说清。权重 20%。
-- Context 补足上下文：是否补充背景、前提、例子。权重 25%。
-- Steering 推进对话：是否拉回、追问、引导。权重 20%。
-- Judgment 判断结果：是否核实、比较、取舍，不照单全收。权重 20%。
-- SafetyOwnership 守住边界并落地：敏感信息、权责、可执行落地。权重 15%。
+## 评分维度说明（五维，百分制 0–100）
 
-每维 level 为 0-100 的整数（百分制）：0 完全缺失，20 很弱，40 较弱，60 基本可用，80 较强，100 非常成熟；可给中间值如 50、75 等。
+请从**用户**在对话中的可观察行为来打分，而不是评价助手的文采或回复质量。
+
+1. **Clarity 说清任务**（权重 40%）：用户是否把目标、约束、受众/对象说清楚；有无模糊或遗漏导致误解。
+2. **Context 补足上下文**（权重 15%）：用户是否在需要时补充了背景、前提或例子，而不是默认助手全知。
+3. **Steering 推进对话**（权重 20%）：用户是否在跑偏时拉回、在不足时追问、在有多解时引导方向。
+4. **Judgment 判断结果**（权重 15%）：用户是否对助手输出做了核实、比较或取舍，而不是照单全收。
+5. **守住边界**（权重 10%）：用户是否注意敏感信息与权责边界。
+
+**等级锚定（0–10 分制，可带一位小数）**：0 完全缺失 → 2.5 很弱 → 4.5 较弱 → 6.5 基本可用 → 8.2 较强 → 10 非常成熟。系统会按 level×10 换算为 0–100 展示。
+
+**给分方式**：每维 level 填 **0–10 的数值，必须保留一位小数**（如 5.8、6.3、7.1、8.4），不要填整数 5、6、7、8。用小数体现细粒度差异。
+
+**给分倾向**：有基本参与的用户，各维建议落在 **5.5–8.5**；**3.0 以下**仅用于该维完全无相关行为，基准偏宽松。
 
 ${JUDGE_PRINCIPLES}
 
-请仅根据**用户**行为，对五维各给出 0-100 的 level（整数），以及 evidence（用户原话或行为引用数组）、reason（一句话理由）；并给出 flags（异常标记数组，可为空）和 suggestions（面向用户的 1-3 条改进建议）。输出必须是且仅是符合下方 JSON schema 的合法 JSON，不要输出其他文字。
+请对五维各给出 0–10、**带一位小数**的 level（如 5.8、7.2）、evidence、reason，以及 flags、suggestions。你的回复必须是且仅是符合下方 JSON 的合法 JSON，不要输出其他文字。
 `;
 }
 
@@ -78,20 +85,20 @@ ${JUDGE_PRINCIPLES}
  */
 export function getJudgeOutputSchemaHint(): string {
   return `
-输出 JSON 结构（严格遵循）：
+请输出且仅输出以下 JSON（level 为 0–10 的数值，必须带一位小数，如 5.8、7.2，不要用整数 5、6、7）：
 {
   "rubricVersion": "1.0",
-  "scenarioId": "<string>",
-  "profile": { "role": "student|general", "level": "novice|intermediate" },
+  "scenarioId": "<场景ID字符串>",
+  "profile": { "role": "student 或 general", "level": "novice 或 intermediate" },
   "dimensions": {
-    "clarity": { "level": 0-100, "evidence": ["<用户原话或行为>"], "reason": "<一句话>" },
-    "context": { "level": 0-100, "evidence": [], "reason": "" },
-    "steering": { "level": 0-100, "evidence": [], "reason": "" },
-    "judgment": { "level": 0-100, "evidence": [], "reason": "" },
-    "safetyOwnership": { "level": 0-100, "evidence": [], "reason": "" }
+    "clarity": { "level": 5.8, "evidence": [], "reason": "" },
+    "context": { "level": 6.2, "evidence": [], "reason": "" },
+    "steering": { "level": 5.5, "evidence": [], "reason": "" },
+    "judgment": { "level": 6.1, "evidence": [], "reason": "" },
+    "safetyOwnership": { "level": 7.5, "evidence": [], "reason": "" }
   },
   "flags": [],
-  "suggestions": ["<建议1>", "<建议2>"]
+  "suggestions": []
 }
 `;
 }
@@ -144,8 +151,12 @@ export function parseJudgeOutputRich(
     if (!d || typeof d !== "object") return null;
     const dd = d as Record<string, unknown>;
     const level = Number(dd.level);
-    if (Number.isNaN(level) || level < 0 || level > 100) return null;
-    const levelClamped = Math.round(Math.min(100, Math.max(0, level)));
+    if (Number.isNaN(level) || level < 0) return null;
+    // 0–10 带小数（如 5.8）→ 换算为 0–100；已是 0–100 则直接取整
+    const levelClamped =
+      level <= 10
+        ? Math.round(Math.min(100, Math.max(0, level * 10)))
+        : Math.round(Math.min(100, Math.max(0, level)));
     const evidence = Array.isArray(dd.evidence)
       ? (dd.evidence as unknown[]).map((x) => String(x)).filter(Boolean)
       : [];

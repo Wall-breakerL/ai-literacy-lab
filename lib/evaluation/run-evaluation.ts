@@ -1,16 +1,10 @@
 import type { UserProfile, ChatMessage } from "../types";
 import type { CorrectedOutput } from "../rule-corrector";
 import { extractEvents } from "../event-logger";
-import { runRuleJudge } from "../judge-rule";
 import { applyRuleCorrections } from "../rule-corrector";
 import { getScenarioById } from "../scenario-loader";
 import { callJudgeApi } from "../llm/judge";
-import {
-  richToScores,
-  applyCorrectedScoresToRich,
-  scoresToMinimalRich,
-  computeWeightedScore,
-} from "../judge-adapter";
+import { richToScores, applyCorrectedScoresToRich, computeWeightedScore } from "../judge-adapter";
 import { VERSION } from "../constants";
 
 export type EvaluationInput = {
@@ -33,7 +27,8 @@ export type EvaluationResult = CorrectedOutput & {
 };
 
 /**
- * Full pipeline: messages → Event Logger → (LLM Judge 或规则 Judge) → Rule Corrector → versioned result.
+ * Full pipeline: messages → Event Logger → LLM Judge (API) → Rule Corrector → versioned result.
+ * 暂不启用 rule-based 回退，未配置 API 时直接报错；等 memory 部分完成后再考虑启用规则 Judge。
  */
 export async function runEvaluation(input: EvaluationInput): Promise<EvaluationResult> {
   const { sessionId, scenarioId, profile, messages } = input;
@@ -43,38 +38,22 @@ export async function runEvaluation(input: EvaluationInput): Promise<EvaluationR
 
   const rich = await callJudgeApi(sessionId, scenarioId, profile, scenario, messages, events);
 
-  let corrected: CorrectedOutput;
-  let judgeModel: string;
-  let dimensions: EvaluationResult["dimensions"];
-  let flags: string[];
-
-  if (rich) {
-    const scores = richToScores(rich);
-    const rawForCorrector = {
-      scenarioId,
-      sessionId,
-      dimensionScores: scores,
-      weightedScore: computeWeightedScore(scores),
-    };
-    corrected = applyRuleCorrections(rawForCorrector, events);
-    const richCorrected = applyCorrectedScoresToRich(rich, corrected.dimensionScores, corrected.suggestions);
-    dimensions = richCorrected.dimensions;
-    flags = richCorrected.flags;
-    judgeModel = process.env.OPENAI_JUDGE_MODEL ?? process.env.OPENAI_CHAT_MODEL ?? "llm";
-  } else {
-    const rawOutput = runRuleJudge(scenarioId, sessionId, events);
-    corrected = applyRuleCorrections(rawOutput, events);
-    const minimalRich = scoresToMinimalRich(
-      scenarioId,
-      profile,
-      corrected.dimensionScores,
-      corrected.suggestions ?? [],
-      VERSION.rubricVersion
+  if (!rich) {
+    throw new Error(
+      "评分需要接入 Judge API。请设置 OPENAI_API_KEY 或 OPENAI_JUDGE_API_KEY 后重试。"
     );
-    dimensions = minimalRich.dimensions;
-    flags = minimalRich.flags;
-    judgeModel = "rule-based";
   }
+
+  const scores = richToScores(rich);
+  const rawForCorrector = {
+    scenarioId,
+    sessionId,
+    dimensionScores: scores,
+    weightedScore: computeWeightedScore(scores),
+  };
+  const corrected = applyRuleCorrections(rawForCorrector, events);
+  const richCorrected = applyCorrectedScoresToRich(rich, corrected.dimensionScores, corrected.suggestions);
+  const judgeModel = process.env.OPENAI_JUDGE_MODEL ?? process.env.OPENAI_CHAT_MODEL ?? "llm";
 
   return {
     ...corrected,
@@ -84,7 +63,7 @@ export async function runEvaluation(input: EvaluationInput): Promise<EvaluationR
     judgePromptVersion: VERSION.judgePromptVersion,
     judgeModel,
     scoredAt: new Date().toISOString(),
-    dimensions,
-    flags,
+    dimensions: richCorrected.dimensions,
+    flags: richCorrected.flags,
   };
 }

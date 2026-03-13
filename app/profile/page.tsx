@@ -4,15 +4,16 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { UserProfile } from "@/lib/types";
 import { getFirstScenarioForProfile } from "@/lib/scenario-router";
+import { copy } from "@/lib/copy";
 
 const ROLES: { value: UserProfile["role"]; label: string }[] = [
-  { value: "student", label: "学生" },
-  { value: "general", label: "通用（职场/生活）" },
+  { value: "student", label: copy.profile.roleStudent },
+  { value: "general", label: copy.profile.roleGeneral },
 ];
 
 const LEVELS: { value: UserProfile["level"]; label: string }[] = [
-  { value: "novice", label: "新手" },
-  { value: "intermediate", label: "有一定经验" },
+  { value: "novice", label: copy.profile.levelNovice },
+  { value: "intermediate", label: copy.profile.levelIntermediate },
 ];
 
 export default function ProfilePage() {
@@ -24,61 +25,39 @@ export default function ProfilePage() {
     e.preventDefault();
     const profile: UserProfile = { role, level };
     const scenarioId = getFirstScenarioForProfile(profile);
-    const params = new URLSearchParams({
-      role,
-      level,
-    });
+    const params = new URLSearchParams({ role, level });
     router.push(`/chat/${scenarioId}?${params.toString()}`);
   }
 
   return (
-    <main style={{ padding: "2rem", maxWidth: 480, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: "0.5rem" }}>选择你的画像</h1>
-      <p style={{ color: "#555", marginBottom: "1.5rem" }}>
-        用于分配更适合你的任务场景，评估维度对所有用户一致。
+    <main className="page-main">
+      <h1 style={{ marginBottom: "var(--space-sm)", fontSize: "var(--text-2xl)", fontWeight: 700 }}>
+        {copy.profile.title}
+      </h1>
+      <p style={{ color: "var(--color-text-muted)", marginBottom: "var(--space-lg)" }}>
+        {copy.profile.subtitle}
       </p>
       <form onSubmit={handleSubmit}>
-        <fieldset style={{ border: "none", marginBottom: "1.5rem" }}>
-          <legend style={{ fontWeight: 600, marginBottom: "0.5rem" }}>身份 / 使用场景</legend>
+        <fieldset style={{ border: "none", marginBottom: "var(--space-lg)" }}>
+          <legend style={{ fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.profile.roleLegend}</legend>
           {ROLES.map((r) => (
-            <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-              <input
-                type="radio"
-                name="role"
-                value={r.value}
-                checked={role === r.value}
-                onChange={() => setRole(r.value)}
-              />
+            <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-xs)" }}>
+              <input type="radio" name="role" value={r.value} checked={role === r.value} onChange={() => setRole(r.value)} />
               {r.label}
             </label>
           ))}
         </fieldset>
-        <fieldset style={{ border: "none", marginBottom: "1.5rem" }}>
-          <legend style={{ fontWeight: 600, marginBottom: "0.5rem" }}>AI 使用熟练度</legend>
+        <fieldset style={{ border: "none", marginBottom: "var(--space-lg)" }}>
+          <legend style={{ fontWeight: 600, marginBottom: "var(--space-sm)" }}>{copy.profile.levelLegend}</legend>
           {LEVELS.map((l) => (
-            <label key={l.value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-              <input
-                type="radio"
-                name="level"
-                value={l.value}
-                checked={level === l.value}
-                onChange={() => setLevel(l.value)}
-              />
+            <label key={l.value} style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-xs)" }}>
+              <input type="radio" name="level" value={l.value} checked={level === l.value} onChange={() => setLevel(l.value)} />
               {l.label}
             </label>
           ))}
         </fieldset>
-        <button
-          type="submit"
-          style={{
-            padding: "0.6rem 1.2rem",
-            background: "#111",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-          }}
-        >
-          进入场景
+        <button type="submit" className="btn-primary">
+          {copy.profile.cta}
         </button>
       </form>
     </main>
