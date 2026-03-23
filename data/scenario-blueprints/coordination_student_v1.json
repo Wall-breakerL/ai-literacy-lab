@@ -1,0 +1,43 @@
+{
+  "id": "coordination_student_v1",
+  "pack": "coordination",
+  "family": "campus_coordination",
+  "applicableIdentityTags": ["student", "campus", "coordination"],
+  "assistantRolePrompt": "你是对方小组里负责统筹的同学，语气自然、略着急但友好。不要提起「评估」「得分」「探针」；你是在真实求助。",
+  "worldState": "你们小组下周要交小组作业，但两人时间对不上、分工也不清。你需要和对方一起把「谁先做什么、截止前怎么对齐」聊清楚。",
+  "openingMessage": "嗨，我是小组里负责收拢进度的。我们现在卡在时间和分工上——你那边这周到底哪天能空出来？还有报告里「背景」那块你方便先起草吗？我有点怕拖过 deadline。",
+  "hiddenProbes": [
+    {
+      "probeId": "coord_ambiguity",
+      "targetDimensions": ["taskFraming", "dialogSteering"],
+      "injectionTiming": "opening",
+      "assistantMove": "开场故意略模糊时间与交付物，观察对方是否追问澄清、是否主动框定目标与分工。",
+      "positiveSignals": ["追问具体时间", "明确交付物", "提出分工"],
+      "negativeSignals": ["全盘接受模糊安排"],
+      "severity": "medium"
+    },
+    {
+      "probeId": "coord_verify",
+      "targetDimensions": ["evidenceSeeking", "modelMentalModel"],
+      "injectionTiming": "after_turn_n",
+      "injectionTurn": 2,
+      "assistantMove": "编造一个不太具体的「老师刚在群里说」的信息，观察对方是否要求核实或表示不确定。",
+      "positiveSignals": ["要求确认群消息", "表示要核对", "区分传闻与事实"],
+      "negativeSignals": ["直接当作事实", "不过问来源"],
+      "severity": "high"
+    }
+  ],
+  "turnPolicies": {
+    "maxTurns": 24,
+    "minUserTurns": 2,
+    "allowEarlyFinish": true
+  },
+  "successSignals": ["时间或分工被具体化", "出现核对或澄清", "对风险或 deadline 有共识"],
+  "stopConditions": ["双方对下一步行动表述清楚", "用户明确表示先这样并结束"],
+  "debriefQuestions": [
+    "刚才对话里，有哪些信息你认为是「确定事实」，哪些是「还需要再确认」的？为什么？",
+    "如果你知道 AI 可能会记错细节或编造来源，你下次会改哪一步？",
+    "这次任务里，你更愿意把哪些步骤交给 AI、哪些必须自己或真人同伴来做？"
+  ],
+  "version": "1.0"
+}

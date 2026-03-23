@@ -31,26 +31,28 @@ npm run dev
 - **`OPENAI_API_KEY`**：若未配置，助手回复与评估均使用**内置 mock**，无需 key 即可完整跑通流程。
 - **`OPENAI_BASE_URL`**、**`OPENAI_CHAT_MODEL`**、**`OPENAI_JUDGE_MODEL`**、**`OPENAI_JUDGE_API_KEY`**：可选，用于接入真实对话与 LLM Judge。
 
-**接入真实 API**：对话逻辑在 `lib/llm/chat.ts` 的 `callChatApi`，评测在 `lib/llm/judge.ts` 的 `callJudgeApi`。两处目前为占位（返回 null），你可在其中实现 `fetch` 或 SDK 调用，配置好 key 后即可生效。
+**接入真实 API**：对话在 `lib/llm/chat.ts` 的 `callChatApi`、评测在 `lib/llm/judge-v2.ts` 的 `callJudgeApiV2`，均通过 OpenAI 兼容 `fetch` 调用；未配置 key 或请求失败时对话回退 mock、评测回退规则 Judge v2（见 `lib/evaluation/run-evaluation-v2.ts`）。
 
 **使用 Minimax**：Minimax 提供 OpenAI 兼容的 Chat Completions 接口。在 `.env.local` 中设置 `OPENAI_BASE_URL=https://api.minimaxi.com/v1`、`OPENAI_API_KEY=你的 Minimax Key`，并将 `OPENAI_CHAT_MODEL` / `OPENAI_JUDGE_MODEL` 设为 Minimax 模型名（如 `MiniMax-M2.5`、`MiniMax-M2.5-highspeed`）即可。参见 `.env.example` 底部示例。
 
 ## Demo 流程
 
-1. 打开首页，点击「开始评估」。
-2. 选择画像：**身份/使用场景**（学生 / 通用）、**AI 使用熟练度**（新手 / 有一定经验）。
-3. 进入场景：系统按画像分配任务（如给导师写消息、选课/选方案等）。
-4. 在聊天中与助手自然对话完成任务，可多轮输入。
-5. 点击「结束并查看结果」：系统根据对话记录事件、按五维 rubric 评分并做规则校正。
-6. 结果页展示总分、五维得分、证据与建议；可展开「关于本次评估」查看版本信息（rubricVersion、scenarioVersion、judgeModel、scoredAt 等）。
+1. 打开首页，点击「开始评估」进入 **`/setup`（身份与入场）**。
+2. 粘贴被测者身份说明或填结构化表单后保存，或跳过（使用系统默认身份）；随后直接进入对话场景。
+3. 自然开场对话（v2 场景蓝图）；与助手多轮协作。
+4. 主对话结束后完成简短收尾问题（micro-debrief），再提交评分。
+5. 结果页展示两层七维得分、证据、盲点与建议；可展开版本与研究者调试信息。
 
-**无 API key 时**：助手为固定轮换的占位回复，评分为规则 Judge + 事件校正，全程可离线完成。
+详见 `docs/09_identity_and_scenario_v2.md`、`docs/10_rubric_v2_two_layers.md`、`docs/11_memory_and_calibration.md`。
+
+**无 API key 时**：助手为固定轮换的占位回复，评分为 `judge-rule-v2` + `rule-corrector-v2`，全程可离线完成。
 
 ## 项目结构（概要）
 
-- **docs/**：需求与规范（00 问题定位 ~ 05 版本与校准）。
-- **data/scenarios/**：4 个场景 JSON（message_student / message_general / choice_student / choice_general）。
-- **lib/**：类型、常量、场景路由与加载、事件识别、规则 Judge、规则校正、评估流水线。
-- **app/**：首页、画像页、聊天页、结果页及 API（/api/chat、/api/evaluate）。
+- **docs/**：需求与规范（含 v2：`09` 身份与场景、`10` 两层七维 rubric、`11` 记忆与离线校准）。
+- **data/scenario-blueprints/**：v2 场景蓝图（唯一场景数据源；旧版 `data/scenarios/` 已移除）。
+- **data/runtime/**：本地 file-json 持久化（体验卡、用户记忆，默认 gitignore）。
+- **lib/**：`identity/`、`scenario-v2/`、`assessment-v2/`、`memory/`、`storage/`、评测与 LLM。
+- **app/**：首页、setup、聊天、结果及 API（chat、evaluate、identity、memory、scenarios）。旧链 `/profile` 重定向到 `/setup`；结果页「再测一轮」直达默认场景对话（带 `userId` 与已保存的 `identityId`）。
 
 场景引擎、评估引擎与 UI 解耦，便于后续迁移或更换实现。

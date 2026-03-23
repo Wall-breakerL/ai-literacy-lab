@@ -10,7 +10,7 @@ import { copy } from "@/lib/copy";
 
 const features = [
   { icon: MessageCircle, label: "自然对话", hint: "任务嵌入情境" },
-  { icon: Scale, label: "可解释评分", hint: "五维 + 证据链" },
+  { icon: Scale, label: "可解释评分", hint: "两层七维 + 证据链" },
   { icon: Sparkles, label: "轻量上手", hint: "无需安装客户端" },
 ] as const;
 
@@ -52,7 +52,7 @@ export default function HomePage() {
           <CardContent className="relative z-[1] space-y-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <Button asChild size="lg" className="w-full shadow-lg sm:w-auto">
-                <Link href="/profile">{copy.home.cta}</Link>
+                <Link href="/setup">{copy.home.cta}</Link>
               </Button>
               <p className="text-center text-xs text-muted-foreground sm:text-left">
                 全流程在浏览器内完成 · 适合课堂与实验室场景

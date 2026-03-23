@@ -4,47 +4,92 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { DIMENSION_KEYS, DIMENSION_LABELS, RUBRIC_WEIGHTS } from "@/lib/constants";
+import { V2_DIMENSION_LABELS } from "@/lib/assessment-v2/labels";
+import type { V2DimensionKey } from "@/lib/assessment-v2/weights";
+import { chatAgainPathFromBrowser } from "@/lib/chat-entry";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const RESULT_STORAGE_KEY = "ai-literacy-last-result";
 
-type DimensionRich = { level: number; evidence: string[]; reason: string };
+type V2Dim = { score: number; max: number; evidence: string[]; reason: string };
 
-type StoredResult = {
+type StoredResultV2 = {
+  kind: "v2";
   weightedScore?: number;
-  dimensionScores?: Record<string, number>;
-  evidence?: Record<string, string[]>;
-  suggestions?: string[];
-  dimensions?: Record<string, DimensionRich>;
+  dimensions?: Record<string, V2Dim>;
   flags?: string[];
+  suggestions?: string[];
+  blindSpots?: string[];
+  nextRecommendedScenarios?: string[];
+  nextRecommendedProbes?: string[];
   rubricVersion?: string;
   scenarioVersion?: string;
+  blueprintVersion?: string;
   eventSchemaVersion?: string;
+  memorySchemaVersion?: string;
   judgePromptVersion?: string;
   judgeModel?: string;
+  identityVersion?: string;
   scoredAt?: string;
+  events?: { event: string; turnIndex?: number }[];
+  rawJudgeJson?: unknown;
 };
 
+const LAYER_A: V2DimensionKey[] = ["taskFraming", "dialogSteering", "evidenceSeeking"];
+const LAYER_B: V2DimensionKey[] = [
+  "modelMentalModel",
+  "failureAwareness",
+  "trustBoundaryCalibration",
+  "reflectiveTransfer",
+];
+
+type LoadState =
+  | { status: "pending" }
+  | { status: "empty" }
+  | { status: "legacy_cache" }
+  | { status: "ok"; data: StoredResultV2 };
+
 export default function ResultPage() {
-  const [data, setData] = useState<StoredResult | null>(null);
+  const [load, setLoad] = useState<LoadState>({ status: "pending" });
   const [showMeta, setShowMeta] = useState(false);
+  const [showResearcher, setShowResearcher] = useState(false);
+  const [chatAgainHref, setChatAgainHref] = useState("/setup");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.sessionStorage.getItem(RESULT_STORAGE_KEY);
-    if (raw) {
-      try {
-        setData(JSON.parse(raw));
-      } catch {
-        setData(null);
+    if (!raw?.trim()) {
+      setLoad({ status: "empty" });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { kind?: string };
+      if (parsed?.kind !== "v2") {
+        setLoad({ status: "legacy_cache" });
+      } else {
+        setLoad({ status: "ok", data: parsed as StoredResultV2 });
       }
+    } catch {
+      setLoad({ status: "legacy_cache" });
     }
   }, []);
 
-  if (data === null) {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setChatAgainHref(chatAgainPathFromBrowser());
+  }, []);
+
+  if (load.status === "pending") {
+    return (
+      <main className="glass-page">
+        <p className="text-sm text-muted-foreground">{copy.common.redirecting}</p>
+      </main>
+    );
+  }
+
+  if (load.status === "empty") {
     return (
       <main className="glass-page">
         <Card>
@@ -62,11 +107,31 @@ export default function ResultPage() {
     );
   }
 
-  const scores = data.dimensionScores ?? {};
-  const evidence = data.evidence ?? {};
-  const suggestions = data.suggestions ?? [];
-  const dimensionsRich = data.dimensions;
+  if (load.status === "legacy_cache") {
+    return (
+      <main className="glass-page">
+        <Card>
+          <CardHeader>
+            <CardTitle className="section-title">{copy.result.title}</CardTitle>
+            <CardDescription>{copy.result.legacyUnsupported}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link href="/">{copy.result.backHome}</Link>
+            </Button>
+            <Button asChild>
+              <Link href={chatAgainHref}>{copy.result.cta}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  const data = load.data;
+  const dims = data.dimensions ?? {};
   const flags = data.flags ?? [];
+  const suggestions = data.suggestions ?? [];
 
   return (
     <main className="glass-page max-w-4xl space-y-4">
@@ -95,44 +160,61 @@ export default function ResultPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{copy.result.dimensionsTitle}</CardTitle>
+          <CardTitle className="text-lg">{copy.result.layerA}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          {DIMENSION_KEYS.map((key, idx) => {
-            const dr = dimensionsRich?.[key];
-            const level = dr?.level ?? scores[key];
-            const reason = dr?.reason;
-            const evList = dr?.evidence ?? evidence[key];
-            return (
-              <motion.div
-                key={key}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: idx * 0.04 }}
-                className="glass-inset p-4 transition-shadow hover:shadow-[0_0_24px_-10px_rgba(99,102,241,0.15)]"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">
-                    {DIMENSION_LABELS[key]}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      （{RUBRIC_WEIGHTS[key]}%）
-                    </span>
-                  </p>
-                  <span className="rounded-lg border border-border bg-card px-2 py-0.5 text-sm font-semibold tabular-nums text-foreground">
-                    {level != null ? level : "—"}
-                  </span>
-                </div>
-                {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
-                {evList?.length ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {copy.result.evidenceLabel}：{evList.join("；")}
-                  </p>
-                ) : null}
-              </motion.div>
-            );
-          })}
+          {LAYER_A.map((key, idx) => renderV2Dim(key, dims[key], idx))}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{copy.result.layerB}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {LAYER_B.map((key, idx) => renderV2Dim(key, dims[key], idx))}
+        </CardContent>
+      </Card>
+
+      {data.blindSpots && data.blindSpots.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{copy.result.blindSpotsTitle}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm text-foreground">
+              {data.blindSpots.map((b, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {(data.nextRecommendedScenarios?.length || data.nextRecommendedProbes?.length) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{copy.result.nextTitle}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            {data.nextRecommendedScenarios && data.nextRecommendedScenarios.length > 0 && (
+              <p>
+                <span className="font-medium text-foreground">场景：</span>
+                {data.nextRecommendedScenarios.join("、")}
+              </p>
+            )}
+            {data.nextRecommendedProbes && data.nextRecommendedProbes.length > 0 && (
+              <p>
+                <span className="font-medium text-foreground">探针：</span>
+                {data.nextRecommendedProbes.join("、")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {flags.length > 0 && (
         <Card>
@@ -145,24 +227,6 @@ export default function ResultPage() {
                 <li key={i} className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {!dimensionsRich && Object.keys(evidence).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{copy.result.evidenceLabel}（事件）</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {DIMENSION_KEYS.filter((k) => evidence[k]?.length).map((key) => (
-                <li key={key}>
-                  <strong className="text-foreground">{DIMENSION_LABELS[key]}</strong>：
-                  {evidence[key].join("、")}
                 </li>
               ))}
             </ul>
@@ -189,7 +253,7 @@ export default function ResultPage() {
       )}
 
       <Card className="bg-card/60">
-        <CardContent className="pt-6">
+        <CardContent className="space-y-3 pt-6">
           <button
             type="button"
             onClick={() => setShowMeta((v) => !v)}
@@ -198,27 +262,76 @@ export default function ResultPage() {
             {showMeta ? copy.result.metaCollapse : copy.result.metaToggle}
           </button>
           {showMeta && (
-            <dl className="glass-inset mt-3 grid gap-2 p-3 text-sm text-muted-foreground">
-              <dt className="font-semibold text-foreground">rubricVersion</dt>
-              <dd>{data.rubricVersion ?? "—"}</dd>
-              <dt className="font-semibold text-foreground">scenarioVersion</dt>
-              <dd>{data.scenarioVersion ?? "—"}</dd>
-              <dt className="font-semibold text-foreground">eventSchemaVersion</dt>
-              <dd>{data.eventSchemaVersion ?? "—"}</dd>
-              <dt className="font-semibold text-foreground">judgePromptVersion</dt>
-              <dd>{data.judgePromptVersion ?? "—"}</dd>
-              <dt className="font-semibold text-foreground">judgeModel</dt>
-              <dd>{data.judgeModel ?? "—"}</dd>
-              <dt className="font-semibold text-foreground">scoredAt</dt>
-              <dd>{data.scoredAt ?? "—"}</dd>
+            <dl className="glass-inset grid gap-2 p-3 text-sm text-muted-foreground">
+              <MetaRow label="rubricVersion" value={data.rubricVersion} />
+              <MetaRow label="scenarioVersion" value={data.scenarioVersion} />
+              <MetaRow label="blueprintVersion" value={data.blueprintVersion} />
+              <MetaRow label="eventSchemaVersion" value={data.eventSchemaVersion} />
+              <MetaRow label="memorySchemaVersion" value={data.memorySchemaVersion} />
+              <MetaRow label="identityVersion" value={data.identityVersion} />
+              <MetaRow label="judgePromptVersion" value={data.judgePromptVersion} />
+              <MetaRow label="judgeModel" value={data.judgeModel} />
+              <MetaRow label="scoredAt" value={data.scoredAt} />
             </dl>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowResearcher((v) => !v)}
+            className="text-sm text-muted-foreground underline underline-offset-2 transition hover:text-foreground"
+          >
+            {copy.result.researcherToggle}
+          </button>
+          {showResearcher && (
+            <pre className="glass-inset max-h-64 overflow-auto p-3 text-xs">
+              {JSON.stringify({ events: data.events, rawJudgeJson: data.rawJudgeJson }, null, 2)}
+            </pre>
           )}
         </CardContent>
       </Card>
 
-      <Button asChild size="lg" className="w-full sm:w-auto">
-        <Link href="/profile">{copy.result.cta}</Link>
-      </Button>
+      <div className="space-y-2">
+        <Button asChild size="lg" className="w-full sm:w-auto">
+          <Link href={chatAgainHref}>{copy.result.cta}</Link>
+        </Button>
+        <p className="text-xs text-muted-foreground">{copy.result.ctaHint}</p>
+      </div>
     </main>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <>
+      <dt className="font-semibold text-foreground">{label}</dt>
+      <dd>{value ?? "—"}</dd>
+    </>
+  );
+}
+
+function renderV2Dim(key: V2DimensionKey, d: V2Dim | undefined, idx: number) {
+  const label = V2_DIMENSION_LABELS[key];
+  const score = d?.score;
+  const max = d?.max ?? 0;
+  return (
+    <motion.div
+      key={key}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: idx * 0.04 }}
+      className="glass-inset p-4 transition-shadow hover:shadow-[0_0_24px_-10px_rgba(99,102,241,0.15)]"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <span className="rounded-lg border border-border bg-card px-2 py-0.5 text-sm font-semibold tabular-nums text-foreground">
+          {score != null ? `${score} / ${max}` : "—"}
+        </span>
+      </div>
+      {d?.reason && <p className="text-sm text-muted-foreground">{d.reason}</p>}
+      {d?.evidence?.length ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {copy.result.evidenceLabel}：{d.evidence.join("；")}
+        </p>
+      ) : null}
+    </motion.div>
   );
 }

@@ -8,10 +8,16 @@
 
 ```typescript
 type EvalVersion = {
-  rubricVersion: string   // 如 "1.0"，对应 03_rubric 的维度与权重
-  scenarioVersion: string // 如 "1.0"，对应 02 中 4 个场景的 id 与文案
-  eventSchemaVersion: string // 如 "1.0"，对应 04 中 EvalEvent 集合
-  judgeVersion?: string  // 规则 judge 或模型 judge 的版本标识
+  rubricVersion: string   // 当前产物多为 "2.0"（两层七维），见 10_rubric_v2
+  scenarioVersion: string // 全局场景包版本
+  blueprintVersion?: string // v2 单蓝图 JSON 的 version 字段
+  eventSchemaVersion: string // v2 事件集合，见 04 与 assessment-v2
+  identityVersion?: string   // IdentityDossier.version
+  memorySchemaVersion?: string // UserMemory / Experience 结构版本
+  judgePromptVersion: string
+  judgeModel: string        // 或 "rule-based"
+  scoredAt: string          // ISO 时间
+  judgeVersion?: string     // 兼容旧字段
 }
 ```
 

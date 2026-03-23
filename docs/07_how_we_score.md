@@ -1,6 +1,8 @@
 # 如何打分（面向老师 / 汇报用）
 
-本文档是「打分流程 + 模型选型 + Judge 约束」的**最终版本**，可直接用于向老师汇报或写进方案。
+> **与当前代码对齐**：在线评测已固定为 **v2**（`judge-v2.ts`、`run-evaluation-v2.ts`、`rule-corrector-v2.ts`、v2 事件）。文中若出现 `lib/llm/judge.ts`、`event-logger`、五维百分制等路径，多为**历史设计**；汇报时请以 `docs/10_rubric_v2_two_layers.md` 与 v2 代码为准。
+
+本文档是「打分流程 + 模型选型 + Judge 约束」的说明稿，可直接用于向老师汇报或写进方案。
 
 ---
 
@@ -144,16 +146,16 @@ type EvalEvent =
 4. **同一核心 rubric 适用于所有 profile；profile 只影响场景期待，不改变 literacy 的核心定义。**
 5. **若 assistant 本身输出很差，要先判断用户有没有机会识别，而不是直接扣用户分。**
 
-实现时：在 `lib/llm/judge.ts`（或等价）的 prompt 模板中显式写入以上 5 条，并在迭代时保持不删减。
+实现时：在 `lib/llm/judge-v2.ts` 的 prompt 模板中显式写入以上 5 条（或等价表述），并在迭代时保持不删减。
 
 ---
 
 ## 7. 与现有实现的对齐与实施计划
 
-- **事件**：已实现 `lib/event-logger.ts`（规则/关键词），满足 Step 1；后续可插拔「轻量 extractor」。
-- **Judge 输出**：当前为简化版（`dimensionScores` + `weightedScore`）；需**扩展**为上述「dimensions.level/evidence/reason + flags + suggestions」的富结构，并在 LLM Judge 与结果页中落地；规则 Judge 可继续输出简化版，由适配层转为富结构或仅填 level。
-- **规则校正**：已实现 `lib/rule-corrector.ts`（缺项降级、敏感扣分），满足 Step 3；可补充「Context/Steering/Judgment 无证据时上限为 2」等规则与 4. 中表格一致。
-- **模型策略**：先按 **A 档**（同一模型、Chat + Judge 两次独立调用）接入；B/C 仅配置与文档预留，不做复杂实现。
-- **Judge 输入**：LLM Judge 的 prompt 中必须包含 profile、scenarioId、场景 hidden checks、完整 transcript、event summary；输出必须走 Structured Outputs 或等价校验，保证 JSON schema 符合 3.2。
+- **事件（v2）**：`lib/assessment-v2/extract-events-v2.ts`。
+- **Judge 输出（v2）**：`JudgeOutputV2`（七维 score/max + evidence + reason 等），见 `lib/assessment-v2/types.ts` 与结果页。
+- **规则校正（v2）**：`lib/rule-corrector-v2.ts`。
+- **模型策略**：Chat 与 Judge 两次独立调用；环境变量见 `06_api_integration.md`。
+- **Judge 输入（v2）**：`lib/llm/judge-v2.ts` 含身份段、蓝图 world、探针摘要、transcript、v2 事件摘要。
 
-具体实施顺序见 [08_implementation_plan_api.md](./08_implementation_plan_api.md)（在下一份文档中给出可执行任务列表）。
+历史五维与 `event-logger` / `rule-corrector.ts` 叙述见上文存档说明。实施顺序的文档化任务表见 [08_implementation_plan_api.md](./08_implementation_plan_api.md)（存档）。

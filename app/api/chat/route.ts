@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getScenarioById } from "@/lib/scenario-loader";
+import { getBlueprintById } from "@/lib/scenario-v2/loader";
 import { callChatApi } from "@/lib/llm/chat";
 import { parseAssistantResponse } from "@/lib/parse-think";
-import type { UserProfile } from "@/lib/types";
+import type { IdentityDossier } from "@/lib/identity/types";
+import { readJsonFile } from "@/lib/storage/file-json-storage";
 
 const MOCK_REPLIES = [
   "好的，我根据你的需求整理了一下，你可以看看这样写是否合适。",
@@ -18,10 +19,10 @@ function getMockReply(turnIndex: number): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, scenarioId, profile } = body as {
+    const { messages, scenarioId, identityId } = body as {
       messages: { role: string; content: string }[];
       scenarioId?: string;
-      profile?: UserProfile;
+      identityId?: string;
     };
 
     if (!Array.isArray(messages)) {
@@ -30,14 +31,29 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!scenarioId?.trim()) {
+      return NextResponse.json({ error: "scenarioId required" }, { status: 400 });
+    }
 
-    const scenario = scenarioId ? getScenarioById(scenarioId) : null;
+    const blueprint = getBlueprintById(scenarioId);
+    if (!blueprint) {
+      return NextResponse.json({ error: "Unknown scenario blueprint" }, { status: 404 });
+    }
+
+    let identityCompiledPrompt: string | null = null;
+    if (identityId) {
+      const dossier = await readJsonFile<IdentityDossier>(`identities/${identityId}.json`);
+      identityCompiledPrompt = dossier?.compiledPrompt ?? null;
+    }
     const typedMessages = messages.filter(
       (m): m is { role: "user" | "assistant"; content: string } =>
         (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
     );
 
-    const raw = await callChatApi(typedMessages, scenarioId, scenario, profile ?? null);
+    const raw = await callChatApi(typedMessages, scenarioId, {
+      blueprint,
+      identityCompiledPrompt,
+    });
     const rawContent = raw?.trim() || getMockReply(messages.length);
     const { content, thinking } = parseAssistantResponse(rawContent);
 

@@ -1,30 +1,27 @@
 "use client";
 
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, Loader2, SendHorizonal } from "lucide-react";
-import type { UserProfile, ChatMessage, Scenario } from "@/lib/types";
-import { SCENARIO_IDS } from "@/lib/constants";
+import type { ChatMessage } from "@/lib/types";
+import type { ScenarioBlueprint } from "@/lib/scenario-v2/types";
+import { ensureBrowserUserId } from "@/lib/session-user";
+import { BLUEPRINT_IDS } from "@/lib/scenario-v2/loader";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  SESSION_STORAGE_KEY_V2,
+  type ChatPhase,
+  type PersistedSessionV2,
+} from "@/lib/memory/session-storage";
 
 const RESULT_STORAGE_KEY = "ai-literacy-last-result";
 
-function getProfileFromSearchParams(searchParams: URLSearchParams): UserProfile | null {
-  const r = searchParams.get("role");
-  const l = searchParams.get("level");
-  if (
-    (r === "student" || r === "general") &&
-    (l === "novice" || l === "intermediate")
-  ) {
-    return { role: r, level: l };
-  }
-  return null;
-}
+const ALLOWED_IDS = new Set(BLUEPRINT_IDS);
 
 function generateSessionId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -32,60 +29,134 @@ function generateSessionId(): string {
     : `session-${Date.now()}`;
 }
 
+type ScenarioFetch = { kind: "blueprint"; blueprint: ScenarioBlueprint };
+
 function ChatPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const scenarioId = typeof params.scenarioId === "string" ? params.scenarioId : null;
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [scenario, setScenario] = useState<Scenario | null | undefined>(undefined);
+  const [payload, setPayload] = useState<ScenarioFetch | null | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
+  const [phase, setPhase] = useState<ChatPhase>("main");
+  const [debriefIndex, setDebriefIndex] = useState(0);
+  const [debriefInput, setDebriefInput] = useState("");
+  const [showTaskCard, setShowTaskCard] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const hydratedRef = useRef(false);
+
+  const [identityId, setIdentityId] = useState<string | undefined>(undefined);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
+  const debug = searchParams.get("debug") === "1";
+
+  useEffect(() => {
+    const fromQ = searchParams.get("identityId");
+    const fromStore =
+      typeof window !== "undefined" ? window.localStorage.getItem("ai-literacy-identity-id") : null;
+    setIdentityId(fromQ ?? fromStore ?? undefined);
+    const uq = searchParams.get("userId");
+    setUserId(uq ?? (typeof window !== "undefined" ? ensureBrowserUserId() : undefined));
+  }, [searchParams]);
+
+  const debriefQuestions = payload?.blueprint.debriefQuestions ?? [];
+
+  const persistSession = useCallback(() => {
+    if (!scenarioId || !sessionIdRef.current) return;
+    const data: PersistedSessionV2 = {
+      sessionId: sessionIdRef.current,
+      scenarioId,
+      identityId,
+      phase,
+      messages,
+      debriefIndex,
+      debriefQuestions,
+    };
+    try {
+      window.localStorage.setItem(SESSION_STORAGE_KEY_V2, JSON.stringify(data));
+    } catch {
+      /* ignore */
+    }
+  }, [scenarioId, identityId, phase, messages, debriefIndex, debriefQuestions]);
+
+  useEffect(() => {
+    if (!scenarioId || !hydratedRef.current) return;
+    persistSession();
+  }, [scenarioId, persistSession]);
 
   useEffect(() => {
     if (!scenarioId) return;
-    if (!(SCENARIO_IDS as readonly string[]).includes(scenarioId)) {
-      router.replace("/profile");
+    if (!ALLOWED_IDS.has(scenarioId)) {
+      router.replace("/setup");
       return;
     }
-    const fromUrl = getProfileFromSearchParams(searchParams);
-    if (!fromUrl) {
-      router.replace("/profile");
-      return;
-    }
-    setProfile(fromUrl);
-
     let cancelled = false;
     fetch(`/api/scenarios/${scenarioId}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: Scenario | null) => {
-        if (!cancelled) setScenario(data ?? null);
+      .then((data: ScenarioFetch | null) => {
+        if (cancelled || !data || data.kind !== "blueprint") {
+          if (!cancelled) setPayload(null);
+          return;
+        }
+        setPayload(data);
       })
       .catch(() => {
-        if (!cancelled) setScenario(null);
+        if (!cancelled) setPayload(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [scenarioId, searchParams, router]);
+  }, [scenarioId, router]);
+
+  useEffect(() => {
+    if (payload === undefined || payload === null || !scenarioId) return;
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+
+    try {
+      const raw = window.localStorage.getItem(SESSION_STORAGE_KEY_V2);
+      if (raw) {
+        const saved = JSON.parse(raw) as PersistedSessionV2;
+        if (saved.scenarioId === scenarioId) {
+          sessionIdRef.current = saved.sessionId;
+          setMessages(saved.messages ?? []);
+          setPhase(saved.phase === "debrief" ? "debrief" : "main");
+          setDebriefIndex(saved.debriefIndex ?? 0);
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    if (!sessionIdRef.current) sessionIdRef.current = generateSessionId();
+
+    if (messages.length === 0) {
+      setMessages([{ role: "assistant", content: payload.blueprint.openingMessage }]);
+    }
+  }, [payload, scenarioId, messages.length]);
 
   useEffect(() => {
     listRef.current && (listRef.current.scrollTop = listRef.current.scrollHeight);
-  }, [messages, loading]);
+  }, [messages, loading, phase]);
 
-  const visibleTask =
-    scenario === undefined ? copy.chat.loading : scenario?.visibleTask ?? copy.chat.loadFailed;
+  const situationalHint =
+    payload === undefined
+      ? copy.chat.loading
+      : payload === null
+        ? copy.chat.loadFailed
+        : payload.blueprint.worldState.slice(0, 200) +
+          (payload.blueprint.worldState.length > 200 ? "…" : "");
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || !profile || !scenarioId || loading) return;
+    if (!text || !scenarioId || loading || ending) return;
 
     const userMessage: ChatMessage = { role: "user", content: text };
     const nextThread = [...messages, userMessage];
@@ -97,7 +168,7 @@ function ChatPageInner() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextThread, scenarioId, profile }),
+        body: JSON.stringify({ messages: nextThread, scenarioId, identityId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "发送失败");
@@ -111,8 +182,8 @@ function ChatPageInner() {
     }
   }
 
-  async function handleEndConversation() {
-    if (!profile || !scenarioId || ending) return;
+  async function runEvaluate(finalMessages: ChatMessage[]) {
+    if (!scenarioId || ending) return;
     if (!sessionIdRef.current) sessionIdRef.current = generateSessionId();
     const sessionId = sessionIdRef.current;
 
@@ -121,12 +192,20 @@ function ChatPageInner() {
       const res = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, scenarioId, profile, messages }),
+        body: JSON.stringify({
+          sessionId,
+          scenarioId,
+          messages: finalMessages,
+          identityId,
+          userId,
+          includeRawJudge: debug,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "评估失败");
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(data));
+        window.localStorage.removeItem(SESSION_STORAGE_KEY_V2);
       }
       router.push("/result");
     } catch (err) {
@@ -135,7 +214,29 @@ function ChatPageInner() {
     }
   }
 
-  if (!profile || !scenarioId) {
+  function handleDebriefSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = debriefInput.trim();
+    if (!text || !debriefQuestions[debriefIndex]) return;
+    const q = debriefQuestions[debriefIndex];
+    const block = `[收尾反思]\n问题：${q}\n回答：${text}`;
+    const nextMessages = [...messages, { role: "user" as const, content: block }];
+    setMessages(nextMessages);
+    setDebriefInput("");
+    if (debriefIndex + 1 >= debriefQuestions.length) {
+      setPhase("main");
+      void runEvaluate(nextMessages);
+    } else {
+      setDebriefIndex((i) => i + 1);
+    }
+  }
+
+  function startDebrief() {
+    setPhase("debrief");
+    setDebriefIndex(0);
+  }
+
+  if (!scenarioId) {
     return (
       <main className="glass-page">
         <p className="text-sm text-muted-foreground">{copy.common.redirecting}</p>
@@ -156,13 +257,66 @@ function ChatPageInner() {
             aria-hidden
           />
           <CardHeader className="pb-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {copy.chat.taskLabel}
-            </p>
-            <CardTitle className="text-base font-medium">当前场景</CardTitle>
-            <CardDescription className="text-sm leading-relaxed">{visibleTask}</CardDescription>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {copy.chat.taskLabel}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setShowTaskCard((v) => !v)}
+              >
+                {showTaskCard ? "收起提示" : "展开情境提示"}
+              </Button>
+            </div>
+            {showTaskCard && (
+              <>
+                <CardTitle className="text-base font-medium">背景</CardTitle>
+                <CardDescription className="text-sm leading-relaxed">{situationalHint}</CardDescription>
+              </>
+            )}
           </CardHeader>
         </Card>
+
+        {debug && payload && (
+          <Card className="mb-3 border-dashed bg-muted/40 p-3 text-xs">
+            <p className="font-semibold">{copy.chat.debugProbes}</p>
+            <ul className="mt-1 list-inside list-disc text-muted-foreground">
+              {payload.blueprint.hiddenProbes.map((p) => (
+                <li key={p.probeId}>
+                  {p.probeId}: {p.assistantMove}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
+        {phase === "debrief" && debriefIndex < debriefQuestions.length && (
+          <Card className="mb-4 ring-1 ring-violet-200/20">
+            <CardHeader>
+              <CardTitle className="text-base">{copy.chat.debriefTitle}</CardTitle>
+              <CardDescription>{copy.chat.debriefHint}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-2 text-sm font-medium">
+                {debriefQuestions[debriefIndex] ?? ""}
+              </p>
+              <form onSubmit={handleDebriefSubmit} className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={debriefInput}
+                  onChange={(e) => setDebriefInput(e.target.value)}
+                  placeholder="简短回答即可"
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={!debriefInput.trim() || ending}>
+                  {debriefIndex + 1 >= debriefQuestions.length ? copy.chat.submitResult : "下一题"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="relative p-4 ring-1 ring-violet-200/15 md:p-6">
           <div
@@ -227,36 +381,40 @@ function ChatPageInner() {
             )}
           </div>
 
-          <form onSubmit={handleSend} className="space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                type="text"
-                placeholder={copy.chat.inputPlaceholder}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={loading}
-                className="h-12 flex-1"
-              />
-              <Button type="submit" disabled={loading} className="h-12 shrink-0 gap-2 sm:w-auto">
-                <SendHorizonal className="h-4 w-4" />
-                {copy.chat.send}
-              </Button>
-            </div>
-          </form>
+          {phase === "main" && (
+            <form onSubmit={handleSend} className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  type="text"
+                  placeholder={copy.chat.inputPlaceholder}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={loading || ending}
+                  className="h-12 flex-1"
+                />
+                <Button type="submit" disabled={loading || ending} className="h-12 shrink-0 gap-2 sm:w-auto">
+                  <SendHorizonal className="h-4 w-4" />
+                  {copy.chat.send}
+                </Button>
+              </div>
+            </form>
+          )}
         </Card>
 
         <div className="mt-4 space-y-2">
           {ending && <p className="text-sm text-muted-foreground">{copy.chat.endingHint}</p>}
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleEndConversation}
-            disabled={ending}
-            className="w-full sm:w-auto"
-          >
-            {ending ? copy.chat.ending : copy.chat.endConversation}
-          </Button>
+          {phase === "main" && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={startDebrief}
+              disabled={ending || messages.length < 2}
+              className="w-full sm:w-auto"
+            >
+              {copy.chat.goDebrief}
+            </Button>
+          )}
         </div>
       </motion.div>
     </main>

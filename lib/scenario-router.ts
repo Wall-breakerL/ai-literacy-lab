@@ -1,20 +1,13 @@
-import type { UserProfile } from "./types";
-import type { ScenarioId } from "./constants";
+import { getDefaultBlueprint } from "./scenario-v2/router";
 
 /**
- * Returns scenario IDs for the given profile. Role determines which scenarios apply.
- * Student → message_student, choice_student; General → message_general, choice_general.
+ * 默认会话入口：loader 中注册的第一个 v2 蓝图。
+ * 未注册任何蓝图时抛错（应用仅支持蓝图场景）。
  */
-export function getScenariosForProfile(profile: UserProfile): ScenarioId[] {
-  return profile.role === "student"
-    ? ["message_student", "choice_student"]
-    : ["message_general", "choice_general"];
-}
-
-/**
- * Get the first scenario to use for MVP (single scenario per session).
- */
-export function getFirstScenarioForProfile(profile: UserProfile): ScenarioId {
-  const ids = getScenariosForProfile(profile);
-  return ids[0];
+export function getDefaultEntryScenarioId(): string {
+  const bp = getDefaultBlueprint();
+  if (!bp) {
+    throw new Error("No scenario blueprint registered in lib/scenario-v2/loader.ts");
+  }
+  return bp.id;
 }

@@ -31,3 +31,7 @@ yarn-error.log*
 .cursor
 *.swp
 *.swo
+
+# Local research runtime (identity / experience / user memory JSON)
+data/runtime/**/*.json
+!data/runtime/.gitkeep

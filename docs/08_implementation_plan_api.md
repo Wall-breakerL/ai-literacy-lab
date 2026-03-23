@@ -1,5 +1,7 @@
 # API 接入与「如何打分」落地 — 实施计划
 
+> **存档性质**：下列任务表描述的是早期五维 + `judge.ts` / `rule-corrector.ts` 路线。**当前主干实现**为 v2（见 `06_api_integration.md`、`run-evaluation-v2.ts`）。阅读时请以「已完成项」作历史对照，勿当作待办清单。
+
 在 [07_how_we_score.md](./07_how_we_score.md) 的流程与约束下，将在线对话、富结构 Judge、规则校正和模型选型落到代码与配置的可执行计划。
 
 ---
@@ -43,7 +45,7 @@
 | 序号 | 任务 | 说明 |
 |------|------|------|
 | 4.1 | Judge 输入构造 | 在调用 LLM Judge 前组装：profile、scenarioId、场景的 `hiddenChecks`（或 hiddenProbes 文案）、完整 transcript、event summary（事件列表或简短摘要）。 |
-| 4.2 | Judge prompt 模板 | 在 `lib/llm/judge.ts` 中写死 07 第 6 节 5 条原则；明确「只评用户」「证据来自用户」「同一 rubric 全 profile」「不奖励篇幅」「assistant 差时看用户是否有机会识别」。 |
+| 4.2 | Judge prompt 模板（历史） | 原计划写在 `lib/llm/judge.ts`；**现为** `lib/llm/judge-v2.ts`，原则同 07 第 6 节。 |
 | 4.3 | 五维定义与 0–5 锚定 | Prompt 中写入 03_rubric 的五维定义与 0–5 锚定（或引用简短版），要求输出 dimensions 的 level/evidence/reason、flags、suggestions。 |
 
 ### 阶段 5：Judge 输出与 LLM 调用
@@ -52,7 +54,7 @@
 |------|------|------|
 | 5.1 | 富结构 JSON 校验 | 定义 `JudgeOutputRich` 的校验（zod 或手写）：五维 key、level 0–5、evidence/reason 数组/字符串、flags/suggestions 数组。 |
 | 5.2 | Structured Outputs 或等价 | 若用 OpenAI：response_format 指定 JSON schema 对应 `JudgeOutputRich`；否则在解析后做校验，不通过则视为失败，回退规则 Judge。 |
-| 5.3 | lib/llm/judge.ts | 输入：sessionId, scenarioId, profile, scenario (含 hiddenChecks), messages, events。构造 prompt → 调用 Chat Completions（或 Judge 专用 endpoint）→ 解析并校验 → 返回 `JudgeOutputRich | null`。 |
+| 5.3 | lib/llm/judge-v2.ts（替代原 judge.ts） | 输入：蓝图、身份编译段、messages、v2 events 等 → 调用 Chat Completions → 解析为 `JudgeOutputV2 | null`。 |
 | 5.4 | run-evaluation 分支 | 若有 Judge 用 key：调 `lib/llm/judge`；得到非 null 则从富结构取 level 转 `DimensionScores`，送 `applyRuleCorrections`，再写回富结构（校正后 level/suggestions）与 rubricVersion、judgeModel、scoredAt。若为 null 则用 `runRuleJudge`，并生成最小富结构（仅 level）供结果页统一展示。 |
 
 ### 阶段 6：结果页与版本

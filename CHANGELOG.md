@@ -1,5 +1,9 @@
 # Changelog
 
+## [未发布]
+
+- **移除 legacy**：删除 `data/scenarios/`、五维评测链（`run-evaluation.ts`、`lib/llm/judge.ts`、`judge-rule.ts`、`rule-corrector.ts` 等）；API 与聊天页仅支持 v2 蓝图；结果页仅展示 `kind: "v2"`，旧 sessionStorage 给出提示文案。
+
 ## [1.1.0] - 2026-03-13
 
 ### 功能与体验

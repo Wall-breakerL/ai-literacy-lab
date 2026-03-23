@@ -1,5 +1,7 @@
 # 基于 Todolist 的修改计划
 
+> 部分条目引用已移除模块（如 `scenario-loader`、五维 `RUBRIC_WEIGHTS`、`profile` 会话字段）。当前主干为 **v2 蓝图 + `run-evaluation-v2`**，阅读时作历史对照即可。
+
 根据 `todolist.md` 中四项待办，制定以下可执行计划。实施时需与 `docs/00–05` 及 `.cursor/rules/core-principles.mdc` 保持一致。
 
 ---
@@ -55,7 +57,7 @@
 
 ## 4. 文案与提示（提示词与引导词）
 
-**现状**：Judge 的 prompt 在 `lib/llm/judge.ts`（含五条硬约束）；Chat 的 system prompt 在 `lib/llm/chat.ts`；前端引导/说明分散在各页的文案中。
+**现状（v2）**：Judge 的 prompt 在 `lib/llm/judge-v2.ts`；Chat 的 system prompt 在 `lib/llm/chat.ts`；前端引导/说明分散在各页的文案中。
 
 | 步骤 | 内容 | 涉及文件/模块 |
 |-----|------|----------------|
