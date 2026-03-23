@@ -1,127 +1,27 @@
 "use client";
 
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkBreaks from "remark-breaks";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { ChevronDown, Loader2, SendHorizonal } from "lucide-react";
 import type { UserProfile, ChatMessage, Scenario } from "@/lib/types";
 import { SCENARIO_IDS } from "@/lib/constants";
 import { copy } from "@/lib/copy";
-
-const markdownStyles: React.CSSProperties = {
-  margin: 0,
-  lineHeight: 1.6,
-  fontSize: "0.9375rem",
-};
-const markdownStylesBlock: React.CSSProperties = {
-  ...markdownStyles,
-  marginTop: "0.5em",
-  marginBottom: "0.5em",
-};
-/** 气泡内标题不放大字号，与正文统一层次，仅用字重区分 */
-const headingStyle: React.CSSProperties = {
-  ...markdownStylesBlock,
-  fontSize: "0.9375rem",
-  fontWeight: 700,
-  marginTop: "0.6em",
-  marginBottom: "0.35em",
-};
-
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const [showThinking, setShowThinking] = useState(false);
-  const isUser = message.role === "user";
-  return (
-    <div
-      style={{
-        marginBottom: "0.75rem",
-        textAlign: isUser ? "right" : "left",
-      }}
-    >
-      <div
-        className="chat-bubble-markdown"
-        style={{
-          display: "inline-block",
-          padding: "0.6rem 0.85rem",
-          borderRadius: "var(--radius-md)",
-          maxWidth: "85%",
-          background: isUser ? "var(--color-primary)" : "var(--color-surface-muted)",
-          color: isUser ? "var(--color-on-primary)" : "var(--color-text)",
-          textAlign: "left",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        <ReactMarkdown
-          remarkPlugins={[remarkBreaks]}
-          components={{
-            p: ({ children }) => <p style={markdownStylesBlock}>{children}</p>,
-            h1: ({ children }) => <p style={headingStyle}>{children}</p>,
-            h2: ({ children }) => <p style={headingStyle}>{children}</p>,
-            h3: ({ children }) => <p style={headingStyle}>{children}</p>,
-            h4: ({ children }) => <p style={headingStyle}>{children}</p>,
-            h5: ({ children }) => <p style={headingStyle}>{children}</p>,
-            h6: ({ children }) => <p style={headingStyle}>{children}</p>,
-            strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
-            em: ({ children }) => <em>{children}</em>,
-            ul: ({ children }) => <ul style={{ ...markdownStylesBlock, paddingLeft: "1.2em", margin: "0.25em 0" }}>{children}</ul>,
-            ol: ({ children }) => <ol style={{ ...markdownStylesBlock, paddingLeft: "1.2em", margin: "0.25em 0" }}>{children}</ol>,
-            li: ({ children }) => <li style={markdownStyles}>{children}</li>,
-            hr: () => <hr style={{ border: "none", borderTop: "1px solid currentColor", opacity: 0.4, margin: "0.5em 0" }} />,
-            code: ({ children }) => <code style={{ background: "rgba(0,0,0,0.08)", padding: "0.1em 0.3em", borderRadius: 4, fontSize: "0.9em" }}>{children}</code>,
-            pre: ({ children }) => <pre style={{ ...markdownStylesBlock, overflow: "auto", whiteSpace: "pre-wrap" }}>{children}</pre>,
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
-      </div>
-      {!isUser && message.thinking && (
-        <div style={{ marginTop: "0.35rem", maxWidth: "85%" }}>
-          <button
-            type="button"
-            onClick={() => setShowThinking((v) => !v)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--text-sm)",
-              cursor: "pointer",
-              padding: 0,
-              textDecoration: "underline",
-            }}
-          >
-            {showThinking ? copy.chat.collapseThinking : copy.chat.expandThinking}
-          </button>
-          {showThinking && (
-            <div
-            style={{
-              marginTop: "var(--space-xs)",
-              padding: "var(--space-sm)",
-              background: "var(--color-surface-muted)",
-              borderRadius: "var(--radius-sm)",
-              fontSize: "var(--text-sm)",
-              color: "var(--color-text-muted)",
-            }}
-            >
-              <ReactMarkdown>{message.thinking}</ReactMarkdown>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const RESULT_STORAGE_KEY = "ai-literacy-last-result";
 
-function getProfileFromSearchParams(
-  searchParams: URLSearchParams
-): UserProfile | null {
-  const role = searchParams.get("role");
-  const level = searchParams.get("level");
+function getProfileFromSearchParams(searchParams: URLSearchParams): UserProfile | null {
+  const r = searchParams.get("role");
+  const l = searchParams.get("level");
   if (
-    (role === "student" || role === "general") &&
-    (level === "novice" || level === "intermediate")
+    (r === "student" || r === "general") &&
+    (l === "novice" || l === "intermediate")
   ) {
-    return { role, level };
+    return { role: r, level: l };
   }
   return null;
 }
@@ -132,30 +32,35 @@ function generateSessionId(): string {
     : `session-${Date.now()}`;
 }
 
-export default function ChatPage() {
+function ChatPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const scenarioId = typeof params.scenarioId === "string" ? params.scenarioId : null;
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [scenario, setScenario] = useState<Scenario | null | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
   const sessionIdRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const p = getProfileFromSearchParams(searchParams);
-    setProfile(p);
-    if (!p) {
+    if (!scenarioId) return;
+    if (!(SCENARIO_IDS as readonly string[]).includes(scenarioId)) {
       router.replace("/profile");
       return;
     }
-    if (!scenarioId || !(SCENARIO_IDS as readonly string[]).includes(scenarioId)) {
+    const fromUrl = getProfileFromSearchParams(searchParams);
+    if (!fromUrl) {
       router.replace("/profile");
       return;
     }
+    setProfile(fromUrl);
+
     let cancelled = false;
     fetch(`/api/scenarios/${scenarioId}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -165,13 +70,17 @@ export default function ChatPage() {
       .catch(() => {
         if (!cancelled) setScenario(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [scenarioId, searchParams, router]);
 
+  useEffect(() => {
+    listRef.current && (listRef.current.scrollTop = listRef.current.scrollHeight);
+  }, [messages, loading]);
+
   const visibleTask =
-    scenario === undefined
-      ? copy.chat.loading
-      : scenario?.visibleTask ?? copy.chat.loadFailed;
+    scenario === undefined ? copy.chat.loading : scenario?.visibleTask ?? copy.chat.loadFailed;
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -179,7 +88,8 @@ export default function ChatPage() {
     if (!text || !profile || !scenarioId || loading) return;
 
     const userMessage: ChatMessage = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMessage]);
+    const nextThread = [...messages, userMessage];
+    setMessages(nextThread);
     setInput("");
     setLoading(true);
 
@@ -187,22 +97,15 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          scenarioId,
-          profile,
-        }),
+        body: JSON.stringify({ messages: nextThread, scenarioId, profile }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "发送失败");
       const content = data.content ?? "（无回复内容）";
       const thinking = typeof data.thinking === "string" ? data.thinking : undefined;
       setMessages((prev) => [...prev, { role: "assistant", content, thinking }]);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: copy.chat.errorFallback },
-      ]);
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: copy.chat.errorFallback }]);
     } finally {
       setLoading(false);
     }
@@ -210,10 +113,7 @@ export default function ChatPage() {
 
   async function handleEndConversation() {
     if (!profile || !scenarioId || ending) return;
-
-    if (!sessionIdRef.current) {
-      sessionIdRef.current = generateSessionId();
-    }
+    if (!sessionIdRef.current) sessionIdRef.current = generateSessionId();
     const sessionId = sessionIdRef.current;
 
     setEnding(true);
@@ -221,12 +121,7 @@ export default function ChatPage() {
       const res = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          scenarioId,
-          profile,
-          messages,
-        }),
+        body: JSON.stringify({ sessionId, scenarioId, profile, messages }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "评估失败");
@@ -242,87 +137,142 @@ export default function ChatPage() {
 
   if (!profile || !scenarioId) {
     return (
-      <main className="page-main page-main--wide" style={{ textAlign: "center" }}>
-        <p style={{ color: "var(--color-text-muted)" }}>{copy.common.redirecting}</p>
+      <main className="glass-page">
+        <p className="text-sm text-muted-foreground">{copy.common.redirecting}</p>
       </main>
     );
   }
 
   return (
-    <main className="page-main page-main--wide">
-      <div
-        className="card"
-        style={{
-          padding: "var(--space-md)",
-          marginBottom: "var(--space-lg)",
-        }}
+    <main className="glass-page max-w-4xl">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
       >
-        <strong style={{ fontSize: "var(--text-sm)" }}>{copy.chat.taskLabel}</strong>
-        <p style={{ marginTop: "var(--space-xs)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>{visibleTask}</p>
-      </div>
-
-      <div
-        className="card"
-        style={{
-          minHeight: 280,
-          padding: "var(--space-md)",
-          marginBottom: "var(--space-md)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ flex: 1, overflowY: "auto", marginBottom: "var(--space-md)" }}>
-          {messages.length === 0 && (
-            <p style={{ color: "var(--color-text-subtle)", fontSize: "var(--text-sm)" }}>
-              {copy.chat.taskPlaceholder}
+        <Card className="relative mb-5 overflow-hidden ring-1 ring-cyan-200/15">
+          <div
+            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/50 to-transparent"
+            aria-hidden
+          />
+          <CardHeader className="pb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {copy.chat.taskLabel}
             </p>
-          )}
-          {messages.map((m, i) => (
-            <MessageBubble key={i} message={m} />
-          ))}
-          {loading && (
-            <p style={{ color: "var(--color-text-subtle)", fontSize: "var(--text-sm)" }} className="typing-dots">
-              {copy.chat.loading}<span>.</span><span>.</span><span>.</span>
-            </p>
-          )}
-        </div>
+            <CardTitle className="text-base font-medium">当前场景</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{visibleTask}</CardDescription>
+          </CardHeader>
+        </Card>
 
-        <form onSubmit={handleSend}>
-          <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-            <input
-              type="text"
-              placeholder={copy.chat.inputPlaceholder}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={loading}
-              style={{
-                flex: 1,
-                padding: "var(--space-sm) var(--space-md)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--color-surface)",
-              }}
-            />
-            <button type="submit" disabled={loading} className="btn-primary" style={{ padding: "var(--space-sm) var(--space-md)" }}>
-              {copy.chat.send}
-            </button>
+        <Card className="relative p-4 ring-1 ring-violet-200/15 md:p-6">
+          <div
+            ref={listRef}
+            className="glass-inset mb-4 max-h-[min(45vh,420px)] min-h-[200px] overflow-y-auto p-3 md:p-4"
+          >
+            {messages.length === 0 && (
+              <p className="text-sm text-muted-foreground">{copy.chat.taskPlaceholder}</p>
+            )}
+            {messages.map((m, i) => {
+              const isUser = m.role === "user";
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22 }}
+                  className={cn("mb-3 flex", isUser ? "justify-end" : "justify-start")}
+                >
+                  <div
+                    className={cn(
+                      "inline-block max-w-[88%] rounded-2xl px-4 py-3 text-left text-sm shadow-sm",
+                      isUser
+                        ? "border border-indigo-400/30 bg-gradient-to-br from-indigo-700 via-violet-700 to-indigo-900 text-white shadow-lg shadow-indigo-600/25"
+                        : "border border-indigo-200/40 bg-gradient-to-br from-white/95 via-indigo-50/40 to-violet-50/30 text-card-foreground shadow-md shadow-indigo-500/10 backdrop-blur-md"
+                    )}
+                  >
+                    <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
+                    {!isUser && m.thinking && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedThinking((prev) => ({ ...prev, [i]: !prev[i] }))
+                          }
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2"
+                        >
+                          <ChevronDown
+                            className={cn(
+                              "h-3.5 w-3.5 transition-transform",
+                              expandedThinking[i] ? "rotate-180" : "rotate-0"
+                            )}
+                          />
+                          {expandedThinking[i] ? copy.chat.collapseThinking : copy.chat.expandThinking}
+                        </button>
+                        {expandedThinking[i] && (
+                          <div className="mt-2 rounded-lg border border-border bg-muted/60 p-3 text-xs text-muted-foreground whitespace-pre-wrap">
+                            {m.thinking}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+            {loading && (
+              <div className="glass-inset inline-flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {copy.chat.loading}
+              </div>
+            )}
           </div>
-        </form>
-      </div>
 
-      {ending && (
-        <p style={{ marginBottom: "var(--space-sm)", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
-          {copy.chat.endingHint}
-        </p>
-      )}
-      <button
-        type="button"
-        onClick={handleEndConversation}
-        disabled={ending}
-        className="btn-primary"
-      >
-        {ending ? copy.chat.ending : copy.chat.endConversation}
-      </button>
+          <form onSubmit={handleSend} className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                type="text"
+                placeholder={copy.chat.inputPlaceholder}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                disabled={loading}
+                className="h-12 flex-1"
+              />
+              <Button type="submit" disabled={loading} className="h-12 shrink-0 gap-2 sm:w-auto">
+                <SendHorizonal className="h-4 w-4" />
+                {copy.chat.send}
+              </Button>
+            </div>
+          </form>
+        </Card>
+
+        <div className="mt-4 space-y-2">
+          {ending && <p className="text-sm text-muted-foreground">{copy.chat.endingHint}</p>}
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={handleEndConversation}
+            disabled={ending}
+            className="w-full sm:w-auto"
+          >
+            {ending ? copy.chat.ending : copy.chat.endConversation}
+          </Button>
+        </div>
+      </motion.div>
     </main>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="glass-page">
+          <p className="text-sm text-muted-foreground">{copy.common.redirecting}</p>
+        </main>
+      }
+    >
+      <ChatPageInner />
+    </Suspense>
   );
 }

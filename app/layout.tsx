@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
+import { AppProviders } from "./providers";
 
 const notoSans = Noto_Sans_SC({
   weight: ["400", "500", "600", "700"],
@@ -21,11 +22,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className={notoSans.variable}>
-      <body className={notoSans.className}>
+      <body className={`${notoSans.className} min-h-screen antialiased`}>
         <div className="body-bg" aria-hidden="true">
+          <span className="body-tech-grid" />
           <span className="bg-orb-3" />
         </div>
-        {children}
+        <AppProviders>
+          <div className="app-shell">{children}</div>
+        </AppProviders>
       </body>
     </html>
   );
