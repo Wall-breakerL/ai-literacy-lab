@@ -22,6 +22,10 @@ export const copy = {
     saving: "保存中…",
     hint: "保存后会在服务端写入 data/runtime/identities/（本地开发）。",
     skip: "跳过，直接开始（无自定义身份）",
+    taskPromptLabel: "任务目标（可选，用于场景匹配/生成）",
+    taskPromptPlaceholder: "例：我想练习和 AI 一起完成一份课程调研计划，并讨论哪些结论必须人工核验。",
+    taskPromptHint:
+      "填写后系统会优先匹配现有场景；若不匹配，会生成一个候选场景并用于本轮对话。",
   },
 
   // 对话页
@@ -43,6 +47,16 @@ export const copy = {
     loading: "加载中",
     loadFailed: "加载失败，请刷新重试",
     errorFallback: "抱歉，暂时无法回复，请稍后再试。",
+    // two-phase
+    phaseHelperLabel: "第一阶段：AI 协作任务",
+    phaseTalkLabel: "第二阶段：深度讨论",
+    phaseSwitchTitle: "任务阶段完成",
+    phaseSwitchDescription: "接下来进入讨论环节。输入你想聊的问题（可留空使用默认引导）。",
+    talkPromptLabel: "下一段想聊什么？",
+    talkPromptPlaceholder: "例：我想聊 AI 什么时候该信、什么时候必须人工核验。",
+    goTalk: "进入讨论",
+    goTalkDefault: "留空并使用默认引导",
+    finishHelper: "完成任务，进入讨论",
   },
 
   // 结果页
@@ -63,6 +77,12 @@ export const copy = {
     nextTitle: "下一步场景建议",
     metaToggle: "版本与复现信息",
     metaCollapse: "收起",
+    phaseScoresTitle: "两段子分（研究参考）",
+    phaseHelper: "Helper 阶段",
+    phaseTalk: "Talk 阶段",
+    phaseWeight: "权重",
+    phaseEvents: "阶段事件",
+    talkPrompt: "Talk Prompt",
     researcherToggle: "研究者视图（事件 / 原始 JSON）",
     cta: "再测一轮（进入对话）",
     ctaHint: "使用当前浏览器里保存的身份（若有）直接进入下一轮；要重填身份说明请从首页点「开始评估」。",

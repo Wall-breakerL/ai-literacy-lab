@@ -38,10 +38,13 @@ npm run dev
 ## Demo 流程
 
 1. 打开首页，点击「开始评估」进入 **`/setup`（身份与入场）**。
-2. 粘贴被测者身份说明或填结构化表单后保存，或跳过（使用系统默认身份）；随后直接进入对话场景。
-3. 自然开场对话（v2 场景蓝图）；与助手多轮协作。
-4. 主对话结束后完成简短收尾问题（micro-debrief），再提交评分。
-5. 结果页展示两层七维得分、证据、盲点与建议；可展开版本与研究者调试信息。
+2. 粘贴被测者身份说明或填结构化表单后保存，或跳过（使用系统默认身份）；可选填写“任务目标 prompt”。
+3. 系统先做场景匹配：命中库场景则直接进入；不命中则生成候选场景并用于本轮对话。
+4. **Phase 1 — Helper**：AI 助手协助用户完成协作任务（如分工、时间对齐）。
+5. 用户完成任务后点击「完成任务，进入讨论」，选择一个感兴趣的话题进入 Phase 2。
+6. **Phase 2 — Talk**：围绕所选话题与 AI 进行深度讨论。
+7. 讨论结束后完成简短收尾问题（micro-debrief），再提交评分。
+8. 结果页展示两层七维得分、证据、盲点与建议；研究者可折叠查看两段子分与原始 JSON。
 
 详见 `docs/09_identity_and_scenario_v2.md`、`docs/10_rubric_v2_two_layers.md`、`docs/11_memory_and_calibration.md`。
 
@@ -50,9 +53,15 @@ npm run dev
 ## 项目结构（概要）
 
 - **docs/**：需求与规范（含 v2：`09` 身份与场景、`10` 两层七维 rubric、`11` 记忆与离线校准）。
-- **data/scenario-blueprints/**：v2 场景蓝图（唯一场景数据源；旧版 `data/scenarios/` 已移除）。
+- **data/scenario-blueprints/**：v3 场景蓝图（两段式 helper→talk；唯一场景数据源）。
 - **data/runtime/**：本地 file-json 持久化（体验卡、用户记忆，默认 gitignore）。
+- **data/runtime/scenario-candidates/**：任务 prompt 未命中时生成的候选场景（需审核后发布）。
 - **lib/**：`identity/`、`scenario-v2/`、`assessment-v2/`、`memory/`、`storage/`、评测与 LLM。
 - **app/**：首页、setup、聊天、结果及 API（chat、evaluate、identity、memory、scenarios）。旧链 `/profile` 重定向到 `/setup`；结果页「再测一轮」直达默认场景对话（带 `userId` 与已保存的 `identityId`）。
 
 场景引擎、评估引擎与 UI 解耦，便于后续迁移或更换实现。
+
+## 候选场景审核发布
+
+- `GET /api/scenario-candidates`：查看候选列表。
+- `POST /api/scenario-candidates/promote`：发布指定候选到 `data/scenario-blueprints/`。

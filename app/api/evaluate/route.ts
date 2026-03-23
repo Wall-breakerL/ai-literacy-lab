@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runEvaluationV2 } from "@/lib/evaluation/run-evaluation-v2";
 import type { ChatMessage } from "@/lib/types";
-import { getBlueprintById } from "@/lib/scenario-v2/loader";
+import { resolveBlueprintById } from "@/lib/scenario-v2/resolver";
 import type { IdentityDossier } from "@/lib/identity/types";
 import { readJsonFile, writeJsonFile } from "@/lib/storage/file-json-storage";
 import { buildExperienceCard } from "@/lib/memory/experience-card";
@@ -12,13 +12,14 @@ import { createDefaultDossier } from "@/lib/identity/default-dossier";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, scenarioId, messages, identityId, userId, includeRawJudge } = body as {
+    const { sessionId, scenarioId, messages, identityId, userId, includeRawJudge, talkPrompt } = body as {
       sessionId: string;
       scenarioId: string;
       messages: ChatMessage[];
       identityId?: string;
       userId?: string;
       includeRawJudge?: boolean;
+      talkPrompt?: string;
     };
 
     if (!sessionId || !scenarioId || !Array.isArray(messages)) {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const blueprint = getBlueprintById(scenarioId);
+    const blueprint = await resolveBlueprintById(scenarioId);
     if (!blueprint) {
       return NextResponse.json(
         { error: "Unknown scenario blueprint (v2 only)" },
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
       identityId: active.identityId,
       identityCompiledPrompt: compiled,
       identityVersion,
+      talkPrompt,
     });
 
     const transcriptHint = messages

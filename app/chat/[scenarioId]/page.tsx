@@ -6,8 +6,8 @@ import { motion } from "framer-motion";
 import { ChevronDown, Loader2, SendHorizonal } from "lucide-react";
 import type { ChatMessage } from "@/lib/types";
 import type { ScenarioBlueprint } from "@/lib/scenario-v2/types";
+import { isTwoPhaseBlueprint } from "@/lib/scenario-v2/types";
 import { ensureBrowserUserId } from "@/lib/session-user";
-import { BLUEPRINT_IDS } from "@/lib/scenario-v2/loader";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,8 +20,6 @@ import {
 } from "@/lib/memory/session-storage";
 
 const RESULT_STORAGE_KEY = "ai-literacy-last-result";
-
-const ALLOWED_IDS = new Set(BLUEPRINT_IDS);
 
 function generateSessionId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -55,6 +53,14 @@ function ChatPageInner() {
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const debug = searchParams.get("debug") === "1";
 
+  // Two-phase state
+  const [talkPrompt, setTalkPrompt] = useState<string | undefined>(undefined);
+  const [talkPromptInput, setTalkPromptInput] = useState("");
+  const [showPhaseSwitchCard, setShowPhaseSwitchCard] = useState(false);
+
+  const bp = payload?.blueprint ?? null;
+  const twoPhase = bp ? isTwoPhaseBlueprint(bp) : false;
+
   useEffect(() => {
     const fromQ = searchParams.get("identityId");
     const fromStore =
@@ -64,7 +70,12 @@ function ChatPageInner() {
     setUserId(uq ?? (typeof window !== "undefined" ? ensureBrowserUserId() : undefined));
   }, [searchParams]);
 
-  const debriefQuestions = payload?.blueprint.debriefQuestions ?? [];
+  const debriefQuestions = bp?.debriefQuestions ?? [];
+  const defaultTalkPrompt = (() => {
+    if (!bp?.phases?.talk) return "请围绕 AI 能力边界、可靠性与人机分工展开讨论。";
+    if (bp.phases.talk.defaultTalkPrompt?.trim()) return bp.phases.talk.defaultTalkPrompt.trim();
+    return "请围绕 AI 能力边界、可靠性与人机分工展开讨论。";
+  })();
 
   const persistSession = useCallback(() => {
     if (!scenarioId || !sessionIdRef.current) return;
@@ -76,13 +87,14 @@ function ChatPageInner() {
       messages,
       debriefIndex,
       debriefQuestions,
+      talkPrompt,
     };
     try {
       window.localStorage.setItem(SESSION_STORAGE_KEY_V2, JSON.stringify(data));
     } catch {
       /* ignore */
     }
-  }, [scenarioId, identityId, phase, messages, debriefIndex, debriefQuestions]);
+  }, [scenarioId, identityId, phase, messages, debriefIndex, debriefQuestions, talkPrompt]);
 
   useEffect(() => {
     if (!scenarioId || !hydratedRef.current) return;
@@ -91,10 +103,6 @@ function ChatPageInner() {
 
   useEffect(() => {
     if (!scenarioId) return;
-    if (!ALLOWED_IDS.has(scenarioId)) {
-      router.replace("/setup");
-      return;
-    }
     let cancelled = false;
     fetch(`/api/scenarios/${scenarioId}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -125,7 +133,18 @@ function ChatPageInner() {
         if (saved.scenarioId === scenarioId) {
           sessionIdRef.current = saved.sessionId;
           setMessages(saved.messages ?? []);
-          setPhase(saved.phase === "debrief" ? "debrief" : "main");
+          const savedTalkPrompt = saved.talkPrompt?.trim() || "";
+          setTalkPrompt(savedTalkPrompt || undefined);
+          setTalkPromptInput(savedTalkPrompt);
+          if (saved.phase === "debrief") {
+            setPhase("debrief");
+          } else if (saved.phase === "talk") {
+            setPhase("talk");
+          } else if (saved.phase === "helper") {
+            setPhase("helper");
+          } else {
+            setPhase("main");
+          }
           setDebriefIndex(saved.debriefIndex ?? 0);
           return;
         }
@@ -136,22 +155,67 @@ function ChatPageInner() {
 
     if (!sessionIdRef.current) sessionIdRef.current = generateSessionId();
 
+    const initialPhase: ChatPhase = twoPhase ? "helper" : "main";
+    setPhase(initialPhase);
+
     if (messages.length === 0) {
-      setMessages([{ role: "assistant", content: payload.blueprint.openingMessage }]);
+      const opening = twoPhase
+        ? payload.blueprint.phases!.helper.openingMessage
+        : payload.blueprint.openingMessage;
+      setMessages([{ role: "assistant", content: opening }]);
     }
-  }, [payload, scenarioId, messages.length]);
+  }, [payload, scenarioId, messages.length, twoPhase]);
 
   useEffect(() => {
     listRef.current && (listRef.current.scrollTop = listRef.current.scrollHeight);
-  }, [messages, loading, phase]);
+  }, [messages, loading, phase, showPhaseSwitchCard]);
 
-  const situationalHint =
-    payload === undefined
-      ? copy.chat.loading
-      : payload === null
-        ? copy.chat.loadFailed
-        : payload.blueprint.worldState.slice(0, 200) +
-          (payload.blueprint.worldState.length > 200 ? "…" : "");
+  // Derive contextual info based on current phase
+  const situationalHint = (() => {
+    if (payload === undefined) return copy.chat.loading;
+    if (payload === null) return copy.chat.loadFailed;
+    if (twoPhase && phase === "helper") {
+      const ws = payload.blueprint.phases!.helper.worldState;
+      return ws.slice(0, 200) + (ws.length > 200 ? "…" : "");
+    }
+    if (twoPhase && phase === "talk") {
+      return (talkPrompt?.trim() || defaultTalkPrompt).slice(0, 200);
+    }
+    const ws = payload.blueprint.worldState;
+    return ws.slice(0, 200) + (ws.length > 200 ? "…" : "");
+  })();
+
+  const phaseLabel = twoPhase
+    ? phase === "helper"
+      ? copy.chat.phaseHelperLabel
+      : phase === "talk"
+        ? copy.chat.phaseTalkLabel
+        : undefined
+    : undefined;
+
+  // Current probes for debug view
+  const currentProbes = (() => {
+    if (!bp) return [];
+    if (twoPhase) {
+      if (phase === "helper") return bp.phases!.helper.hiddenProbes;
+      if (phase === "talk") return bp.phases!.talk.hiddenProbes;
+      return [];
+    }
+    return bp.hiddenProbes;
+  })();
+
+  // Count user turns in current phase
+  const userTurnsInPhase = (() => {
+    if (!twoPhase || phase !== "helper") return messages.filter((m) => m.role === "user").length;
+    // Count from start of helper phase messages
+    return messages.filter((m) => m.role === "user").length;
+  })();
+
+  const canSwitchPhase =
+    twoPhase &&
+    phase === "helper" &&
+    bp?.phaseSwitchPolicy &&
+    userTurnsInPhase >= bp.phaseSwitchPolicy.minPhase1UserTurns;
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -168,7 +232,13 @@ function ChatPageInner() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextThread, scenarioId, identityId }),
+        body: JSON.stringify({
+          messages: nextThread,
+          scenarioId,
+          identityId,
+          phase: twoPhase ? phase : undefined,
+          talkPrompt: phase === "talk" ? talkPrompt : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "发送失败");
@@ -180,6 +250,19 @@ function ChatPageInner() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleStartTalkPhase() {
+    if (!bp?.phases?.talk) return;
+    const fromInput = talkPromptInput.trim();
+    const finalPrompt = fromInput || defaultTalkPrompt;
+    setTalkPrompt(finalPrompt);
+    setShowPhaseSwitchCard(false);
+    setPhase("talk");
+
+    const talkOpening = bp.phases.talk.openingMessage;
+    const openingWithPrompt = `${talkOpening}\n\n[本段讨论引导]\n${finalPrompt}`;
+    setMessages((prev) => [...prev, { role: "assistant", content: openingWithPrompt }]);
   }
 
   async function runEvaluate(finalMessages: ChatMessage[]) {
@@ -199,6 +282,7 @@ function ChatPageInner() {
           identityId,
           userId,
           includeRawJudge: debug,
+          talkPrompt,
         }),
       });
       const data = await res.json();
@@ -236,6 +320,8 @@ function ChatPageInner() {
     setDebriefIndex(0);
   }
 
+  const isConversationPhase = phase === "main" || phase === "helper" || phase === "talk";
+
   if (!scenarioId) {
     return (
       <main className="glass-page">
@@ -258,9 +344,16 @@ function ChatPageInner() {
           />
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {copy.chat.taskLabel}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {copy.chat.taskLabel}
+                </p>
+                {phaseLabel && (
+                  <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-400">
+                    {phaseLabel}
+                  </span>
+                )}
+              </div>
               <Button
                 type="button"
                 variant="ghost"
@@ -280,16 +373,50 @@ function ChatPageInner() {
           </CardHeader>
         </Card>
 
-        {debug && payload && (
+        {debug && payload && currentProbes.length > 0 && (
           <Card className="mb-3 border-dashed bg-muted/40 p-3 text-xs">
             <p className="font-semibold">{copy.chat.debugProbes}</p>
             <ul className="mt-1 list-inside list-disc text-muted-foreground">
-              {payload.blueprint.hiddenProbes.map((p) => (
+              {currentProbes.map((p) => (
                 <li key={p.probeId}>
                   {p.probeId}: {p.assistantMove}
                 </li>
               ))}
             </ul>
+          </Card>
+        )}
+
+        {/* Phase switch card: helper → talk */}
+        {showPhaseSwitchCard && bp?.phases?.talk && (
+          <Card className="mb-4 ring-1 ring-cyan-200/20">
+            <CardHeader>
+              <CardTitle className="text-base">{copy.chat.phaseSwitchTitle}</CardTitle>
+              <CardDescription>{copy.chat.phaseSwitchDescription}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm font-medium">{copy.chat.talkPromptLabel}</p>
+              <textarea
+                className="border-input bg-background min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
+                value={talkPromptInput}
+                onChange={(e) => setTalkPromptInput(e.target.value)}
+                placeholder={copy.chat.talkPromptPlaceholder}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={handleStartTalkPhase}>
+                  {copy.chat.goTalk}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setTalkPromptInput("");
+                    handleStartTalkPhase();
+                  }}
+                >
+                  {copy.chat.goTalkDefault}
+                </Button>
+              </div>
+            </CardContent>
           </Card>
         )}
 
@@ -381,7 +508,7 @@ function ChatPageInner() {
             )}
           </div>
 
-          {phase === "main" && (
+          {isConversationPhase && !showPhaseSwitchCard && (
             <form onSubmit={handleSend} className="space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
@@ -403,7 +530,23 @@ function ChatPageInner() {
 
         <div className="mt-4 space-y-2">
           {ending && <p className="text-sm text-muted-foreground">{copy.chat.endingHint}</p>}
-          {phase === "main" && (
+
+          {/* Two-phase: helper → talk switch button */}
+          {canSwitchPhase && !showPhaseSwitchCard && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={() => setShowPhaseSwitchCard(true)}
+              disabled={ending || loading}
+              className="w-full sm:w-auto"
+            >
+              {copy.chat.finishHelper}
+            </Button>
+          )}
+
+          {/* Two-phase: talk → debrief; or single-phase: main → debrief */}
+          {((twoPhase && phase === "talk") || (!twoPhase && phase === "main")) && !showPhaseSwitchCard && (
             <Button
               type="button"
               variant="secondary"

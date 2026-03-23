@@ -1,6 +1,12 @@
 import type { EvaluationResultV2Payload } from "../evaluation/run-evaluation-v2";
 import type { V2DimensionKey } from "../assessment-v2/weights";
 
+export type PhaseScoreSummary = {
+  phase: "helper" | "talk";
+  score: number;
+  eventCounts: Record<string, number>;
+};
+
 export type ExperienceCard = {
   sessionId: string;
   identityId: string;
@@ -13,6 +19,10 @@ export type ExperienceCard = {
   blindSpots: string[];
   nextRecommendedScenarios: string[];
   nextRecommendedProbes: string[];
+  /** Two-phase summary (present only for v3 blueprints). */
+  phaseScores?: PhaseScoreSummary[];
+  talkPrompt?: string;
+  phaseSwitchTurn?: number;
   versions: {
     identityVersion: string;
     scenarioVersion: string;
@@ -56,6 +66,15 @@ export function buildExperienceCard(
         .join("; ")} | scores:${JSON.stringify(dimScores)}`
   );
 
+  // Phase scores summary
+  let phaseScores: PhaseScoreSummary[] | undefined;
+  if (result.phaseScores) {
+    phaseScores = [
+      { phase: "helper", score: result.phaseScores.helper.score, eventCounts: result.phaseScores.helper.eventCounts },
+      { phase: "talk", score: result.phaseScores.talk.score, eventCounts: result.phaseScores.talk.eventCounts },
+    ];
+  }
+
   return {
     sessionId: opts.sessionId,
     identityId: result.identityId ?? "unknown",
@@ -68,6 +87,9 @@ export function buildExperienceCard(
     blindSpots: result.blindSpots,
     nextRecommendedScenarios: result.nextRecommendedScenarios,
     nextRecommendedProbes: result.nextRecommendedProbes,
+    phaseScores,
+    talkPrompt: result.talkPrompt,
+    phaseSwitchTurn: result.phaseSwitchTurn,
     versions: {
       identityVersion: opts.identityVersion,
       scenarioVersion: result.scenarioVersion,

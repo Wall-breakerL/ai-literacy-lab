@@ -15,6 +15,13 @@ const RESULT_STORAGE_KEY = "ai-literacy-last-result";
 
 type V2Dim = { score: number; max: number; evidence: string[]; reason: string };
 
+type PhaseScoreData = {
+  phase: string;
+  score: number;
+  dimensions?: Record<string, V2Dim>;
+  eventCounts?: Record<string, number>;
+};
+
 type StoredResultV2 = {
   kind: "v2";
   weightedScore?: number;
@@ -33,8 +40,15 @@ type StoredResultV2 = {
   judgeModel?: string;
   identityVersion?: string;
   scoredAt?: string;
-  events?: { event: string; turnIndex?: number }[];
+  events?: { event: string; turnIndex?: number; phase?: string }[];
   rawJudgeJson?: unknown;
+  phaseScores?: {
+    helper: PhaseScoreData;
+    talk: PhaseScoreData;
+    weights: { helper: number; talk: number };
+  };
+  talkPrompt?: string;
+  phaseSwitchTurn?: number;
 };
 
 const LAYER_A: V2DimensionKey[] = ["taskFraming", "dialogSteering", "evidenceSeeking"];
@@ -55,6 +69,7 @@ export default function ResultPage() {
   const [load, setLoad] = useState<LoadState>({ status: "pending" });
   const [showMeta, setShowMeta] = useState(false);
   const [showResearcher, setShowResearcher] = useState(false);
+  const [showPhaseScores, setShowPhaseScores] = useState(false);
   const [chatAgainHref, setChatAgainHref] = useState("/setup");
 
   useEffect(() => {
@@ -254,6 +269,48 @@ export default function ResultPage() {
 
       <Card className="bg-card/60">
         <CardContent className="space-y-3 pt-6">
+          {data.phaseScores && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowPhaseScores((v) => !v)}
+                className="text-sm text-muted-foreground underline underline-offset-2 transition hover:text-foreground"
+              >
+                {showPhaseScores ? copy.result.metaCollapse : copy.result.phaseScoresTitle}
+              </button>
+              {showPhaseScores && (
+                <div className="glass-inset space-y-3 p-3 text-sm">
+                  {data.talkPrompt && (
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{copy.result.talkPrompt}：</span>
+                      {data.talkPrompt}
+                    </p>
+                  )}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(["helper", "talk"] as const).map((ph) => {
+                      const ps = data.phaseScores![ph];
+                      const w = data.phaseScores!.weights[ph];
+                      return (
+                        <div key={ph} className="rounded-lg border border-border p-3">
+                          <p className="font-medium text-foreground">
+                            {ph === "helper" ? copy.result.phaseHelper : copy.result.phaseTalk}
+                          </p>
+                          <p className="mt-1 tabular-nums">
+                            {ps.score} <span className="text-xs text-muted-foreground">({copy.result.phaseWeight} {w})</span>
+                          </p>
+                          {ps.eventCounts && Object.keys(ps.eventCounts).length > 0 && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {copy.result.phaseEvents}：{Object.entries(ps.eventCounts).map(([k, v]) => `${k}:${v}`).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           <button
             type="button"
             onClick={() => setShowMeta((v) => !v)}
@@ -283,7 +340,7 @@ export default function ResultPage() {
           </button>
           {showResearcher && (
             <pre className="glass-inset max-h-64 overflow-auto p-3 text-xs">
-              {JSON.stringify({ events: data.events, rawJudgeJson: data.rawJudgeJson }, null, 2)}
+              {JSON.stringify({ events: data.events, phaseScores: data.phaseScores, rawJudgeJson: data.rawJudgeJson }, null, 2)}
             </pre>
           )}
         </CardContent>

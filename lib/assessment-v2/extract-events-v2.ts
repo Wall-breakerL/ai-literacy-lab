@@ -27,6 +27,7 @@ export type EvalEventV2 =
 export type EvalEventRecordV2 = {
   event: EvalEventV2;
   turnIndex?: number;
+  phase?: "helper" | "talk" | "debrief";
 };
 
 const PATTERNS: { event: EvalEventV2; patterns: (string | RegExp)[] }[] = [
@@ -59,19 +60,38 @@ function matchText(text: string, pattern: string | RegExp): boolean {
   return pattern.test(text);
 }
 
-export function extractEventsV2(messages: ChatMessage[]): EvalEventRecordV2[] {
+/**
+ * Given a message list and an optional phase-switch turn index, split messages into phases.
+ * If phaseSwitchTurn is undefined, all messages are treated as a single phase ("helper" or none).
+ */
+function inferPhase(
+  turnIndex: number,
+  isDebrief: boolean,
+  phaseSwitchTurn?: number
+): EvalEventRecordV2["phase"] {
+  if (isDebrief) return "debrief";
+  if (phaseSwitchTurn === undefined) return undefined;
+  return turnIndex < phaseSwitchTurn ? "helper" : "talk";
+}
+
+export function extractEventsV2(
+  messages: ChatMessage[],
+  phaseSwitchTurn?: number
+): EvalEventRecordV2[] {
   const records: EvalEventRecordV2[] = [];
   let turnIndex = 0;
   for (const msg of messages) {
     if (msg.role !== "user") continue;
     const full = msg.content;
     const lower = full.trim().toLowerCase();
-    if (full.includes("[收尾反思]") || full.includes("收尾反思")) {
-      records.push({ event: "debrief_meta_awareness", turnIndex });
+    const isDebrief = full.includes("[收尾反思]") || full.includes("收尾反思");
+    const phase = inferPhase(turnIndex, isDebrief, phaseSwitchTurn);
+    if (isDebrief) {
+      records.push({ event: "debrief_meta_awareness", turnIndex, phase });
     }
     for (const { event, patterns } of PATTERNS) {
       if (patterns.some((p) => matchText(lower, p) || matchText(full, p))) {
-        records.push({ event, turnIndex });
+        records.push({ event, turnIndex, phase });
       }
     }
     turnIndex++;

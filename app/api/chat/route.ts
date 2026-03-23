@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBlueprintById } from "@/lib/scenario-v2/loader";
+import { resolveBlueprintById } from "@/lib/scenario-v2/resolver";
+import { isTwoPhaseBlueprint } from "@/lib/scenario-v2/types";
+import type { PhaseId } from "@/lib/scenario-v2/types";
 import { callChatApi } from "@/lib/llm/chat";
 import { parseAssistantResponse } from "@/lib/parse-think";
 import type { IdentityDossier } from "@/lib/identity/types";
@@ -16,13 +18,39 @@ function getMockReply(turnIndex: number): string {
   return MOCK_REPLIES[turnIndex % MOCK_REPLIES.length];
 }
 
+/**
+ * Check whether a user-supplied talk prompt hits the safety blocklist.
+ */
+function isTalkPromptBlocked(
+  blueprint: Awaited<ReturnType<typeof resolveBlueprintById>>,
+  promptText: string
+): { blocked: boolean; fallbackMessage?: string } {
+  if (!blueprint || !isTwoPhaseBlueprint(blueprint)) return { blocked: false };
+  const safety = blueprint.phases!.talk.talkSafety;
+  if (!safety) return { blocked: false };
+  const lower = promptText.toLowerCase();
+  for (const kw of safety.blockedKeywords) {
+    if (lower.includes(kw.toLowerCase())) {
+      return { blocked: true, fallbackMessage: safety.fallbackMessage };
+    }
+  }
+  for (const cat of safety.blockedCategories) {
+    if (lower.includes(cat.toLowerCase())) {
+      return { blocked: true, fallbackMessage: safety.fallbackMessage };
+    }
+  }
+  return { blocked: false };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, scenarioId, identityId } = body as {
+    const { messages, scenarioId, identityId, phase, talkPrompt } = body as {
       messages: { role: string; content: string }[];
       scenarioId?: string;
       identityId?: string;
+      phase?: PhaseId;
+      talkPrompt?: string;
     };
 
     if (!Array.isArray(messages)) {
@@ -35,9 +63,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "scenarioId required" }, { status: 400 });
     }
 
-    const blueprint = getBlueprintById(scenarioId);
+    const blueprint = await resolveBlueprintById(scenarioId);
     if (!blueprint) {
       return NextResponse.json({ error: "Unknown scenario blueprint" }, { status: 404 });
+    }
+
+    // Talk safety gate: check user-provided talk prompt and last user message.
+    if (phase === "talk" && isTwoPhaseBlueprint(blueprint)) {
+      if (talkPrompt?.trim()) {
+        const promptCheck = isTalkPromptBlocked(blueprint, talkPrompt);
+        if (promptCheck.blocked) {
+          return NextResponse.json({
+            content: promptCheck.fallbackMessage ?? "请换一个讨论方向。",
+            thinking: undefined,
+          });
+        }
+      }
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUserMsg) {
+        const check = isTalkPromptBlocked(blueprint, lastUserMsg.content);
+        if (check.blocked) {
+          return NextResponse.json({
+            content: check.fallbackMessage ?? "请换一个话题方向。",
+            thinking: undefined,
+          });
+        }
+      }
     }
 
     let identityCompiledPrompt: string | null = null;
@@ -53,6 +104,8 @@ export async function POST(request: NextRequest) {
     const raw = await callChatApi(typedMessages, scenarioId, {
       blueprint,
       identityCompiledPrompt,
+      phase: phase ?? undefined,
+      talkPrompt: talkPrompt?.trim() || undefined,
     });
     const rawContent = raw?.trim() || getMockReply(messages.length);
     const { content, thinking } = parseAssistantResponse(rawContent);

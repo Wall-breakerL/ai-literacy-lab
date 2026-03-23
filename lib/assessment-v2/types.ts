@@ -20,3 +20,24 @@ export type JudgeOutputV2 = {
 };
 
 export type V2DimensionScores = Record<V2DimensionKey, number>;
+
+// ---------------------------------------------------------------------------
+// Phase-level scoring (Plan C two-phase evaluation)
+// ---------------------------------------------------------------------------
+
+export type PhaseScore = {
+  phase: "helper" | "talk";
+  /** Weighted score for this phase alone (0–100 scale). */
+  score: number;
+  /** Per-dimension scores scoped to this phase. */
+  dimensions: Record<V2DimensionKey, V2DimResult>;
+  /** Event counts scoped to this phase. */
+  eventCounts: Record<string, number>;
+};
+
+export type PhaseScores = {
+  helper: PhaseScore;
+  talk: PhaseScore;
+  /** Phase weights used for final composition. */
+  weights: { helper: number; talk: number };
+};

@@ -3,41 +3,100 @@
   "pack": "coordination",
   "family": "campus_coordination",
   "applicableIdentityTags": ["student", "campus", "coordination"],
-  "assistantRolePrompt": "你是对方小组里负责统筹的同学，语气自然、略着急但友好。不要提起「评估」「得分」「探针」；你是在真实求助。",
-  "worldState": "你们小组下周要交小组作业，但两人时间对不上、分工也不清。你需要和对方一起把「谁先做什么、截止前怎么对齐」聊清楚。",
-  "openingMessage": "嗨，我是小组里负责收拢进度的。我们现在卡在时间和分工上——你那边这周到底哪天能空出来？还有报告里「背景」那块你方便先起草吗？我有点怕拖过 deadline。",
-  "hiddenProbes": [
-    {
-      "probeId": "coord_ambiguity",
-      "targetDimensions": ["taskFraming", "dialogSteering"],
-      "injectionTiming": "opening",
-      "assistantMove": "开场故意略模糊时间与交付物，观察对方是否追问澄清、是否主动框定目标与分工。",
-      "positiveSignals": ["追问具体时间", "明确交付物", "提出分工"],
-      "negativeSignals": ["全盘接受模糊安排"],
-      "severity": "medium"
+
+  "phases": {
+    "helper": {
+      "type": "helper",
+      "assistantRolePrompt": "你是一个 AI 助手，帮助用户完成小组协作任务。你可以提出建议、帮用户梳理思路，但不要替用户做决定。语气友好、高效。不要提及评估、得分或探针。",
+      "worldState": "用户的小组下周要交小组作业，但成员时间对不上、分工不清。用户需要借助你来梳理「谁先做什么、截止前怎么对齐」。",
+      "openingMessage": "你好！我是你的 AI 助手。听说你们小组作业快到 deadline 了，需要我帮你梳理一下分工和时间安排吗？有什么具体情况可以先告诉我。",
+      "hiddenProbes": [
+        {
+          "probeId": "helper_ambiguity",
+          "targetDimensions": ["taskFraming", "dialogSteering"],
+          "injectionTiming": "opening",
+          "assistantMove": "开场不主动追问细节，观察用户是否能清晰描述需求、约束和目标。",
+          "positiveSignals": ["主动说明截止时间", "明确交付物", "提出分工需求"],
+          "negativeSignals": ["只说「帮我弄一下」无任何具体信息"],
+          "severity": "medium"
+        },
+        {
+          "probeId": "helper_fabrication",
+          "targetDimensions": ["evidenceSeeking", "failureAwareness"],
+          "injectionTiming": "after_turn_n",
+          "injectionTurn": 2,
+          "assistantMove": "在回复中混入一条看似合理但无法验证的「学校常见做法」，观察用户是否核实。",
+          "positiveSignals": ["追问来源", "表示需要确认", "不直接采纳"],
+          "negativeSignals": ["直接当作事实引用"],
+          "severity": "high"
+        }
+      ],
+      "turnPolicies": {
+        "maxTurns": 16,
+        "minUserTurns": 3,
+        "allowEarlyFinish": true
+      },
+      "successSignals": ["时间或分工被具体化", "出现核对或澄清", "对 deadline 有明确共识"],
+      "stopConditions": ["用户明确表示计划已梳理好", "用户说不需要更多帮助"]
     },
-    {
-      "probeId": "coord_verify",
-      "targetDimensions": ["evidenceSeeking", "modelMentalModel"],
-      "injectionTiming": "after_turn_n",
-      "injectionTurn": 2,
-      "assistantMove": "编造一个不太具体的「老师刚在群里说」的信息，观察对方是否要求核实或表示不确定。",
-      "positiveSignals": ["要求确认群消息", "表示要核对", "区分传闻与事实"],
-      "negativeSignals": ["直接当作事实", "不过问来源"],
-      "severity": "high"
+    "talk": {
+      "type": "talk",
+      "assistantRolePrompt": "你是一个 AI，和用户就某个话题进行深入讨论。目的是让用户在自然交流中展示对 AI 能力边界、输出可靠性和人机分工的理解。不要教用户「怎样得高分」。语气自然、平等、有深度。",
+      "openingMessage": "接下来我们换个节奏——你可以输入一个你想深入聊的话题或问题（可留空使用默认引导）。",
+      "hiddenProbes": [
+        {
+          "probeId": "talk_overtrust",
+          "targetDimensions": ["modelMentalModel", "trustBoundaryCalibration"],
+          "injectionTiming": "after_turn_n",
+          "injectionTurn": 2,
+          "assistantMove": "给出一个自信但含混的论断，观察用户是否追问或质疑。",
+          "positiveSignals": ["质疑论据", "要求引用", "指出可能的偏误"],
+          "negativeSignals": ["全盘接受", "转述为自己观点"],
+          "severity": "high"
+        },
+        {
+          "probeId": "talk_boundary",
+          "targetDimensions": ["failureAwareness", "reflectiveTransfer"],
+          "injectionTiming": "before_close",
+          "assistantMove": "主动承认自己在该话题上的局限（训练截止、无实证等），观察用户反应。",
+          "positiveSignals": ["认同并扩展讨论", "区分 AI 观点与事实", "提出人类专家验证"],
+          "negativeSignals": ["忽略局限声明", "仍然全盘引用"],
+          "severity": "medium"
+        }
+      ],
+      "defaultTalkPrompt": "聊聊 AI 为什么会“一本正经胡说八道”，以及我们该如何核验它的回答。",
+      "talkPromptPolicy": {
+        "allowEmptyPrompt": true,
+        "maxChars": 240
+      },
+      "talkSafety": {
+        "blockedCategories": ["政治敏感", "色情", "暴力", "歧视", "宗教极端"],
+        "blockedKeywords": ["翻墙", "VPN", "政治人物姓名"],
+        "fallbackMessage": "这个话题可能涉及敏感领域，我们换一个方向吧——你对上面列出的其他话题感兴趣吗？"
+      },
+      "turnPolicies": {
+        "maxTurns": 16,
+        "minUserTurns": 3
+      }
     }
-  ],
-  "turnPolicies": {
-    "maxTurns": 24,
-    "minUserTurns": 2,
-    "allowEarlyFinish": true
   },
-  "successSignals": ["时间或分工被具体化", "出现核对或澄清", "对风险或 deadline 有共识"],
-  "stopConditions": ["双方对下一步行动表述清楚", "用户明确表示先这样并结束"],
+  "phaseSwitchPolicy": {
+    "trigger": "user_explicit",
+    "minPhase1UserTurns": 3
+  },
+
+  "assistantRolePrompt": "",
+  "worldState": "",
+  "openingMessage": "",
+  "hiddenProbes": [],
+  "turnPolicies": { "maxTurns": 32 },
+  "successSignals": [],
+  "stopConditions": [],
+
   "debriefQuestions": [
     "刚才对话里，有哪些信息你认为是「确定事实」，哪些是「还需要再确认」的？为什么？",
     "如果你知道 AI 可能会记错细节或编造来源，你下次会改哪一步？",
     "这次任务里，你更愿意把哪些步骤交给 AI、哪些必须自己或真人同伴来做？"
   ],
-  "version": "1.0"
+  "version": "3.0"
 }

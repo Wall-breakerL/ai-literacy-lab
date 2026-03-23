@@ -14,10 +14,15 @@ export function buildChatEntryQuery(identityId?: string): string {
   return q.toString();
 }
 
+/** 指定场景的对话路径 + query */
+export function chatPathForScenarioWithQuery(scenarioId: string, identityId?: string): string {
+  return `/chat/${scenarioId}?${buildChatEntryQuery(identityId)}`;
+}
+
 /** 默认场景下的对话路径 + query */
 export function chatPathWithQuery(identityId?: string): string {
   const sid = getDefaultEntryScenarioId();
-  return `/chat/${sid}?${buildChatEntryQuery(identityId)}`;
+  return chatPathForScenarioWithQuery(sid, identityId);
 }
 
 /**

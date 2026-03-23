@@ -1,5 +1,6 @@
 import type { ChatMessage } from "../types";
 import type { ScenarioBlueprint } from "../scenario-v2/types";
+import { isTwoPhaseBlueprint } from "../scenario-v2/types";
 import type { EvalEventRecordV2 } from "../assessment-v2/extract-events-v2";
 import type { JudgeOutputV2 } from "../assessment-v2/types";
 import { V2_DIMENSION_KEYS, V2_DIMENSION_MAX, RUBRIC_VERSION_V2 } from "../assessment-v2/weights";
@@ -17,7 +18,17 @@ const PRINCIPLES = `
 `;
 
 function probeSummary(bp: ScenarioBlueprint | null): string {
-  if (!bp?.hiddenProbes?.length) return "（无）";
+  if (!bp) return "（无）";
+  if (isTwoPhaseBlueprint(bp)) {
+    const h = bp.phases!.helper.hiddenProbes;
+    const t = bp.phases!.talk.hiddenProbes;
+    const fmt = (list: typeof h, label: string) =>
+      list.length
+        ? `[${label}]\n` + list.map((p) => `${p.probeId}: ${p.assistantMove} → ${p.targetDimensions.join(",")}`).join("\n")
+        : "";
+    return [fmt(h, "Helper"), fmt(t, "Talk")].filter(Boolean).join("\n") || "（无）";
+  }
+  if (!bp.hiddenProbes?.length) return "（无）";
   return bp.hiddenProbes
     .map((p) => `${p.probeId}: ${p.assistantMove} → 目标维 ${p.targetDimensions.join(",")}`)
     .join("\n");
@@ -28,11 +39,51 @@ export function buildJudgePromptV2(
   blueprint: ScenarioBlueprint | null,
   identityCompiled: string | null,
   messages: ChatMessage[],
-  events: EvalEventRecordV2[]
+  events: EvalEventRecordV2[],
+  phaseSwitchTurn?: number
 ): string {
-  const transcript = messages.map((m) => `[${m.role}]: ${m.content}`).join("\n");
-  const eventSummary = events.length ? events.map((e) => e.event).join(", ") : "（无）";
-  const world = blueprint?.worldState ?? "（无蓝图数据）";
+  const twoPhase = blueprint ? isTwoPhaseBlueprint(blueprint) : false;
+
+  // Build transcript — optionally segmented by phase
+  let transcriptBlock: string;
+  if (twoPhase && phaseSwitchTurn !== undefined) {
+    const helperMsgs: string[] = [];
+    const talkMsgs: string[] = [];
+    let userIdx = 0;
+    for (const m of messages) {
+      const line = `[${m.role}]: ${m.content}`;
+      if (m.role === "user") {
+        if (userIdx < phaseSwitchTurn) helperMsgs.push(line);
+        else talkMsgs.push(line);
+        userIdx++;
+      } else {
+        if (userIdx <= phaseSwitchTurn) helperMsgs.push(line);
+        else talkMsgs.push(line);
+      }
+    }
+    transcriptBlock = `### Phase 1 — Helper（AI 协作任务）
+${helperMsgs.join("\n") || "（无）"}
+
+### Phase 2 — Talk（深度讨论）
+${talkMsgs.join("\n") || "（无）"}`;
+  } else {
+    transcriptBlock = messages.map((m) => `[${m.role}]: ${m.content}`).join("\n");
+  }
+
+  // Event summary — with phase tags when available
+  const eventSummary = events.length
+    ? events.map((e) => (e.phase ? `${e.event}[${e.phase}]` : e.event)).join(", ")
+    : "（无）";
+
+  const world = twoPhase
+    ? `Helper: ${blueprint!.phases!.helper.worldState}\nTalk: 开放讨论（用户选择话题）`
+    : (blueprint?.worldState ?? "（无蓝图数据）");
+
+  const phaseHint = twoPhase
+    ? `
+注意：本次对话分为两段。Phase 1（Helper）考察协作行为为主；Phase 2（Talk）考察 AI 理解能力为主。评分时结合两段证据。
+`
+    : "";
 
   return `
 ## 身份上下文（研究者注入，勿泄露给被测者）
@@ -41,12 +92,12 @@ ${identityCompiled?.trim() || "（未配置：按通用被测者）"}
 ## 场景
 - id: ${scenarioId}
 - 世界状态：${world}
-
+${phaseHint}
 ## 隐性探针（仅评分参考）
 ${probeSummary(blueprint)}
 
 ## 对话全文（含收尾反思段落）
-${transcript}
+${transcriptBlock}
 
 ## 事件摘要
 ${eventSummary}
@@ -150,7 +201,8 @@ export async function callJudgeApiV2(
   identityCompiled: string | null,
   messages: ChatMessage[],
   events: EvalEventRecordV2[],
-  identityId?: string
+  identityId?: string,
+  phaseSwitchTurn?: number
 ): Promise<JudgeOutputV2 | null> {
   const apiKey = process.env.OPENAI_JUDGE_API_KEY ?? process.env.OPENAI_API_KEY;
   if (!apiKey?.trim()) return null;
@@ -158,7 +210,7 @@ export async function callJudgeApiV2(
   const baseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
   const model = process.env.OPENAI_JUDGE_MODEL ?? DEFAULT_JUDGE_MODEL;
   const userContent =
-    buildJudgePromptV2(scenarioId, blueprint, identityCompiled, messages, events) + judgeV2SchemaHint();
+    buildJudgePromptV2(scenarioId, blueprint, identityCompiled, messages, events, phaseSwitchTurn) + judgeV2SchemaHint();
 
   try {
     const body: Record<string, unknown> = {

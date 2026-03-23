@@ -100,6 +100,15 @@
 
 ## 事件与规则 Judge
 
-- **事件 v2**：`lib/assessment-v2/extract-events-v2.ts`（含 `uncertainty_acknowledged`、`source_requested` 等）。
+- **事件 v2**：`lib/assessment-v2/extract-events-v2.ts`（含 `uncertainty_acknowledged`、`source_requested` 等）。事件记录现支持 `phase` 标签（`helper` | `talk` | `debrief`），由 `phaseSwitchTurn` 自动推断。
 - **规则回退**：`lib/judge-rule-v2.ts` + `lib/rule-corrector-v2.ts`。
-- **LLM Judge**：`lib/llm/judge-v2.ts`（固定原则，**非在线自改写**）。
+- **LLM Judge**：`lib/llm/judge-v2.ts`（固定原则，**非在线自改写**）。两段式蓝图时 prompt 分段输入 transcript。
+
+## 两段式评分（Plan C）
+
+v3 蓝图采用固定两段对话：Helper（AI 协作任务）→ Talk（深度讨论），最终输出单一总分（七维加权），同时保留 phase 级别中间分供研究使用。
+
+- **Phase 切分**：`run-evaluation-v2.ts` 通过 `detectPhaseSwitchTurn` 识别 talk 开场消息位置。
+- **Phase 子分**：`PhaseScore` 包含 phase 粒度的维度得分与事件计数（`lib/assessment-v2/types.ts`）。
+- **Phase 权重**：默认 `helper: 0.55`、`talk: 0.45`（可调）。
+- **结果展示**：总分主视图不变；「两段子分」折叠区供研究者查看。

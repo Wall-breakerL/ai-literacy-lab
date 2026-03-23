@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import type { IdentitySource } from "@/lib/identity/types";
-import { chatPathWithQuery } from "@/lib/chat-entry";
+import { chatPathForScenarioWithQuery, chatPathWithQuery } from "@/lib/chat-entry";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,18 +23,39 @@ export default function SetupPage() {
   const [communicationStyle, setCommunicationStyle] = useState("");
   const [aiFamiliarity, setAiFamiliarity] = useState("");
   const [riskSensitivity, setRiskSensitivity] = useState("");
+  const [taskPrompt, setTaskPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function goToChat(identityId?: string) {
+  async function selectScenarioId(identityId?: string): Promise<string | null> {
+    if (!taskPrompt.trim()) return null;
+    try {
+      const res = await fetch("/api/scenario-select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskPrompt: taskPrompt.trim(), identityId }),
+      });
+      const data = (await res.json()) as { scenarioId?: string };
+      return data.scenarioId?.trim() ? data.scenarioId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function goToChat(identityId?: string) {
+    const scenarioId = await selectScenarioId(identityId);
+    if (scenarioId) {
+      router.push(chatPathForScenarioWithQuery(scenarioId, identityId));
+      return;
+    }
     router.push(chatPathWithQuery(identityId));
   }
 
-  function handleSkip() {
+  async function handleSkip() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("ai-literacy-identity-id");
     }
-    goToChat(undefined);
+    await goToChat(undefined);
   }
 
   async function submit(source: IdentitySource) {
@@ -67,7 +88,7 @@ export default function SetupPage() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("ai-literacy-identity-id", data.identityId);
       }
-      goToChat(data.identityId);
+      await goToChat(data.identityId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -156,6 +177,17 @@ export default function SetupPage() {
                 </Button>
               </div>
             )}
+            <div className="space-y-2">
+              <Label htmlFor="taskPrompt">{copy.setup.taskPromptLabel}</Label>
+              <textarea
+                id="taskPrompt"
+                className="border-input bg-background min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
+                value={taskPrompt}
+                onChange={(e) => setTaskPrompt(e.target.value)}
+                placeholder={copy.setup.taskPromptPlaceholder}
+              />
+              <p className="text-xs text-muted-foreground">{copy.setup.taskPromptHint}</p>
+            </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBlueprintById } from "@/lib/scenario-v2/loader";
+import { resolveBlueprintById } from "@/lib/scenario-v2/resolver";
 
 export async function GET(
   _request: NextRequest,
@@ -11,7 +11,7 @@ export async function GET(
     return NextResponse.json({ error: "scenarioId required" }, { status: 400 });
   }
 
-  const blueprint = getBlueprintById(scenarioId);
+  const blueprint = await resolveBlueprintById(scenarioId);
   if (!blueprint) {
     return NextResponse.json({ error: "Blueprint not found" }, { status: 404 });
   }

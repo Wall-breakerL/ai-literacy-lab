@@ -20,9 +20,20 @@
 
 ## 2. 在线对话（/api/chat）
 
-**现状**：`app/api/chat/route.ts` → `lib/llm/chat.ts` 的 `callChatApi`；需有效 **v2 蓝图 id**。有 `OPENAI_API_KEY` 时用 OpenAI 兼容 `fetch`；返回 `null` 或异常时回退轮换 **mock** 回复。
+**现状**：`app/api/chat/route.ts` → `lib/llm/chat.ts` 的 `callChatApi`；需有效 **v2/v3 蓝图 id**。有 `OPENAI_API_KEY` 时用 OpenAI 兼容 `fetch`；返回 `null` 或异常时回退轮换 **mock** 回复。
 
-- System prompt：蓝图叙事字段 + 可选身份 `compiledPrompt`；约束不泄露探针、不教刷分。
+- System prompt：根据 `phase` 参数（`helper` | `talk`）构建不同提示。Helper 注入任务 `worldState`；Talk 注入讨论引导（由 `talkPrompt` 或蓝图 `defaultTalkPrompt` 生成）。
+- **新增参数**：`phase`（可选）、`talkPrompt`（可选，talk 阶段的用户输入）。
+- **安全门控**：Talk 阶段检测最新 user 消息是否命中 `talkSafety.blockedKeywords` / `blockedCategories`，命中则返回 `fallbackMessage`，不调用 LLM。
+
+## 2.1 场景选择（/api/scenario-select）
+
+- 入参：`taskPrompt`（可选）、`identityId`（可选）。
+- 行为：
+  - 命中正式蓝图库：返回 `source: "matched"` + 正式 `scenarioId`。
+  - 不命中：生成 v3 两段式候选蓝图，写入 `data/runtime/scenario-candidates/`，返回 `source: "generated_candidate"` + 候选 `scenarioId`。
+  - 无 prompt/异常：回退默认蓝图并返回 `source: "default" | "fallback_default"`。
+- 目的：平衡“用户表达个体任务意图”与“库场景复用一致性”。
 
 ---
 
@@ -30,8 +41,10 @@
 
 **现状**：`lib/evaluation/run-evaluation-v2.ts` 调用 `callJudgeApiV2`（`lib/llm/judge-v2.ts`）。未配置 key、请求失败或 JSON 不合法时回退 **`runRuleJudgeV2`**（`lib/judge-rule-v2.ts`），再经 **`applyRuleCorrectionsV2`**（`lib/rule-corrector-v2.ts`）。
 
-- LLM 路径：输出 **JudgeOutputV2**（两层七维），见 `lib/assessment-v2/types.ts`。
+- LLM 路径：输出 **JudgeOutputV2**（两层七维），见 `lib/assessment-v2/types.ts`。两段式蓝图时 prompt 分段输入 transcript 与分段事件摘要。
 - 回退路径：`judgeModel` 记为 **`rule-based`**。
+- **Phase 子分**：`EvaluationResultV2Payload` 新增 `phaseScores`（`PhaseScores`），含 helper/talk 两段的维度得分与事件计数。
+- **新增入参**：`talkPrompt`（可选），透传至 experience card。
 
 **输出与标度**：见 [04_eval_spec.md](./04_eval_spec.md) §0 与 [10_rubric_v2_two_layers.md](./10_rubric_v2_two_layers.md)。
 
@@ -43,6 +56,12 @@
 |------|------------|
 | 对话 API | 网络/4xx/5xx/解析失败 → 返回 mock 回复，不向用户报错 |
 | Judge API | 未配置 key / 请求失败 / JSON 不合法 → `runRuleJudgeV2`，`judgeModel` 为 `rule-based` |
+| 场景选择 API | 匹配/生成异常 → 回退默认蓝图，保证会话可继续 |
+
+## 4.1 候选审核发布 API
+
+- `GET /api/scenario-candidates`：列出 runtime 候选场景。
+- `POST /api/scenario-candidates/promote`：将候选写入 `data/scenario-blueprints/` 并标记为 `promoted`。
 
 ---
 
@@ -60,3 +79,4 @@
 - **核心 Rubric**：两层七维 v2，见 `docs/10_rubric_v2_two_layers.md` 与 `lib/assessment-v2/weights.ts`。
 - **规则校正**：`applyRuleCorrectionsV2`。
 - **版本追溯**：结果载荷中的 `rubricVersion`、`blueprintVersion`、`eventSchemaVersion`、`judgePromptVersion`、`judgeModel`、`scoredAt` 等。
+- **两段式**：v3 蓝图支持 helper→talk 两段对话；评测自动检测 phase 切换点，生成 phase 级子分。详见 `docs/10_rubric_v2_two_layers.md` 底部「两段式评分」。
