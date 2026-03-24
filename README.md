@@ -31,7 +31,7 @@ npm run dev
 - **`OPENAI_API_KEY`**：若未配置，助手回复与评估均使用**内置 mock**，无需 key 即可完整跑通流程。
 - **`OPENAI_BASE_URL`**、**`OPENAI_CHAT_MODEL`**、**`OPENAI_JUDGE_MODEL`**、**`OPENAI_JUDGE_API_KEY`**：可选，用于接入真实对话与 LLM Judge。
 
-**接入真实 API**：对话在 `lib/llm/chat.ts` 的 `callChatApi`、评测在 `lib/llm/judge-v2.ts` 的 `callJudgeApiV2`，均通过 OpenAI 兼容 `fetch` 调用；未配置 key 或请求失败时对话回退 mock、评测回退规则 Judge v2（见 `lib/evaluation/run-evaluation-v2.ts`）。
+**接入真实 API**：对话在 `lib/llm/chat.ts` 的 `callChatApi`、评测在 `lib/llm/judge-v2.ts` 的 `callJudgeApiV2`，均通过 OpenAI 兼容 `fetch` 调用；未配置 key 时对话回退 mock、评测直接报错（规则 Judge 回退已关闭）。
 
 **使用 Minimax**：Minimax 提供 OpenAI 兼容的 Chat Completions 接口。在 `.env.local` 中设置 `OPENAI_BASE_URL=https://api.minimaxi.com/v1`、`OPENAI_API_KEY=你的 Minimax Key`，并将 `OPENAI_CHAT_MODEL` / `OPENAI_JUDGE_MODEL` 设为 Minimax 模型名（如 `MiniMax-M2.5`、`MiniMax-M2.5-highspeed`）即可。参见 `.env.example` 底部示例。
 
@@ -46,13 +46,13 @@ npm run dev
 7. 讨论结束后完成简短收尾问题（micro-debrief），再提交评分。
 8. 结果页展示两层七维得分、证据、盲点与建议；研究者可折叠查看两段子分与原始 JSON。
 
-详见 `docs/09_identity_and_scenario_v2.md`、`docs/10_rubric_v2_two_layers.md`、`docs/11_memory_and_calibration.md`。
+详见 `docs/01_evaluation_overview.md`（项目概览）和 `docs/02–08` 各模块文档。
 
-**无 API key 时**：助手为固定轮换的占位回复，评分为 `judge-rule-v2` + `rule-corrector-v2`，全程可离线完成。
+**无 API key 时**：助手为固定轮换的占位回复，评测需配置 `OPENAI_API_KEY`；否则直接报错（v2.0 规则 Judge 回退已关闭）。
 
 ## 项目结构（概要）
 
-- **docs/**：需求与规范（含 v2：`09` 身份与场景、`10` 两层七维 rubric、`11` 记忆与离线校准）。
+- **docs/**：需求与规范（`01` 概览、`02` 场景蓝图、`03` 身份、`04` 评分体系、`05` 评测流程、`06` 记忆层、`07` API 参考、`08` 部署指南）。
 - **data/scenario-blueprints/**：v2 场景蓝图（两段式 helper→talk；唯一场景数据源）。
 - **data/runtime/**：本地 file-json 持久化（体验卡、用户记忆，默认 gitignore）。
 - **data/runtime/scenario-candidates/**：任务 prompt 未命中时生成的候选场景（需审核后发布）。
