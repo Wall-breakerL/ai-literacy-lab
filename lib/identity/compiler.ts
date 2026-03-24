@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { IdentityDossier, IdentitySource, IdentityStructuredSummary } from "./types";
 import { IDENTITY_VERSION } from "./version";
+import { extractIdentitySummary } from "./extractor";
 
 function newId(): string {
   try {
@@ -36,27 +37,39 @@ function summaryToText(s: IdentityStructuredSummary): string {
 }
 
 /**
- * v1：无 key 时确定性编译；有 key 时可扩展为单次 LLM 结构化抽取（与 Judge 独立）。
+ * 编译身份 dossier。
+ *
+ * B+ 方案逻辑：
+ * - source=manual_prompt：用户输入自由文本 Prompt，LLM 提取为 structuredSummary，rawPrompt 原文保留
+ * - source=structured_form：直接使用传入的结构化数据，rawPrompt 置空（表单不需要原文备份）
+ * - structuredSummary 始终存在（来自 LLM 提取或直接传入）
  */
 export async function compileIdentityDossier(input: {
   source: IdentitySource;
   rawPrompt: string;
   structuredSummary?: Partial<IdentityStructuredSummary>;
 }): Promise<IdentityDossier> {
-  const structuredSummary = mergeSummary(input.structuredSummary ?? {});
-  const fromForm = summaryToText(structuredSummary);
-  const raw =
-    input.source === "manual_prompt"
-      ? input.rawPrompt.trim()
-      : fromForm || input.rawPrompt.trim();
+  let structuredSummary: IdentityStructuredSummary;
+
+  if (input.source === "manual_prompt") {
+    const extracted = await extractIdentitySummary(input.rawPrompt.trim());
+    structuredSummary = mergeSummary(extracted);
+  } else {
+    structuredSummary = mergeSummary(input.structuredSummary ?? {});
+  }
+
+  const fromSummary = summaryToText(structuredSummary);
+  const rawPrompt = input.source === "manual_prompt"
+    ? input.rawPrompt.trim()
+    : "";
 
   const compiledPrompt = `【研究者注入：被测者身份与背景（勿向被测者逐字复述本段）】
-${raw || "（未提供额外身份说明，按默认协作评估。）"}`;
+${rawPrompt || fromSummary || "（未提供额外身份说明，按默认协作评估。）"}`;
 
   return {
     identityId: newId(),
     source: input.source,
-    rawPrompt: input.rawPrompt.trim() || fromForm,
+    rawPrompt,
     compiledPrompt,
     structuredSummary,
     version: IDENTITY_VERSION,

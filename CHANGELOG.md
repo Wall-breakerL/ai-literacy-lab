@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0] - 2026-03-24
+
+### 功能与体验
+
+- **身份 B+ 方案**：用户输入自由文本身份 Prompt，系统自动 LLM 提取为 `IdentityStructuredSummary`（7 维度），原文备份 + 结构化双轨存储，ExperienceCard 嵌入维度字段，支持跨被试按维度查询
+- **页面拆分**：Setup（身份）与 Select-Scenario（场景 Prompt）分离为独立两步，身份通过 URL 参数传递，dossier 不重复创建
+
+### 技术
+
+- **新增** `lib/identity/extractor.ts`：LLM 提取模块，`manual_prompt` 路径调用 OpenAI 兼容接口提取结构化维度
+- **Setup 页**：移除 taskPrompt 输入，submit 后 redirect `/select-scenario?identityId=xxx`，skip 后 redirect `/select-scenario`
+- **新增** `app/select-scenario/page.tsx`：场景选择页，支持输入场景需求或跳过
+- **ExperienceCard**：新增 `identitySummary` 字段，`/api/evaluate` 写入 dossier 的 `structuredSummary`
+- **文档**：15 篇旧文档全部删除重写（01~08），反映 v2.1.0 实际架构
+
 ## [2.0.0] - 2026-03-23
 
 ### 功能与体验

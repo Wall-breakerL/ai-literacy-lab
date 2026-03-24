@@ -1,4 +1,5 @@
 import type { EvaluationResultV2Payload } from "../evaluation/run-evaluation-v2";
+import type { IdentityStructuredSummary } from "../identity/types";
 import type { V2DimensionKey } from "../assessment-v2/weights";
 
 export type PhaseScoreSummary = {
@@ -10,6 +11,8 @@ export type PhaseScoreSummary = {
 export type ExperienceCard = {
   sessionId: string;
   identityId: string;
+  /** B+ 方案：从 dossier structuredSummary 提取，供记忆库按维度查询 */
+  identitySummary?: IdentityStructuredSummary;
   userId?: string;
   scenarioId: string;
   transcriptSummary: string;
@@ -45,7 +48,13 @@ function summarizeTranscript(text: string, maxLen = 400): string {
 
 export function buildExperienceCard(
   result: EvaluationResultV2Payload,
-  opts: { sessionId: string; userId?: string; identityVersion: string; transcriptHint?: string }
+  opts: {
+    sessionId: string;
+    userId?: string;
+    identityVersion: string;
+    transcriptHint?: string;
+    identitySummary?: IdentityStructuredSummary;
+  }
 ): ExperienceCard {
   const dimScores: Record<string, number> = {};
   const evidence: Record<string, string[]> = {};
@@ -78,6 +87,7 @@ export function buildExperienceCard(
   return {
     sessionId: opts.sessionId,
     identityId: result.identityId ?? "unknown",
+    identitySummary: opts.identitySummary,
     userId: opts.userId,
     scenarioId: result.scenarioId,
     transcriptSummary,

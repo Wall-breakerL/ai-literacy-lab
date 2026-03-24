@@ -27,12 +27,14 @@
 ## 完整评测流程
 
 ```
-首页 (/")
+首页 (/)
     ↓
-Setup (/setup) — 配置身份 + 任务目标（可选）
-    ↓
-场景匹配 — 命中库场景直接进入；不命中则生成候选场景
-    ↓
+Setup (/setup) — 填身份 Prompt，系统自动提取为结构化维度
+    ↓ POST /api/identity
+    ↓ redirect /select-scenario?identityId=xxx
+Select-Scenario (/select-scenario) — 填场景需求（可选）
+    ↓ POST /api/scenario-select → 匹配/生成场景
+    ↓ redirect /chat/{scenarioId}?identityId=xxx&userId=xxx
 Phase 1: Helper — AI 协作任务
     ↓ 满足 minPhase1UserTurns 后可切换
 Phase 2: Talk — 深度讨论（可选自定义话题）
@@ -50,13 +52,14 @@ Debrief — 3 个收尾反思问题
 ai-literacy-lab/
 ├── app/
 │   ├── page.tsx              # 首页
-│   ├── setup/                # 身份与入场
+│   ├── setup/                # 身份与入场（填身份 Prompt）
+│   ├── select-scenario/      # 场景选择（填场景 Prompt）
 │   ├── chat/[scenarioId]/    # 聊天对话页
 │   ├── result/               # 结果展示页
 │   └── api/                  # API 路由
 ├── lib/
 │   ├── scenario-v2/           # 场景引擎（蓝图加载、路由、匹配、生成）
-│   ├── identity/              # 身份编译
+│   ├── identity/              # 身份编译（含 LLM 提取为结构化维度）
 │   ├── assessment-v2/         # 评估引擎（事件提取、权重、类型）
 │   ├── memory/                # 记忆层
 │   ├── evaluation/            # 评测执行
@@ -64,7 +67,7 @@ ai-literacy-lab/
 │   └── storage/               # 文件持久化
 ├── data/
 │   ├── scenario-blueprints/   # 正式场景蓝图
-│   └── runtime/               # 运行时数据（gitignored）
+│   └── runtime/              # 运行时数据（gitignored）
 └── docs/                      # 本文档目录
 ```
 

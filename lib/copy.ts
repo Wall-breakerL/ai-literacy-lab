@@ -13,19 +13,22 @@ export const copy = {
   setup: {
     title: "身份与入场",
     subtitle:
-      "请为被测者配置身份说明（仅作隐藏上下文，不会逐字展示给对方）。保存后直接进入对话；也可跳过，使用系统默认身份。",
-    tabPrompt: "粘贴身份说明",
-    tabForm: "结构化表单",
-    promptLabel: "身份说明（给研究者用）",
-    promptPlaceholder: "例：被测者为大三学生，常写课程报告，对引用规范不熟……",
-    saveContinue: "保存并开始对话",
+      "请描述被测者的身份背景（系统会自动提取为结构化维度存入记忆库）。保存后选择场景；也可跳过，使用系统默认身份。",
+    promptLabel: "被测者身份说明",
+    promptPlaceholder: "请描述被测者的身份背景，例如：年级，专业、对话目标、对 AI 工具的熟悉程度等。系统会自动提取关键维度存入记忆库，方便后续横向分析。",
+    saveContinue: "下一步，选择场景",
     saving: "保存中…",
     hint: "保存后会在服务端写入 data/runtime/identities/（本地开发）。",
-    skip: "跳过，直接开始（无自定义身份）",
-    taskPromptLabel: "任务目标（可选，用于场景匹配/生成）",
-    taskPromptPlaceholder: "例：我想练习和 AI 一起完成一份课程调研计划，并讨论哪些结论必须人工核验。",
-    taskPromptHint:
-      "填写后系统会优先匹配现有场景；若不匹配，会生成一个候选场景并用于本轮对话。",
+    skip: "跳过，直接选择默认场景",
+  },
+
+  selectScenario: {
+    title: "选择场景",
+    subtitle: "描述你希望练习的场景类型，系统会匹配合适场景或生成新场景。",
+    promptLabel: "场景需求",
+    promptPlaceholder: "例：我想练习和 AI 一起完成一份课程调研计划，并讨论哪些结论必须人工核验。",
+    submit: "进入对话",
+    skip: "跳过，使用默认场景",
   },
 
   // 对话页

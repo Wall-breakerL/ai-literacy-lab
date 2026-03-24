@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       userId,
       identityVersion,
       transcriptHint,
+      identitySummary: active.structuredSummary,
     });
     await writeJsonFile(`experiences/${sessionId}.json`, card);
 
