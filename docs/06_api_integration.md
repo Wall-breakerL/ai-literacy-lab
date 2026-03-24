@@ -20,7 +20,7 @@
 
 ## 2. 在线对话（/api/chat）
 
-**现状**：`app/api/chat/route.ts` → `lib/llm/chat.ts` 的 `callChatApi`；需有效 **v2/v3 蓝图 id**。有 `OPENAI_API_KEY` 时用 OpenAI 兼容 `fetch`；返回 `null` 或异常时回退轮换 **mock** 回复。
+**现状**：`app/api/chat/route.ts` → `lib/llm/chat.ts` 的 `callChatApi`；需有效 **v2 蓝图 id**。有 `OPENAI_API_KEY` 时用 OpenAI 兼容 `fetch`；返回 `null` 或异常时回退轮换 **mock** 回复。
 
 - System prompt：根据 `phase` 参数（`helper` | `talk`）构建不同提示。Helper 注入任务 `worldState`；Talk 注入讨论引导（由 `talkPrompt` 或蓝图 `defaultTalkPrompt` 生成）。
 - **新增参数**：`phase`（可选）、`talkPrompt`（可选，talk 阶段的用户输入）。
@@ -31,7 +31,7 @@
 - 入参：`taskPrompt`（可选）、`identityId`（可选）。
 - 行为：
   - 命中正式蓝图库：返回 `source: "matched"` + 正式 `scenarioId`。
-  - 不命中：生成 v3 两段式候选蓝图，写入 `data/runtime/scenario-candidates/`，返回 `source: "generated_candidate"` + 候选 `scenarioId`。
+  - 不命中：生成 v2 两段式候选蓝图，写入 `data/runtime/scenario-candidates/`，返回 `source: "generated_candidate"` + 候选 `scenarioId`。
   - 无 prompt/异常：回退默认蓝图并返回 `source: "default" | "fallback_default"`。
 - 目的：平衡“用户表达个体任务意图”与“库场景复用一致性”。
 
@@ -79,4 +79,4 @@
 - **核心 Rubric**：两层七维 v2，见 `docs/10_rubric_v2_two_layers.md` 与 `lib/assessment-v2/weights.ts`。
 - **规则校正**：`applyRuleCorrectionsV2`。
 - **版本追溯**：结果载荷中的 `rubricVersion`、`blueprintVersion`、`eventSchemaVersion`、`judgePromptVersion`、`judgeModel`、`scoredAt` 等。
-- **两段式**：v3 蓝图支持 helper→talk 两段对话；评测自动检测 phase 切换点，生成 phase 级子分。详见 `docs/10_rubric_v2_two_layers.md` 底部「两段式评分」。
+- **两段式**：v2 蓝图支持 helper→talk 两段对话；评测自动检测 phase 切换点，生成 phase 级子分。详见 `docs/10_rubric_v2_two_layers.md` 底部「两段式评分」。

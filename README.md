@@ -53,7 +53,7 @@ npm run dev
 ## 项目结构（概要）
 
 - **docs/**：需求与规范（含 v2：`09` 身份与场景、`10` 两层七维 rubric、`11` 记忆与离线校准）。
-- **data/scenario-blueprints/**：v3 场景蓝图（两段式 helper→talk；唯一场景数据源）。
+- **data/scenario-blueprints/**：v2 场景蓝图（两段式 helper→talk；唯一场景数据源）。
 - **data/runtime/**：本地 file-json 持久化（体验卡、用户记忆，默认 gitignore）。
 - **data/runtime/scenario-candidates/**：任务 prompt 未命中时生成的候选场景（需审核后发布）。
 - **lib/**：`identity/`、`scenario-v2/`、`assessment-v2/`、`memory/`、`storage/`、评测与 LLM。

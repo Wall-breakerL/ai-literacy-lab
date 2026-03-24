@@ -9,9 +9,9 @@
 - **编译**：`lib/identity/compiler.ts`（当前为确定性拼接；后续可加单次 LLM 结构化抽取，**与 Judge 独立**）。
 - **持久化**：`POST /api/identity` → `data/runtime/identities/{id}.json`（`lib/storage/file-json-storage.ts`）。
 
-## 2. ScenarioBlueprint（v3 两段式）
+## 2. ScenarioBlueprint（v2 两段式）
 
-蓝图 schema 已升级至 v3，支持固定两段式对话：
+蓝图 schema 已升级至 v2，支持固定两段式对话：
 
 1. **Phase 1 — Helper**：AI 助手协助用户完成具体任务（考察协作行为为主）。
 2. **Phase 2 — Talk**：用户选话题与 AI 深入讨论（考察 AI 理解能力为主）。
@@ -38,7 +38,7 @@
 - **入口**：`/setup` 新增任务 prompt（可选）。
 - **选择 API**：`POST /api/scenario-select`。
   - 有 prompt 且命中库：返回 `source: "matched"` + 正式 `scenarioId`。
-  - 有 prompt 但不命中：按 prompt 生成 v3 两段式蓝图，写入 `data/runtime/scenario-candidates/`，返回 `source: "generated_candidate"`。
+  - 有 prompt 但不命中：按 prompt 生成 v2 两段式蓝图，写入 `data/runtime/scenario-candidates/`，返回 `source: "generated_candidate"`。
   - 无 prompt 或生成失败：回退默认蓝图入口。
 - **读取策略**：`resolveBlueprintById()` 统一解析“正式库 + runtime 候选库”，`/api/scenarios/[id]`、`/api/chat`、`/api/evaluate` 全部走该解析。
 - **审核发布**：

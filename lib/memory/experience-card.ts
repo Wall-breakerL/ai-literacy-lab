@@ -19,7 +19,7 @@ export type ExperienceCard = {
   blindSpots: string[];
   nextRecommendedScenarios: string[];
   nextRecommendedProbes: string[];
-  /** Two-phase summary (present only for v3 blueprints). */
+  /** Two-phase summary (present only for v2 blueprints). */
   phaseScores?: PhaseScoreSummary[];
   talkPrompt?: string;
   phaseSwitchTurn?: number;

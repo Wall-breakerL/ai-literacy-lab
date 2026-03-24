@@ -8,7 +8,7 @@ const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
 const TONE = "语气自然、专业、好沟通即可。";
 
 /**
- * 构造对话用 system prompt：支持 v3 两段式蓝图和单段蓝图。
+ * 构造对话用 system prompt：支持 v2 两段式蓝图和单段蓝图。
  */
 export function buildChatSystemPrompt(params: {
   blueprint: ScenarioBlueprint | null;

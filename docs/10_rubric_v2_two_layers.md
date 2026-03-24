@@ -106,7 +106,7 @@
 
 ## 两段式评分（Plan C）
 
-v3 蓝图采用固定两段对话：Helper（AI 协作任务）→ Talk（深度讨论），最终输出单一总分（七维加权），同时保留 phase 级别中间分供研究使用。
+v2 蓝图采用固定两段对话：Helper（AI 协作任务）→ Talk（深度讨论），最终输出单一总分（七维加权），同时保留 phase 级别中间分供研究使用。
 
 - **Phase 切分**：`run-evaluation-v2.ts` 通过 `detectPhaseSwitchTurn` 识别 talk 开场消息位置。
 - **Phase 子分**：`PhaseScore` 包含 phase 粒度的维度得分与事件计数（`lib/assessment-v2/types.ts`）。

@@ -1,8 +1,19 @@
 # Changelog
 
-## [未发布]
+## [2.0.0] - 2026-03-23
 
-- **移除 legacy**：删除 `data/scenarios/`、五维评测链（`run-evaluation.ts`、`lib/llm/judge.ts`、`judge-rule.ts`、`rule-corrector.ts` 等）；API 与聊天页仅支持 v2 蓝图；结果页仅展示 `kind: "v2"`，旧 sessionStorage 给出提示文案。
+### 功能与体验
+
+- **场景匹配与生成**：全新 scenario-v2 系统，支持按任务 prompt 匹配库中场景，未命中则生成候选场景（需审核后发布）
+- **两段式对话**：Helper（协作任务）→ Talk（深度讨论）两阶段评估流程，考察不同维度能力
+- **用户记忆**：SessionMemory（会话恢复）、UserMemoryCard（长期画像）、ExperienceBank（匿名体验记录）
+- **候选场景工作流**：生成 → 审核 → 发布完整流程，支持 `/api/scenario-candidates` 列表与发布 API
+- **两层七维 Rubric v2**：协作行为层（Task Framing、Dialog Steering、Evidence Seeking）+ AI 理解能力层（Model Mental Model、Failure Awareness、Trust / Boundary Calibration、Reflective Transfer）
+
+### 技术
+
+- **移除 legacy**：删除 `data/scenarios/`、五维评测链（`run-evaluation.ts`、`lib/llm/judge.ts`、`judge-rule.ts`、`rule-corrector.ts` 等）；API 与聊天页仅支持 v2 蓝图；结果页仅展示 `kind: "v2"`，旧 sessionStorage 给出提示文案
+- **两段式评分**：Helper 默认权重 55%、Talk 默认 45%，保留 phase 级别中间分供研究使用
 
 ## [1.1.0] - 2026-03-13
 

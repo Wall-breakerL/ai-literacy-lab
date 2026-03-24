@@ -18,7 +18,7 @@ export type ProbeSpec = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase types (v3 two-phase blueprint)
+// Phase types (v2 two-phase blueprint)
 // ---------------------------------------------------------------------------
 
 export type PhaseId = "helper" | "talk";
@@ -74,7 +74,7 @@ export type PhaseSwitchPolicy = {
 };
 
 // ---------------------------------------------------------------------------
-// ScenarioBlueprint (v3 — backward-compatible)
+// ScenarioBlueprint (v2 — backward-compatible)
 // ---------------------------------------------------------------------------
 
 export type ScenarioBlueprint = {
@@ -83,7 +83,7 @@ export type ScenarioBlueprint = {
   family: string;
   applicableIdentityTags: string[];
 
-  /** v3: two-phase specs; when present, top-level assistantRolePrompt etc. are ignored. */
+  /** v2: two-phase specs; when present, top-level assistantRolePrompt etc. are ignored. */
   phases?: {
     helper: HelperPhaseSpec;
     talk: TalkPhaseSpec;
@@ -122,7 +122,7 @@ export function isScenarioBlueprint(x: unknown): x is ScenarioBlueprint {
     Array.isArray(o.hiddenProbes) &&
     Array.isArray(o.debriefQuestions);
   if (hasTopLevel) return true;
-  // v3: top-level fields may be empty strings if phases are present
+  // v2: top-level fields may be empty strings if phases are present
   if (typeof o.id === "string" && o.phases && typeof o.phases === "object") {
     const p = o.phases as Record<string, unknown>;
     return Boolean(p.helper && p.talk);
