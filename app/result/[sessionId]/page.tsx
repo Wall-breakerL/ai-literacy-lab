@@ -21,8 +21,8 @@ export default function ResultPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
   const { snapshot, events, loading, error, loadSession } = useAssessmentUiStore();
-  const [showAudit, setShowAudit] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
 
   useEffect(() => {
     void loadSession(sessionId);
@@ -67,10 +67,10 @@ export default function ResultPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-6 py-10">
       <Panel>
-        <Badge className="text-lab-accent">测评结果 / {sessionId}</Badge>
-        <h1 className="mt-2 text-2xl font-semibold">协作结果概览</h1>
+        <Badge className="text-lab-accent">原型结果概览</Badge>
+        <h1 className="mt-2 text-2xl font-semibold">协作结果摘要</h1>
         <p className="mt-2 text-sm text-lab-muted">
-          结果基于两段连续任务的行为证据聚合，优先展示对你下一次协作最有帮助的结论与建议。
+          当前为原型版结果解释，主要用于体验流程与交互反馈，不代表正式模型能力或最终评估结论。
         </p>
       </Panel>
 
@@ -122,30 +122,29 @@ export default function ResultPage() {
             <SceneContribution items={result.sceneContribution} />
             <ContextVariationNote items={result.contextVariation} />
             <ExportActions resultJson={result} sessionId={sessionId} shareCopy={result.shareCopy} />
-          </div>
-        ) : null}
-      </Card>
-
-      <Card className="lab-layer-panel p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-lab-muted">审计视图（原始技术数据）</p>
-          <Button onClick={() => setShowAudit((prev) => !prev)} variant="subtle">
-            {showAudit ? "隐藏" : "展开"}
-          </Button>
-        </div>
-        {showAudit ? (
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
             <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="text-xs text-lab-muted">raw snapshot</p>
-              <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.rawSnapshot, null, 2)}</pre>
-            </div>
-            <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="text-xs text-lab-muted">probe timeline</p>
-              <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.probeTimeline, null, 2)}</pre>
-            </div>
-            <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="text-xs text-lab-muted">scene delta sources</p>
-              <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.sceneDeltaSources, null, 2)}</pre>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-lab-muted">审计视图（原始技术数据）</p>
+                <Button className="px-2 py-1 text-xs" onClick={() => setShowAudit((prev) => !prev)} variant="subtle">
+                  {showAudit ? "隐藏" : "展开"}
+                </Button>
+              </div>
+              {showAudit ? (
+                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                  <div className="rounded-lg border border-lab bg-lab-panel p-3">
+                    <p className="text-xs text-lab-muted">raw snapshot</p>
+                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.rawSnapshot, null, 2)}</pre>
+                  </div>
+                  <div className="rounded-lg border border-lab bg-lab-panel p-3">
+                    <p className="text-xs text-lab-muted">probe timeline</p>
+                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.probeTimeline, null, 2)}</pre>
+                  </div>
+                  <div className="rounded-lg border border-lab bg-lab-panel p-3">
+                    <p className="text-xs text-lab-muted">scene delta sources</p>
+                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.sceneDeltaSources, null, 2)}</pre>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

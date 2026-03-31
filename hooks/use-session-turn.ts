@@ -14,7 +14,7 @@ async function postTurn(sessionId: string, userMessage: string): Promise<TurnOut
     body: JSON.stringify({ sessionId, userMessage }),
   });
   if (!response.ok) {
-    throw new Error("提交会话动作失败");
+    throw new Error("原型会话提交失败");
   }
   return TurnResponseSchema.parse(await response.json());
 }

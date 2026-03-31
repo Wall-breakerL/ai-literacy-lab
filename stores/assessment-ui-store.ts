@@ -22,7 +22,7 @@ interface AssessmentUiState {
 async function fetchReplay(sessionId: string): Promise<SessionReplay> {
   const response = await fetch(`/api/session/${sessionId}`, { method: "GET" });
   if (!response.ok) {
-    throw new Error("加载会话失败");
+    throw new Error("原型会话加载失败，请刷新或重新创建会话。");
   }
   return GetSessionResponseSchema.parse(await response.json());
 }
@@ -37,7 +37,7 @@ async function postTurn(sessionId: string, userMessage: string): Promise<void> {
     body: JSON.stringify(requestBody),
   });
   if (!response.ok) {
-    throw new Error("提交会话动作失败");
+    throw new Error("原型会话提交失败，请稍后重试。");
   }
   TurnResponseSchema.parse(await response.json());
 }

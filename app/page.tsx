@@ -26,12 +26,12 @@ export default function HomePage() {
         body: JSON.stringify({}),
       });
       if (!response.ok) {
-        throw new Error("创建会话失败");
+        throw new Error("原型会话创建失败，请稍后重试。");
       }
       const data = CreateSessionResponseSchema.parse(await response.json());
       router.push(`/lab/${data.sessionId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "未知错误");
+      setError(err instanceof Error ? err.message : "原型服务暂时不可用，请稍后再试。");
     } finally {
       setLoading(false);
     }
@@ -41,9 +41,7 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-6 py-10">
       <Hero />
       <IntroGrid />
-      <section id="flow-section">
-        <TestFlow />
-      </section>
+      <TestFlow />
       <StartCta error={error} loading={loading} onStart={handleStart} />
       <FrameworkStrip />
     </main>

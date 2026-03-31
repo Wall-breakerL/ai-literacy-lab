@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Human-AI 协作测评",
-  description: "固定双任务的人机协作测评流程",
+  title: "Human-AI 协作原型",
+  description: "双任务协作流程原型（内测体验）",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

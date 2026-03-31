@@ -6,8 +6,8 @@ type ButtonVariant = "primary" | "ghost" | "subtle";
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:
     "border-lab bg-lab-card text-lab-fg hover:border-[rgb(var(--lab-accent))]/60 hover:text-lab-fg disabled:border-lab disabled:bg-lab-panel",
-  ghost: "border-lab bg-transparent text-lab-fg hover:border-[rgb(var(--lab-accent))]/60 hover:text-lab-fg",
-  subtle: "border-lab bg-lab-panel text-lab-muted hover:border-[rgb(var(--lab-accent))]/40 hover:text-lab-fg",
+  ghost: "border-transparent bg-transparent text-lab-fg hover:border-[rgb(var(--lab-accent))]/45 hover:text-lab-fg",
+  subtle: "border-transparent bg-lab-panel text-lab-muted hover:border-[rgb(var(--lab-accent))]/30 hover:text-lab-fg",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

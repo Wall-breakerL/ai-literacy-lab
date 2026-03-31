@@ -11,7 +11,6 @@ import { Composer } from "@/components/lab/composer";
 import { DebugDrawer } from "@/components/lab/debug-drawer";
 import { MessageList } from "@/components/lab/message-list";
 import { QuickActions } from "@/components/lab/quick-actions";
-import { SceneProgress } from "@/components/lab/scene-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
@@ -26,6 +25,7 @@ export default function LabSessionPage() {
   const searchParams = useSearchParams();
   const sessionId = params.sessionId;
   const debugEnabledByQuery = searchParams.get("debug") === "1";
+  const showAssistantPanel = searchParams.get("assist") === "1";
 
   const { snapshot, events, loading, error } = useAssessmentUiStore();
   const { reload } = useSessionRecovery(sessionId);
@@ -36,10 +36,8 @@ export default function LabSessionPage() {
     transitionError,
     lastTurnOutput,
     isLeftDrawerOpen,
-    isRightDrawerOpen,
     setDebugOpen,
     setLeftDrawerOpen,
-    setRightDrawerOpen,
     setTransitionError,
   } = useLabUiStore();
 
@@ -74,20 +72,20 @@ export default function LabSessionPage() {
       (event) => event.type === "SCENE_ENTERED" && event.payload.sceneId === "brand-naming-sprint",
     );
     if (completedApartment && !enteredBrand) {
-      setTransitionError("场景过渡异常：已完成第一段但未进入第二段。请刷新会话。");
+      setTransitionError("流程在原型环境中出现过渡中断，请刷新会话或返回首页重建。");
       return;
     }
     setTransitionError(null);
   }, [events, setTransitionError]);
 
   if (!snapshot && loading) {
-    return <main className="mx-auto max-w-4xl px-6 py-16 text-lab-muted">正在加载会话...</main>;
+    return <main className="mx-auto max-w-4xl px-6 py-16 text-lab-muted">正在加载原型会话...</main>;
   }
 
   if (!snapshot || !activeScene || !activeSceneBlueprint) {
     return (
       <main className="mx-auto max-w-4xl px-6 py-16">
-        <p className="mb-4 text-rose-300">{error ?? "会话不可用"}</p>
+        <p className="mb-4 text-rose-300">{error ?? "当前原型会话不可用，请重试。"}</p>
         <Link className="text-lab-accent hover:underline" href="/">
           返回首页
         </Link>
@@ -101,9 +99,10 @@ export default function LabSessionPage() {
   const handleTurn = async (message: string) => {
     const ok = await submitTurn(message);
     if (!ok) {
-      setTransitionError("消息提交中断，请重试。");
+      setTransitionError("当前为原型模式，消息提交失败。请重试或返回首页重新创建会话。");
     }
   };
+  const shouldRenderDebug = debugEnabledByQuery || isDebugOpen;
 
   const interludeVisible =
     events.some((event) => event.type === "SCENE_COMPLETED" && event.payload.sceneId === "apartment-tradeoff") &&
@@ -114,13 +113,10 @@ export default function LabSessionPage() {
       center={
         <Panel className="lab-layer-panel flex h-full flex-col gap-3 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <Badge className="text-lab-accent">协作时间线</Badge>
+            <Badge className="text-lab-accent">任务对话</Badge>
             <div className="flex items-center gap-2">
               <Button className="px-2 py-1 text-xs lg:hidden" onClick={() => setLeftDrawerOpen(!isLeftDrawerOpen)} variant="subtle">
                 任务说明
-              </Button>
-              <Button className="px-2 py-1 text-xs lg:hidden" onClick={() => setRightDrawerOpen(!isRightDrawerOpen)} variant="subtle">
-                行动清单
               </Button>
             </div>
           </div>
@@ -146,8 +142,16 @@ export default function LabSessionPage() {
           <MessageList events={events} isThinking={isThinking || loading} stageByScene={stageByScene} />
           <QuickActions disabled={loading} onAction={handleTurn} />
           <Composer disabled={loading} onSubmit={handleTurn} />
+          <p className="text-xs text-lab-muted">原型提示：若回复不稳定，可重试输入或重新创建会话。</p>
 
-          <DebugDrawer onToggle={() => setDebugOpen(!isDebugOpen)} open={isDebugOpen} snapshot={snapshot} turnOutput={lastTurnOutput} />
+          <div className="pt-2">
+            <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">
+              {isDebugOpen ? "隐藏高级视图" : "查看高级视图（研究/调试）"}
+            </Button>
+          </div>
+          {shouldRenderDebug ? (
+            <DebugDrawer onToggle={() => setDebugOpen(!isDebugOpen)} open={isDebugOpen} snapshot={snapshot} turnOutput={lastTurnOutput} />
+          ) : null}
         </Panel>
       }
       left={<BriefPanel scene={activeSceneBlueprint} />}
@@ -164,22 +168,10 @@ export default function LabSessionPage() {
           </div>
         ) : null
       }
-      mobileRightDrawer={
-        isRightDrawerOpen ? (
-          <div className="rounded-xl border border-lab bg-lab-panel p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs text-lab-muted">行动清单</p>
-              <Button className="px-2 py-1 text-xs" onClick={() => setRightDrawerOpen(false)} variant="subtle">
-                收起
-              </Button>
-            </div>
-            <ChecklistPanel events={events} scene={activeSceneBlueprint} />
-          </div>
-        ) : null
-      }
-      right={<ChecklistPanel events={events} scene={activeSceneBlueprint} />}
-      subTop={<SceneProgress run={activeScene} scene={activeSceneBlueprint} />}
-      top={<AssessmentProgress assessmentState={snapshot.assessmentState} sessionId={sessionId} />}
+      mobileRightDrawer={null}
+      right={showAssistantPanel ? <ChecklistPanel events={events} scene={activeSceneBlueprint} /> : null}
+      subTop={null}
+      top={<AssessmentProgress assessmentState={snapshot.assessmentState} />}
     />
   );
 }

@@ -18,8 +18,8 @@ export function handleApiError(error: unknown): Response {
   }
 
   if (error instanceof Error && error.message === "SESSION_NOT_FOUND") {
-    return jsonError("SESSION_NOT_FOUND", "未找到对应的会话。", 404);
+    return jsonError("SESSION_NOT_FOUND", "未找到该原型会话，请返回首页重新创建。", 404);
   }
 
-  return jsonError("INTERNAL_ERROR", "服务器发生未预期错误。", 500);
+  return jsonError("INTERNAL_ERROR", "原型服务暂时不可用，请稍后重试。", 500);
 }

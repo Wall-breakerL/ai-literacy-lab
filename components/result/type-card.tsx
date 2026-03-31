@@ -13,7 +13,7 @@ export function TypeCard({ typeCode, summary, lowConfidenceNotes }: TypeCardProp
       <Badge className="text-lab-accent">简洁总结</Badge>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
-          <p className="type-code text-4xl font-semibold tracking-[0.2em]">{typeCode}</p>
+          <p className="type-code text-2xl font-semibold tracking-[0.12em]">{typeCode}</p>
           <p className="mt-2 text-sm text-lab-muted">{summary}</p>
         </div>
       </div>

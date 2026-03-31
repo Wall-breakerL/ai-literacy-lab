@@ -28,16 +28,7 @@ export function ChecklistPanel({ scene, events }: ChecklistPanelProps) {
 
   return (
     <Card className="lab-layer-panel p-4">
-      <Badge className="text-lab-accent">行动检查清单</Badge>
-
-      <div className="mt-3">
-        <p className="text-xs text-lab-muted">当前任务目标</p>
-        <ul className="mt-2 space-y-1 text-sm">
-          {scene.deliverables.map((item) => (
-            <li key={item}>- {item}</li>
-          ))}
-        </ul>
-      </div>
+      <Badge className="text-lab-accent">辅助提示</Badge>
 
       <div className="mt-4">
         <p className="text-xs text-lab-muted">近期判断与依据</p>

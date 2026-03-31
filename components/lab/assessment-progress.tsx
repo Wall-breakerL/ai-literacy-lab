@@ -13,10 +13,9 @@ const STEPS: Array<{ id: AssessmentFlowState; label: string }> = [
 
 interface AssessmentProgressProps {
   assessmentState: AssessmentFlowState;
-  sessionId: string;
 }
 
-export function AssessmentProgress({ assessmentState, sessionId }: AssessmentProgressProps) {
+export function AssessmentProgress({ assessmentState }: AssessmentProgressProps) {
   const currentIndex = Math.max(
     0,
     STEPS.findIndex((step) => step.id === assessmentState),
@@ -26,16 +25,16 @@ export function AssessmentProgress({ assessmentState, sessionId }: AssessmentPro
     <div>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs text-lab-muted">Human-AI 协作测评</p>
-          <h1 className="text-lg font-semibold">连续双任务协作流程</h1>
+          <p className="text-xs text-lab-muted">原型流程</p>
+          <h1 className="text-lg font-semibold">双任务协作体验</h1>
         </div>
-        <Badge className="text-lab-accent">会话 {sessionId}</Badge>
+        <Badge className="text-lab-accent">{STEPS[currentIndex]?.label ?? "进行中"}</Badge>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-6">
         {STEPS.map((step, index) => (
           <div
             className={cn(
-              "rounded-lg border px-2 py-2 text-center text-xs type-code",
+              "rounded-lg border px-2 py-2 text-center text-xs",
               index <= currentIndex
                 ? "border-cyan-300/50 bg-cyan-950/25 text-cyan-100"
                 : "border-lab bg-lab-panel text-lab-muted",
