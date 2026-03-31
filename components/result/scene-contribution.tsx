@@ -1,0 +1,39 @@
+import { Card } from "@/components/ui/card";
+import type { SessionResultPayload } from "@/server/services/build-session-result";
+
+interface SceneContributionProps {
+  items: SessionResultPayload["sceneContribution"];
+}
+
+export function SceneContribution({ items }: SceneContributionProps) {
+  return (
+    <Card className="lab-layer-panel p-5">
+      <h2 className="text-lg font-semibold">Scene Contribution</h2>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {items.map((scene) => (
+          <div className="rounded-lg border border-lab bg-lab-panel p-4" key={scene.sceneId}>
+            <p className="type-code text-xs text-lab-accent">{scene.title}</p>
+            <p className="mt-2 text-xs text-lab-muted">MBTI 信号</p>
+            <ul className="mt-1 space-y-1 text-sm">
+              {Object.entries(scene.mbti).map(([axisId, value]) => (
+                <li key={axisId}>
+                  {axisId}: <span className="type-code">{value.toFixed(1)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-lab-muted">FAA 信号</p>
+            <ul className="mt-1 space-y-1 text-sm">
+              {Object.entries(scene.faa).map(([dimensionId, value]) => (
+                <li key={dimensionId}>
+                  {dimensionId}: <span className="type-code">{value.toFixed(1)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-lab-muted">Probe IDs: {scene.probeIds.join(", ") || "-"}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+

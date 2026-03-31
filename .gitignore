@@ -1,4 +1,12 @@
-# Minimal reboot ignore set
-.DS_Store
+# Node / Next
 node_modules/
+.next/
+coverage/
+dist/
+
+# Local env / OS
 .env.local
+.DS_Store
+
+# TypeScript
+tsconfig.tsbuildinfo

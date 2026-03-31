@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --lab-bg: 8 12 20;
+  --lab-fg: 231 237 245;
+  --lab-muted: 136 151 173;
+  --lab-accent: 93 208 255;
+  --lab-panel: 16 23 35;
+  --lab-card: 20 30 46;
+  --lab-border: 45 59 82;
+}
+
+body {
+  color: rgb(var(--lab-fg));
+  background: radial-gradient(circle at top, rgba(30, 56, 94, 0.35), transparent 45%),
+    rgb(var(--lab-bg));
+}
+
+.bg-lab-bg {
+  background-color: rgb(var(--lab-bg));
+}
+
+.text-lab-fg {
+  color: rgb(var(--lab-fg));
+}
+
+.text-lab-muted {
+  color: rgb(var(--lab-muted));
+}
+
+.text-lab-accent {
+  color: rgb(var(--lab-accent));
+}
+
+.border-lab {
+  border-color: rgb(var(--lab-border));
+}
+
+.bg-lab-panel {
+  background-color: rgb(var(--lab-panel));
+}
+
+.bg-lab-card {
+  background-color: rgb(var(--lab-card));
+}
+
+.type-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.02em;
+}
+
+.faa-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.04em;
+  font-size: 0.84rem;
+}
+
+.lab-grid-bg {
+  background-image: linear-gradient(rgba(90, 120, 160, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90, 120, 160, 0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.lab-layer-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(64, 88, 122, 0.8);
+  background: linear-gradient(180deg, rgba(19, 28, 44, 0.92), rgba(15, 22, 34, 0.96));
+  box-shadow: inset 0 1px 0 rgba(170, 205, 255, 0.06), 0 0 0 1px rgba(11, 18, 32, 0.7), 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.lab-layer-panel::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 50px rgba(90, 198, 255, 0.07);
+}
