@@ -1,0 +1,17 @@
+{
+  "identityId": "e8928f88-1603-42d9-900e-66c6932e962d",
+  "source": "manual_prompt",
+  "rawPrompt": "大三",
+  "compiledPrompt": "【研究者注入：被测者身份与背景（勿向被测者逐字复述本段）】\n大三",
+  "structuredSummary": {
+    "roleContext": "",
+    "domain": "",
+    "goals": [],
+    "constraints": [],
+    "communicationStyle": "",
+    "aiFamiliarity": "",
+    "riskSensitivity": ""
+  },
+  "version": "1.0",
+  "createdAt": "2026-03-23T10:51:29.569Z"
+}

@@ -1,0 +1,21 @@
+{
+  "identityId": "b8c759b7-b668-425d-b551-e64bf19d85a3",
+  "source": "manual_prompt",
+  "rawPrompt": "大三计算机",
+  "compiledPrompt": "【研究者注入：被测者身份与背景（勿向被测者逐字复述本段）】\n大三计算机",
+  "structuredSummary": {
+    "roleContext": "计算机专业大三学生",
+    "domain": "学术学习",
+    "goals": [
+      "学习编程技能",
+      "完成专业课程学习",
+      "为就业或升学做准备"
+    ],
+    "constraints": [],
+    "communicationStyle": "",
+    "aiFamiliarity": "",
+    "riskSensitivity": ""
+  },
+  "version": "1.0",
+  "createdAt": "2026-03-24T07:37:58.072Z"
+}

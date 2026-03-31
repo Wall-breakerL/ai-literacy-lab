@@ -1,0 +1,17 @@
+{
+  "identityId": "a5d083d1-c3ec-4036-a430-1d8f068a72c4",
+  "source": "manual_prompt",
+  "rawPrompt": "大三计算机",
+  "compiledPrompt": "【研究者注入：被测者身份与背景（勿向被测者逐字复述本段）】\n大三计算机",
+  "structuredSummary": {
+    "roleContext": "大三计算机专业学生",
+    "domain": "计算机",
+    "goals": [],
+    "constraints": [],
+    "communicationStyle": "",
+    "aiFamiliarity": "",
+    "riskSensitivity": ""
+  },
+  "version": "1.0",
+  "createdAt": "2026-03-24T08:12:23.140Z"
+}

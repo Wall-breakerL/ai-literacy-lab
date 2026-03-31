@@ -1,0 +1,8 @@
+{
+  "/select-scenario/page": "app/select-scenario/page.js",
+  "/setup/page": "app/setup/page.js",
+  "/api/evaluate/route": "app/api/evaluate/route.js",
+  "/page": "app/page.js",
+  "/result/page": "app/result/page.js",
+  "/chat/[scenarioId]/page": "app/chat/[scenarioId]/page.js"
+}

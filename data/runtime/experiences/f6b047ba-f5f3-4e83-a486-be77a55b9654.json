@@ -1,0 +1,86 @@
+{
+  "sessionId": "f6b047ba-f5f3-4e83-a486-be77a55b9654",
+  "identityId": "b8c759b7-b668-425d-b551-e64bf19d85a3",
+  "identitySummary": {
+    "roleContext": "计算机专业大三学生",
+    "domain": "学术学习",
+    "goals": [
+      "学习编程技能",
+      "完成专业课程学习",
+      "为就业或升学做准备"
+    ],
+    "constraints": [],
+    "communicationStyle": "",
+    "aiFamiliarity": "",
+    "riskSensitivity": ""
+  },
+  "userId": "da6d8918-8516-45e6-9ff1-faa1cd121562",
+  "scenarioId": "generated_ai_900773",
+  "transcriptSummary": "上海，3天，2人，预算3000/人，出发从南京 | 日期是周日，目的约会，住宿偏好市中心地铁方便，交通自驾 | 这周日，静安区，江景餐厅 | 我想问问你图灵机方面的事 | [收尾反思] 问题：刚才哪些信息你认为必须核验来源？ 回答：数学 | [收尾反思] 问题：如果 AI 说得很自信但你不确定，你会怎么做？ 回答：查资料 | [收尾反思] 问题：下次类似任务里，你会如何分配 AI 与人工的职责？ 回答：ai做简单工作",
+  "eventSummary": {
+    "context_added": 1,
+    "debrief_meta_awareness": 3,
+    "constraint_specified": 1,
+    "verification_requested": 1,
+    "uncertainty_acknowledged": 1,
+    "example_added": 1,
+    "human_review_required": 1,
+    "reflection_articulated": 1
+  },
+  "dimensionScores": {
+    "taskFraming": 5,
+    "dialogSteering": 4,
+    "evidenceSeeking": 8,
+    "modelMentalModel": 10,
+    "failureAwareness": 10,
+    "trustBoundaryCalibration": 8,
+    "reflectiveTransfer": 15
+  },
+  "evidence": {
+    "taskFraming": [
+      "constraint_specified"
+    ],
+    "dialogSteering": [],
+    "evidenceSeeking": [
+      "verification_requested"
+    ],
+    "modelMentalModel": [
+      "uncertainty_acknowledged"
+    ],
+    "failureAwareness": [
+      "verification_requested",
+      "uncertainty_acknowledged"
+    ],
+    "trustBoundaryCalibration": [
+      "human_review_required"
+    ],
+    "reflectiveTransfer": [
+      "debrief_meta_awareness",
+      "debrief_meta_awareness",
+      "debrief_meta_awareness",
+      "reflection_articulated"
+    ]
+  },
+  "blindSpots": [],
+  "nextRecommendedScenarios": [
+    "verification_pack_v1",
+    "risk_boundary_pack_v1"
+  ],
+  "nextRecommendedProbes": [
+    "coord_verify",
+    "source_check"
+  ],
+  "talkPrompt": "聊一聊图灵机",
+  "versions": {
+    "identityVersion": "1.0",
+    "scenarioVersion": "1.0",
+    "blueprintVersion": "3.0-generated",
+    "rubricVersion": "2.0",
+    "eventSchemaVersion": "2.0",
+    "memorySchemaVersion": "1.0",
+    "judgePromptVersion": "1.0-v2",
+    "judgeModel": "rule-based",
+    "scoredAt": "2026-03-24T07:41:15.503Z"
+  },
+  "createdAt": "2026-03-24T07:41:15.503Z"
+}

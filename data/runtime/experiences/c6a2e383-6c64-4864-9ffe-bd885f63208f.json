@@ -1,0 +1,95 @@
+{
+  "sessionId": "c6a2e383-6c64-4864-9ffe-bd885f63208f",
+  "identityId": "default",
+  "identitySummary": {
+    "roleContext": "通用协作场景",
+    "domain": "未单独配置",
+    "goals": [
+      "完成当前对话中的协作任务"
+    ],
+    "constraints": [],
+    "communicationStyle": "自然、直接",
+    "aiFamiliarity": "未注明",
+    "riskSensitivity": "中等"
+  },
+  "userId": "da6d8918-8516-45e6-9ff1-faa1cd121562",
+  "scenarioId": "coordination_student_v1",
+  "transcriptSummary": "一个人 | 就我一个人 | 下周一 | [收尾反思] 问题：刚才对话里，有哪些信息你认为是「确定事实」，哪些是「还需要再确认」的？为什么？ 回答：1 | [收尾反思] 问题：如果你知道 AI 可能会记错细节或编造来源，你下次会改哪一步？ 回答：1 | [收尾反思] 问题：这次任务里，你更愿意把哪些步骤交给 AI、哪些必须自己或真人同伴来做？ 回答：1",
+  "eventSummary": {
+    "debrief_meta_awareness": 3,
+    "goal_specified": 1,
+    "verification_requested": 2,
+    "hallucination_detected": 1,
+    "reflection_articulated": 1,
+    "constraint_specified": 1,
+    "human_review_required": 1
+  },
+  "dimensionScores": {
+    "taskFraming": 4,
+    "dialogSteering": 3,
+    "evidenceSeeking": 2,
+    "modelMentalModel": 5,
+    "failureAwareness": 3,
+    "trustBoundaryCalibration": 4,
+    "reflectiveTransfer": 2
+  },
+  "evidence": {
+    "taskFraming": [
+      "一个人",
+      "下周一"
+    ],
+    "dialogSteering": [
+      "一个人",
+      "下周一",
+      "回答：1"
+    ],
+    "evidenceSeeking": [
+      "回答：1"
+    ],
+    "modelMentalModel": [
+      "回答：1"
+    ],
+    "failureAwareness": [
+      "回答：1"
+    ],
+    "trustBoundaryCalibration": [
+      "一个人",
+      "回答：1"
+    ],
+    "reflectiveTransfer": [
+      "回答：1",
+      "回答：1",
+      "回答：1"
+    ]
+  },
+  "blindSpots": [
+    "用户未澄清'一个人'的真实含义（单干 vs. 队友失联），导致任务框架存在根本歧义。",
+    "用户对对话缺乏主导意识，全程被动等待追问，未推动对话向解决方案演进。",
+    "用户在Talk阶段完全放弃参与，错失了在安全环境中练习质疑AI的机会。",
+    "用户未展示对'AI可能产生错误信息'这一核心风险的基本认知。"
+  ],
+  "nextRecommendedScenarios": [
+    "文献综述任务：AI生成参考文献，用户需核实是否存在该文献。",
+    "跨学科小组项目：需要协调不同专业背景的成员，涉及专业术语准确性验证。",
+    "时间管理场景：AI提供日程建议，用户需根据实际约束调整并发现建议中的疏漏。"
+  ],
+  "nextRecommendedProbes": [
+    "你提到的'一个人'是指真的只有你一个人做，还是其他组员没回复？如果是后者，要不要先尝试联系他们？",
+    "如果AI给了你一个看起来合理的学校政策建议，你会怎么验证它是不是准确的呢？",
+    "在这个作业里，你觉得哪些部分必须自己完成，哪些可以交给AI帮忙？",
+    "如果AI给你的时间规划不太符合你的实际情况，你会怎么发现这个问题？"
+  ],
+  "talkPrompt": "聊聊 AI 为什么会“一本正经胡说八道”，以及我们该如何核验它的回答。",
+  "versions": {
+    "identityVersion": "1.0",
+    "scenarioVersion": "1.0",
+    "blueprintVersion": "2.0",
+    "rubricVersion": "2.0",
+    "eventSchemaVersion": "2.0",
+    "memorySchemaVersion": "1.0",
+    "judgePromptVersion": "1.0-v2",
+    "judgeModel": "MiniMax-M2.7",
+    "scoredAt": "2026-03-24T08:00:32.284Z"
+  },
+  "createdAt": "2026-03-24T08:00:32.284Z"
+}

@@ -1,0 +1,88 @@
+{
+  "sessionId": "eb24666e-d32c-4891-872a-8bcefb53f122",
+  "identityId": "default",
+  "identitySummary": {
+    "roleContext": "通用协作场景",
+    "domain": "未单独配置",
+    "goals": [
+      "完成当前对话中的协作任务"
+    ],
+    "constraints": [],
+    "communicationStyle": "自然、直接",
+    "aiFamiliarity": "未注明",
+    "riskSensitivity": "中等"
+  },
+  "userId": "da6d8918-8516-45e6-9ff1-faa1cd121562",
+  "scenarioId": "coordination_student_v1",
+  "transcriptSummary": "一个人 | 一个人 | 不配合 | [收尾反思] 问题：刚才对话里，有哪些信息你认为是「确定事实」，哪些是「还需要再确认」的？为什么？ 回答：1 | [收尾反思] 问题：如果你知道 AI 可能会记错细节或编造来源，你下次会改哪一步？ 回答：1 | [收尾反思] 问题：这次任务里，你更愿意把哪些步骤交给 AI、哪些必须自己或真人同伴来做？ 回答：1",
+  "eventSummary": {
+    "debrief_meta_awareness": 3,
+    "goal_specified": 1,
+    "verification_requested": 2,
+    "hallucination_detected": 1,
+    "reflection_articulated": 1,
+    "constraint_specified": 1,
+    "human_review_required": 1
+  },
+  "dimensionScores": {
+    "taskFraming": 7,
+    "dialogSteering": 5,
+    "evidenceSeeking": 10,
+    "modelMentalModel": 10,
+    "failureAwareness": 12,
+    "trustBoundaryCalibration": 8,
+    "reflectiveTransfer": 15
+  },
+  "evidence": {
+    "taskFraming": [
+      "goal_specified",
+      "constraint_specified"
+    ],
+    "dialogSteering": [
+      "goal_specified"
+    ],
+    "evidenceSeeking": [
+      "verification_requested",
+      "verification_requested"
+    ],
+    "modelMentalModel": [
+      "hallucination_detected"
+    ],
+    "failureAwareness": [
+      "verification_requested",
+      "verification_requested",
+      "hallucination_detected"
+    ],
+    "trustBoundaryCalibration": [
+      "human_review_required"
+    ],
+    "reflectiveTransfer": [
+      "debrief_meta_awareness",
+      "debrief_meta_awareness",
+      "reflection_articulated",
+      "debrief_meta_awareness"
+    ]
+  },
+  "blindSpots": [],
+  "nextRecommendedScenarios": [
+    "verification_pack_v1",
+    "risk_boundary_pack_v1"
+  ],
+  "nextRecommendedProbes": [
+    "coord_verify",
+    "source_check"
+  ],
+  "talkPrompt": "聊聊 AI 为什么会“一本正经胡说八道”，以及我们该如何核验它的回答。",
+  "versions": {
+    "identityVersion": "1.0",
+    "scenarioVersion": "1.0",
+    "blueprintVersion": "2.0",
+    "rubricVersion": "2.0",
+    "eventSchemaVersion": "2.0",
+    "memorySchemaVersion": "1.0",
+    "judgePromptVersion": "1.0-v2",
+    "judgeModel": "rule-based",
+    "scoredAt": "2026-03-24T07:55:40.804Z"
+  },
+  "createdAt": "2026-03-24T07:55:40.804Z"
+}
