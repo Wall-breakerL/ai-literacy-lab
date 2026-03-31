@@ -23,8 +23,11 @@ export const AgentBOutputSchema = z.object({
     .object({
       probe_instance_id: z.string().nullable(),
       should_apply_score: z.boolean(),
+      /** resolved = adequate response; unresolved = close without applying probe score (e.g. abandoned). */
+      outcome: z.enum(["resolved", "unresolved"]).optional(),
       score_delta: ProbeScoreDeltaSchema.optional(),
       evidence_excerpt: z.string().optional(),
+      reason: z.string().optional(),
     })
     .optional(),
 });

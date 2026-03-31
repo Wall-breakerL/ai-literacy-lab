@@ -31,7 +31,7 @@ function collectMbtiScoringEvents(events: SessionEvent[]): Array<{
 }> {
   const rows: Array<{ sceneId: SceneId; mbtiDeltas: Record<string, number | undefined>; excerpt: string; probeId: string }> = [];
   for (const event of events) {
-    if (event.type === "PROBE_SCORED") {
+    if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       rows.push({
         sceneId: event.payload.sceneId,
         mbtiDeltas: event.payload.mbtiDeltas,

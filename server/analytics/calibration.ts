@@ -56,7 +56,7 @@ export function buildCalibrationReport(sessions: SessionPack[]): CalibrationRepo
         if (event.payload.sceneId === "apartment-tradeoff") current.apartment += 1;
         if (event.payload.sceneId === "brand-naming-sprint") current.brand += 1;
         probeMap.set(event.payload.probeId, current);
-      } else if (event.type === "PROBE_SCORED") {
+      } else if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
         const current = probeMap.get(event.payload.probeId) ?? { total: 0, apartment: 0, brand: 0, scoreSignals: [] };
         const sum = Object.values(event.payload.mbtiDeltas).reduce((acc, value) => acc + (value ?? 0), 0);
         const faaSum = Object.values(event.payload.faaScores).reduce((acc, value) => acc + (value ?? 0), 0);

@@ -1,21 +1,12 @@
 import type { AgentBOutput } from "@/domain/agent/agent-b-output";
 import type { RuleSignal } from "@/domain/probes/types";
-import type { SceneBlueprint, StageDefinition } from "@/domain/scenes/types";
+import type { SceneBlueprint } from "@/domain/scenes/types";
+import { computeStageTransition } from "@/server/engine/stage-completion";
 
-function nextStage(stages: StageDefinition[], stageId: string): string {
-  const index = stages.findIndex((stage) => stage.id === stageId);
-  if (index < 0 || index >= stages.length - 1) return stageId;
-  return stages[index + 1].id;
-}
-
-function hasEnoughApartmentDeliverables(msg: string): boolean {
-  return ["排序", "推荐", "权重", "问题"].every((kw) => msg.includes(kw));
-}
-
-function hasEnoughBrandDeliverables(msg: string): boolean {
-  return ["候选", "理由", "tagline", "淘汰"].every((kw) => msg.includes(kw.toLowerCase()) || msg.includes(kw));
-}
-
+/**
+ * Stage advancement driven by deliverable-style gates (see stage-completion.ts),
+ * not by raw message length heuristics.
+ */
 export function resolveSceneStageTransition(input: {
   scene: SceneBlueprint;
   currentStageId: string;
@@ -23,41 +14,11 @@ export function resolveSceneStageTransition(input: {
   signals: RuleSignal[];
   completionRequested: boolean;
 }): { nextStageId: string; sceneCompleted: boolean } {
-  const { scene, currentStageId, userMessage, signals, completionRequested } = input;
-  const bump = completionRequested || signals.length > 0 || userMessage.length > 40;
-  const candidate = bump ? nextStage(scene.stages, currentStageId) : currentStageId;
-
-  if (
-    scene.id === "apartment-tradeoff" &&
-    candidate === "decide" &&
-    completionRequested &&
-    hasEnoughApartmentDeliverables(userMessage)
-  ) {
-    return { nextStageId: candidate, sceneCompleted: true };
-  }
-  if (scene.id === "apartment-tradeoff" && (candidate === "stress_test" || candidate === "decide") && completionRequested) {
-    return { nextStageId: candidate, sceneCompleted: true };
-  }
-  if (
-    scene.id === "brand-naming-sprint" &&
-    candidate === "finalize" &&
-    completionRequested &&
-    hasEnoughBrandDeliverables(userMessage)
-  ) {
-    return { nextStageId: candidate, sceneCompleted: true };
-  }
-  if (
-    scene.id === "brand-naming-sprint" &&
-    (candidate === "stress_test" || candidate === "finalize") &&
-    completionRequested
-  ) {
-    return { nextStageId: candidate, sceneCompleted: true };
-  }
-
-  return { nextStageId: candidate, sceneCompleted: false };
+  const r = computeStageTransition(input);
+  return { nextStageId: r.nextStageId, sceneCompleted: r.sceneCompleted };
 }
 
-/** Prefer Agent B suggestion when confident and valid; otherwise legacy heuristic. */
+/** Prefer Agent B suggestion when confident and valid; otherwise deterministic gates. */
 export function resolveTransitionWithAgentB(input: {
   scene: SceneBlueprint;
   currentStageId: string;
@@ -73,6 +34,11 @@ export function resolveTransitionWithAgentB(input: {
     signals: input.signals,
     completionRequested: input.completionRequested,
   });
+
+  /** 用户显式完成场景时以门控结果为准，不被 Agent B 的「下一阶段建议」覆盖。 */
+  if (legacy.sceneCompleted) {
+    return legacy;
+  }
 
   const stageIds = new Set(input.scene.stages.map((s) => s.id));
   const suggestion = input.agentB.next_stage_suggestion;

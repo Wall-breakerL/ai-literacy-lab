@@ -5,7 +5,7 @@ import type { SessionEvent } from "@/domain/session/events";
 import { mergeSignalOnlyDeltas } from "@/server/engine/agent-b-scorer";
 import { selectTriggeredProbes } from "@/server/engine/probe-orchestrator";
 import { extractRuleSignals } from "@/server/engine/rule-extractor";
-import { resolveSceneStageTransition } from "@/server/engine/scene-transition";
+import { computeStageTransition } from "@/server/engine/stage-completion";
 import { getLlmEnvConfig } from "@/server/providers/llm-env";
 import { getLlmProvider } from "@/server/providers/llm-provider";
 
@@ -19,7 +19,7 @@ function getOpenProbeInstances(events: SessionEvent[], sceneId: string): Array<{
     if (e.type === "PROBE_FIRED" && e.payload.sceneId === sceneId) {
       fired.set(e.payload.probeInstanceId, { probeId: e.payload.probeId });
     }
-    if (e.type === "PROBE_SCORED" && e.payload.sceneId === sceneId) {
+    if (e.type === "PROBE_CLOSED" && e.payload.sceneId === sceneId) {
       fired.delete(e.payload.probeInstanceId);
     }
   }
@@ -54,8 +54,10 @@ function buildAgentBPrompt(input: {
     "Latest user message:",
     input.userMessage,
     "",
-    "Probe catalog (ids you may recommend):",
+    "Probe catalog (ids you may recommend; probeIntentZh is hidden from end user, purpose is evaluator-facing):",
     input.probeCatalog.map((p) => `- ${p.id}: ${p.purpose}`).join("\n"),
+    "",
+    "Stage advancement should reflect deliverable-style evidence (constraints, comparisons, stress handling, final ranking), not message length alone.",
   ].join("\n");
 }
 
@@ -99,8 +101,9 @@ export async function evaluateAgentB(input: {
         "next_stage_suggestion (string or null),",
         "can_advance_stage (boolean),",
         "confidence (0-1 number),",
-        "probe_resolution: optional { probe_instance_id, should_apply_score, score_delta {mbti,faa}, evidence_excerpt }.",
-        "If open probes exist, decide if the latest user message addresses the challenge; if yes set should_apply_score true and fill score_delta.",
+        "probe_resolution: optional { probe_instance_id, should_apply_score, outcome resolved|unresolved, score_delta {mbti,faa}, evidence_excerpt, reason }.",
+        "If open probes exist: if the user adequately addresses the challenge set should_apply_score true, outcome resolved, fill score_delta from catalog.",
+        "If the user clearly does not engage with the open challenge and you must close it without score, set outcome unresolved and should_apply_score false.",
       ].join(" ");
 
       const user = buildAgentBPrompt({
@@ -151,12 +154,14 @@ export async function evaluateAgentB(input: {
     probeResolution = {
       probe_instance_id: target.probeInstanceId,
       should_apply_score: adequate,
+      outcome: adequate ? "resolved" : undefined,
       score_delta: adequate && def ? def.scoreDelta : undefined,
       evidence_excerpt: input.normalizedUserMessage.slice(0, 160),
+      reason: adequate ? "用户回应包含可核验信号且长度足够，视为完成观察挑战。" : undefined,
     };
   }
 
-  const transition = resolveSceneStageTransition({
+  const transition = computeStageTransition({
     scene: input.scene,
     currentStageId: input.stageId,
     userMessage: input.normalizedUserMessage,
@@ -164,9 +169,7 @@ export async function evaluateAgentB(input: {
     completionRequested: input.completionRequested,
   });
 
-  const canAdvance =
-    transition.nextStageId !== input.stageId &&
-    (signals.length > 0 || input.normalizedUserMessage.length > 36 || input.completionRequested);
+  const canAdvance = transition.nextStageId !== input.stageId || transition.sceneCompleted;
 
   const output = AgentBOutputSchema.parse({
     user_intent_summary: "（规则回退）基于关键词信号与阶段启发式给出的本地评估。",
@@ -175,10 +178,10 @@ export async function evaluateAgentB(input: {
     score_deltas: probeResolution?.should_apply_score ? [] : [signalDelta],
     risk_flags: [],
     recommended_probe_ids: firedProbes.map((p) => p.id),
-    stage_completion_status: transition.sceneCompleted ? "complete" : canAdvance ? "ready" : "incomplete",
+    stage_completion_status: transition.sceneCompleted ? "complete" : transition.gateMet ? "ready" : "incomplete",
     next_stage_suggestion: transition.nextStageId,
-    can_advance_stage: canAdvance || transition.sceneCompleted,
-    confidence: 0.35,
+    can_advance_stage: canAdvance,
+    confidence: transition.confidence,
     probe_resolution: probeResolution,
   });
 

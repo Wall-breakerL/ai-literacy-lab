@@ -80,7 +80,8 @@ describe("dual-agent post engine transcripts", () => {
       const replay = engine.getState(session.sessionId);
       const stageEvents = replay.events.filter((event) => event.type === "STAGE_CHANGED");
       const scoringEvents = replay.events.filter(
-        (event) => event.type === "PROBE_SCORED" || event.type === "EVALUATION_SCORE_APPLIED",
+        (event) =>
+          (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) || event.type === "EVALUATION_SCORE_APPLIED",
       );
 
       expect(stageEvents.length).toBeGreaterThan(0);

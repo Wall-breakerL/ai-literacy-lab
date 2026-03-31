@@ -78,7 +78,13 @@ export const ProbeDefinitionSchema = z.object({
   label: z.string().min(1),
   weight: z.enum(["high", "medium", "low"]),
   purpose: z.string().min(1),
+  /** Evaluator / orchestrator internal line (not shown verbatim to user). */
   injectMessageTemplate: z.string().min(1),
+  /**
+   * Hidden conversational objective for Agent A this turn: natural guidance,
+   * no meta words like probe/评分/系统.
+   */
+  probeIntentZh: z.string().min(1),
   triggerOnSignalsAny: z.array(RuleSignalSchema).default([]),
   triggerStageIds: z.array(z.string().min(1)).default([]),
   scoreDelta: ProbeScoreDeltaSchema,

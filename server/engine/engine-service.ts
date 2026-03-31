@@ -97,7 +97,7 @@ export class EngineService {
     const normalizedMessage = completionRequested ? "用户点击了完成当前场景按钮。" : userMessage;
     const signals = completionRequested ? [] : extractRuleSignals(normalizedMessage);
 
-    const { output: agentB, source: agentBSource } = await evaluateAgentB({
+    const { output: rawAgentB, source: agentBSource } = await evaluateAgentB({
       scene,
       stageId: currentRun.stageId,
       userMessage,
@@ -109,6 +109,11 @@ export class EngineService {
       completionRequested,
       llmEnabled,
     });
+    /** Probe 结案回合：不把同一轮的 Agent B 信号汇总与探针分重复计入。 */
+    const agentB =
+      rawAgentB.probe_resolution?.should_apply_score === true
+        ? { ...rawAgentB, score_deltas: [] }
+        : rawAgentB;
 
     const transition = resolveTransitionWithAgentB({
       scene,
@@ -136,7 +141,15 @@ export class EngineService {
       );
       recommendedIds = ruleFired.map((p) => p.id);
     }
-    recommendedIds = [...new Set(recommendedIds)].slice(0, 2);
+    const weightRank: Record<"high" | "medium" | "low", number> = { high: 0, medium: 1, low: 2 };
+    recommendedIds = [...new Set(recommendedIds)]
+      .sort((a, b) => {
+        const da = scene.probes.find((p) => p.id === a);
+        const db = scene.probes.find((p) => p.id === b);
+        if (!da || !db) return 0;
+        return weightRank[da.weight] - weightRank[db.weight] || a.localeCompare(b);
+      })
+      .slice(0, 4);
 
     const firedProbeDefs: ProbeDefinition[] = [];
     for (const id of recommendedIds) {
@@ -151,7 +164,7 @@ export class EngineService {
     ];
 
     const pr = agentB.probe_resolution;
-    if (pr?.should_apply_score && pr.probe_instance_id && pr.score_delta) {
+    if (pr?.probe_instance_id && pr.outcome === "unresolved" && !pr.should_apply_score) {
       const openBefore = pack.events.filter(
         (e): e is Extract<SessionEvent, { type: "PROBE_FIRED" }> =>
           e.type === "PROBE_FIRED" &&
@@ -161,13 +174,41 @@ export class EngineService {
       const lastFire = openBefore[openBefore.length - 1];
       if (lastFire && lastFire.type === "PROBE_FIRED") {
         freshEvents.push(
-          event(sessionId, "PROBE_SCORED", {
+          event(sessionId, "PROBE_CLOSED", {
             sceneId: scene.id,
             probeId: lastFire.payload.probeId,
             probeInstanceId: pr.probe_instance_id,
+            outcome: "unresolved",
+            reason: pr.reason ?? "观察挑战未形成可评分回应，已结案（不计分）。",
+            evidenceExcerpt: pr.evidence_excerpt ?? normalizedMessage.slice(0, 160),
+            userResponseExcerpt: normalizedMessage.slice(0, 200),
+            mbtiDeltas: {},
+            faaScores: {},
+            scoreApplied: false,
+          }),
+        );
+      }
+    } else if (pr?.should_apply_score && pr.probe_instance_id && pr.score_delta && pr.outcome !== "unresolved") {
+      const openBefore = pack.events.filter(
+        (e): e is Extract<SessionEvent, { type: "PROBE_FIRED" }> =>
+          e.type === "PROBE_FIRED" &&
+          e.payload.sceneId === scene.id &&
+          e.payload.probeInstanceId === pr.probe_instance_id,
+      );
+      const lastFire = openBefore[openBefore.length - 1];
+      if (lastFire && lastFire.type === "PROBE_FIRED") {
+        freshEvents.push(
+          event(sessionId, "PROBE_CLOSED", {
+            sceneId: scene.id,
+            probeId: lastFire.payload.probeId,
+            probeInstanceId: pr.probe_instance_id,
+            outcome: "resolved",
+            reason: pr.reason ?? "用户回应满足观察挑战，按探针定义计分。",
+            evidenceExcerpt: pr.evidence_excerpt ?? normalizedMessage.slice(0, 160),
+            userResponseExcerpt: normalizedMessage.slice(0, 200),
             mbtiDeltas: pr.score_delta.mbti,
             faaScores: pr.score_delta.faa,
-            evidenceExcerpt: pr.evidence_excerpt ?? normalizedMessage.slice(0, 160),
+            scoreApplied: true,
           }),
         );
       }
@@ -187,6 +228,7 @@ export class EngineService {
 
     for (const probe of firedProbeDefs) {
       const probeInstanceId = createId("probe");
+      const sigLabel = signals.length > 0 ? signals.join("、") : "无关键词信号";
       freshEvents.push(
         event(sessionId, "PROBE_FIRED", {
           sceneId: scene.id,
@@ -194,6 +236,7 @@ export class EngineService {
           probeInstanceId,
           weight: probe.weight,
           prompt: probe.injectMessageTemplate,
+          triggerReason: `阶段「${currentRun.stageId}」；规则信号：${sigLabel}；探针「${probe.label}」`,
         }),
       );
     }
@@ -231,7 +274,6 @@ export class EngineService {
 
     const agentScene = SCENE_REGISTRY[stateBeforeAgent.currentSceneId];
     const agentAMessage = await generateAgentAReply({
-      assessmentState: stateBeforeAgent.assessmentState,
       scene: agentScene,
       stageId: currentStage,
       bridgeToNextScene,

@@ -5,6 +5,7 @@ import {
   type SessionEvent,
   type SessionState,
 } from "@/domain";
+import { SCENE_REGISTRY } from "@/domain/assessment/registry";
 import { aggregateFaaFromEvents } from "@/domain/faa/aggregate";
 import { aggregateMbtiFromEvents } from "@/domain/mbti/aggregate";
 import { buildMbtiTypeCode } from "@/domain/mbti/type-mapping";
@@ -38,14 +39,16 @@ export interface SessionResultPayload {
   suggestions: string[];
   lowConfidenceNotes: string[];
   shareCopy: string;
+  /** 默认视图：观察挑战与回应的可读摘要（非调试字段）。 */
+  probeHighlights: string[];
   audit: {
     rawSnapshot: SessionState;
-    /** Raw events for PROBE_FIRED / PROBE_SCORED (legacy compat). */
+    /** Raw events for PROBE_FIRED / PROBE_CLOSED. */
     probeTimeline: SessionEvent[];
     /** Human-readable probe / scoring trail (default-friendly). */
     probeLifecycleReadable: Array<{
       timestamp: string;
-      kind: "probe_fired" | "probe_scored" | "evaluation_applied";
+      kind: "probe_fired" | "probe_closed" | "evaluation_applied";
       sceneId: SceneId;
       probeId?: string;
       probeInstanceId?: string;
@@ -70,6 +73,35 @@ function axisLabel(axisId: string): string {
 
 function sceneTitle(sceneId: SceneId): string {
   return sceneId === "apartment-tradeoff" ? "Apartment Trade-off" : "Brand Naming Sprint";
+}
+
+function sceneTitleZh(sceneId: SceneId): string {
+  return SCENE_REGISTRY[sceneId].titleZh;
+}
+
+function resolveProbeLabel(sceneId: SceneId, probeId: string): string {
+  return SCENE_REGISTRY[sceneId].probes.find((p) => p.id === probeId)?.label ?? probeId;
+}
+
+function buildProbeHighlights(events: SessionEvent[]): string[] {
+  const lines: string[] = [];
+  for (const event of events) {
+    if (event.type === "PROBE_FIRED") {
+      const label = resolveProbeLabel(event.payload.sceneId, event.payload.probeId);
+      lines.push(
+        `「${sceneTitleZh(event.payload.sceneId)}」观察挑战「${label}」触发：${event.payload.triggerReason.slice(0, 140)}${event.payload.triggerReason.length > 140 ? "…" : ""}`,
+      );
+    }
+    if (event.type === "PROBE_CLOSED") {
+      const label = resolveProbeLabel(event.payload.sceneId, event.payload.probeId);
+      if (event.payload.scoreApplied) {
+        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」挑战「${label}」已回应并计入评分：${event.payload.reason.slice(0, 100)}`);
+      } else {
+        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」挑战「${label}」结案（未计分）：${event.payload.reason.slice(0, 100)}`);
+      }
+    }
+  }
+  return lines.slice(-8);
 }
 
 function buildContextVariation(axes: ReturnType<typeof aggregateMbtiFromEvents>): ContextVariation[] {
@@ -111,17 +143,21 @@ function buildProbeLifecycleReadable(events: SessionEvent[]): SessionResultPaylo
         probeId: event.payload.probeId,
         probeInstanceId: event.payload.probeInstanceId,
         weight: event.payload.weight,
-        summary: `挑战已触发（${event.payload.weight}）：${event.payload.probeId} — 请用下一条消息回应以完成计分。`,
+        summary: `观察挑战「${resolveProbeLabel(event.payload.sceneId, event.payload.probeId)}」已触发（${event.payload.weight}）。${event.payload.triggerReason}`,
       });
     }
-    if (event.type === "PROBE_SCORED") {
+    if (event.type === "PROBE_CLOSED") {
+      const scored = event.payload.scoreApplied && event.payload.outcome === "resolved";
       rows.push({
         timestamp: event.timestamp,
-        kind: "probe_scored",
+        kind: "probe_closed",
         sceneId: event.payload.sceneId,
         probeId: event.payload.probeId,
         probeInstanceId: event.payload.probeInstanceId,
-        summary: `探针已结算：${event.payload.probeId}（证据摘录已记录）。`,
+        weight: undefined,
+        summary: scored
+          ? `「${resolveProbeLabel(event.payload.sceneId, event.payload.probeId)}」已回应并计分：${event.payload.reason}`
+          : `「${resolveProbeLabel(event.payload.sceneId, event.payload.probeId)}」结案未计分：${event.payload.reason}`,
       });
     }
     if (event.type === "EVALUATION_SCORE_APPLIED") {
@@ -142,11 +178,11 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
   const faa = aggregateFaaFromEvents(events);
   const typeCode = buildMbtiTypeCode(mbtiAxes).code;
   const contextVariation = buildContextVariation(mbtiAxes);
-  const probeTimeline = events.filter((event) => event.type === "PROBE_FIRED" || event.type === "PROBE_SCORED");
+  const probeTimeline = events.filter((event) => event.type === "PROBE_FIRED" || event.type === "PROBE_CLOSED");
   const probeLifecycleReadable = buildProbeLifecycleReadable(events);
   const sceneDeltaSources: SessionResultPayload["audit"]["sceneDeltaSources"] = [];
   for (const event of events) {
-    if (event.type === "PROBE_SCORED") {
+    if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       sceneDeltaSources.push({
         sceneId: event.payload.sceneId,
         source: "probe",
@@ -154,7 +190,7 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
         probeInstanceId: event.payload.probeInstanceId,
         mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
         faaScores: event.payload.faaScores as Record<string, number>,
-        note: event.payload.evidenceExcerpt.slice(0, 120),
+        note: `${resolveProbeLabel(event.payload.sceneId, event.payload.probeId)} · ${event.payload.reason}`,
       });
     }
     if (event.type === "EVALUATION_SCORE_APPLIED") {
@@ -238,6 +274,7 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
     shareCopy: `我在 Human-AI Performance Lab 完成了连续双任务协作测评。当前类型倾向 ${typeCode}，FAA 总分 ${faa.overall.toFixed(
       1,
     )}。这不是考试，而是一次可审计的人机协作复盘。`,
+    probeHighlights: buildProbeHighlights(events),
     audit: {
       rawSnapshot: snapshot,
       probeTimeline,

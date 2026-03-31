@@ -80,7 +80,7 @@ export function reduceSessionState(events: SessionEvent[], sessionId: string): S
         run.firedHighWeightProbeIds = [...run.firedHighWeightProbeIds, event.payload.probeId];
       }
     }
-    if (event.type === "PROBE_SCORED") {
+    if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       state = applyProbeDeltas(state, [{ mbti: event.payload.mbtiDeltas, faa: event.payload.faaScores }]);
     }
     if (event.type === "EVALUATION_SCORE_APPLIED") {

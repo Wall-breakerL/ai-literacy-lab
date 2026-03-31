@@ -8,6 +8,11 @@ export default defineConfig({
     },
   },
   test: {
+    /** Deterministic engine tests: force rule-based Agent B fallback (no live LLM). */
+    env: {
+      OPENAI_API_KEY: "",
+      LLM_ENABLED: "false",
+    },
     environment: "node",
     include: ["tests/**/*.test.ts"],
     coverage: {

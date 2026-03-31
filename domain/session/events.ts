@@ -13,7 +13,7 @@ export const SessionEventTypeSchema = z.enum([
   "USER_MESSAGE",
   "AGENT_A_MESSAGE",
   "PROBE_FIRED",
-  "PROBE_SCORED",
+  "PROBE_CLOSED",
   "EVALUATION_SCORE_APPLIED",
   "STAGE_CHANGED",
   "SCENE_COMPLETED",
@@ -96,22 +96,32 @@ export const ProbeFiredEventSchema = EventMetaSchema.extend({
   payload: z.object({
     sceneId: SceneIdSchema,
     probeId: ProbeIdSchema,
-    /** Stable id for probe lifecycle (fired → scored on resolution). */
+    /** Stable id for probe lifecycle (fired → awaiting_response → closed). */
     probeInstanceId: z.string().min(1),
     weight: z.enum(["high", "medium", "low"]),
+    /** Internal template / evaluator hint (not shown raw to user in Agent A path). */
     prompt: z.string().min(1),
+    /** Why this probe matched (stage + signals), for audit / results. */
+    triggerReason: z.string().min(1),
   }),
 });
 
-export const ProbeScoredEventSchema = EventMetaSchema.extend({
-  type: z.literal("PROBE_SCORED"),
+/** Probe lifecycle end: resolved (score may apply) or unresolved (no score). */
+export const ProbeClosedEventSchema = EventMetaSchema.extend({
+  type: z.literal("PROBE_CLOSED"),
   payload: z.object({
     sceneId: SceneIdSchema,
     probeId: ProbeIdSchema,
     probeInstanceId: z.string().min(1),
+    outcome: z.enum(["resolved", "unresolved"]),
+    /** Human-readable: why closed / how user responded. */
+    reason: z.string().min(1),
+    evidenceExcerpt: z.string().min(1),
+    userResponseExcerpt: z.string().optional(),
     mbtiDeltas: MbtiDeltaSchema,
     faaScores: FaaScorePatchSchema,
-    evidenceExcerpt: z.string().min(1),
+    /** When true, mbti/faa deltas are applied to session scores. */
+    scoreApplied: z.boolean(),
   }),
 });
 
@@ -158,7 +168,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   UserMessageEventSchema,
   AgentAMessageEventSchema,
   ProbeFiredEventSchema,
-  ProbeScoredEventSchema,
+  ProbeClosedEventSchema,
   EvaluationScoreAppliedEventSchema,
   StageChangedEventSchema,
   SceneCompletedEventSchema,

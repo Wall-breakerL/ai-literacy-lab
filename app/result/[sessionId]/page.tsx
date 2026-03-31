@@ -105,6 +105,20 @@ export default function ResultPage() {
 
       <EvidenceCards items={result.evidenceCards} />
 
+      {result.probeHighlights.length > 0 ? (
+        <Card className="lab-layer-panel p-4">
+          <p className="text-xs text-lab-muted">观察挑战与回应</p>
+          <p className="mt-1 text-sm text-lab-muted">
+            以下为会话中出现的观察挑战及结案说明；计分主要来自你对挑战的回应（见高级分析中的分数来源）。
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-lab-muted">
+            {result.probeHighlights.map((line, index) => (
+              <li key={`${index}-${line.slice(0, 24)}`}>- {line}</li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       <Card className="lab-layer-panel p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs text-lab-muted">高级分析（研究与开发视角）</p>
@@ -156,7 +170,9 @@ export default function ResultPage() {
                         result.audit.sceneDeltaSources.map((row, index) => (
                           <li className="border-b border-lab/50 pb-2 last:border-0" key={`${row.sceneId}-${row.source}-${index}`}>
                             <span className="text-cyan-200/90">{row.sceneId}</span> · {row.source === "probe" ? "探针结算" : "信号汇总"}{" "}
-                            <span className="text-lab-muted/70">({row.probeId})</span>
+                            {row.source === "probe" ? null : (
+                              <span className="text-lab-muted/70">({row.probeId})</span>
+                            )}
                             {row.note ? <div className="mt-1 text-lab-muted/90">{row.note}</div> : null}
                           </li>
                         ))

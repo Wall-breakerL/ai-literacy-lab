@@ -68,7 +68,7 @@ export function buildReplayView(sessionId: string, snapshot: SessionState, event
         stageFrom: event.payload.fromStage,
         stageTo: event.payload.toStage,
       });
-    } else if (event.type === "PROBE_SCORED") {
+    } else if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       sceneMap[event.payload.sceneId].items.push({
         eventId: event.id,
         timestamp: event.timestamp,

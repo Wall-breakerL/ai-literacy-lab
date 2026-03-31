@@ -11,6 +11,7 @@ import { Composer } from "@/components/lab/composer";
 import { DebugDrawer } from "@/components/lab/debug-drawer";
 import { MessageList } from "@/components/lab/message-list";
 import { QuickActions } from "@/components/lab/quick-actions";
+import { SceneProgress } from "@/components/lab/scene-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
@@ -25,7 +26,8 @@ export default function LabSessionPage() {
   const searchParams = useSearchParams();
   const sessionId = params.sessionId;
   const debugEnabledByQuery = searchParams.get("debug") === "1";
-  const showAssistantPanel = searchParams.get("assist") === "1";
+  /** 默认展示任务辅助（探针与待核验）；`?assist=0` 可隐藏右栏。 */
+  const showAssistantPanel = searchParams.get("assist") !== "0";
 
   const { snapshot, events, loading, error } = useAssessmentUiStore();
   const { reload } = useSessionRecovery(sessionId);
@@ -140,7 +142,7 @@ export default function LabSessionPage() {
           ) : null}
 
           <MessageList events={events} isThinking={isThinking || loading} stageByScene={stageByScene} />
-          <QuickActions disabled={loading} onAction={handleTurn} />
+          <QuickActions disabled={loading} onAction={handleTurn} sceneId={activeScene.sceneId} />
           <Composer disabled={loading} onSubmit={handleTurn} />
           <p className="text-xs text-lab-muted">
             原型提示：左侧为当前场景阶段与交付物；结束场景请按任务说明中的约定指令单独发送。若回复不稳定，可重试或新建会话。
@@ -156,7 +158,7 @@ export default function LabSessionPage() {
           ) : null}
         </Panel>
       }
-      left={<BriefPanel scene={activeSceneBlueprint} />}
+      left={<BriefPanel currentStageId={activeScene.stageId} scene={activeSceneBlueprint} />}
       mobileLeftDrawer={
         isLeftDrawerOpen ? (
           <div className="rounded-xl border border-lab bg-lab-panel p-3">
@@ -166,13 +168,18 @@ export default function LabSessionPage() {
                 收起
               </Button>
             </div>
-            <BriefPanel scene={activeSceneBlueprint} />
+            <BriefPanel currentStageId={activeScene.stageId} scene={activeSceneBlueprint} />
           </div>
         ) : null
       }
       mobileRightDrawer={null}
       right={showAssistantPanel ? <ChecklistPanel events={events} scene={activeSceneBlueprint} /> : null}
-      subTop={null}
+      subTop={
+        <SceneProgress
+          run={activeScene}
+          scene={activeSceneBlueprint}
+        />
+      }
       top={<AssessmentProgress assessmentState={snapshot.assessmentState} />}
     />
   );

@@ -10,7 +10,7 @@ export async function GET(): Promise<Response> {
     for (const sessionId of service.listSessionIds()) {
       const replay = service.getState(sessionId);
       for (const event of replay.events) {
-        if (event.type !== "PROBE_SCORED") continue;
+        if (event.type !== "PROBE_CLOSED" || !event.payload.scoreApplied) continue;
         rows.push(
           [
             sessionId,

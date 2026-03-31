@@ -36,7 +36,7 @@ function collectFaaScoringEvents(events: SessionEvent[]): Array<{
 }> {
   const rows: Array<{ sceneId: SceneId; faaScores: Record<string, number | undefined>; excerpt: string; probeId: string }> = [];
   for (const event of events) {
-    if (event.type === "PROBE_SCORED") {
+    if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       rows.push({
         sceneId: event.payload.sceneId,
         faaScores: event.payload.faaScores,
