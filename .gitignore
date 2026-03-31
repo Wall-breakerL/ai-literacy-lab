@@ -1,0 +1,4 @@
+# Minimal reboot ignore set
+.DS_Store
+node_modules/
+.env.local
