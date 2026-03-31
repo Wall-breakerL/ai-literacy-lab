@@ -1,3 +1,4 @@
+export * from "@/domain/agent/agent-b-output";
 export * from "@/domain/assessment/registry";
 export * from "@/domain/engine/session-state";
 export * from "@/domain/faa/dimensions";

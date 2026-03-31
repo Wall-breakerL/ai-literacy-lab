@@ -40,8 +40,27 @@ export interface SessionResultPayload {
   shareCopy: string;
   audit: {
     rawSnapshot: SessionState;
+    /** Raw events for PROBE_FIRED / PROBE_SCORED (legacy compat). */
     probeTimeline: SessionEvent[];
-    sceneDeltaSources: Array<{ sceneId: SceneId; probeId: string; mbtiDeltas: Record<string, number>; faaScores: Record<string, number> }>;
+    /** Human-readable probe / scoring trail (default-friendly). */
+    probeLifecycleReadable: Array<{
+      timestamp: string;
+      kind: "probe_fired" | "probe_scored" | "evaluation_applied";
+      sceneId: SceneId;
+      probeId?: string;
+      probeInstanceId?: string;
+      weight?: "high" | "medium" | "low";
+      summary: string;
+    }>;
+    sceneDeltaSources: Array<{
+      sceneId: SceneId;
+      source: "probe" | "evaluation";
+      probeId: string;
+      probeInstanceId?: string;
+      mbtiDeltas: Record<string, number>;
+      faaScores: Record<string, number>;
+      note?: string;
+    }>;
   };
 }
 
@@ -81,20 +100,74 @@ function buildContextVariation(axes: ReturnType<typeof aggregateMbtiFromEvents>)
   });
 }
 
+function buildProbeLifecycleReadable(events: SessionEvent[]): SessionResultPayload["audit"]["probeLifecycleReadable"] {
+  const rows: SessionResultPayload["audit"]["probeLifecycleReadable"] = [];
+  for (const event of events) {
+    if (event.type === "PROBE_FIRED") {
+      rows.push({
+        timestamp: event.timestamp,
+        kind: "probe_fired",
+        sceneId: event.payload.sceneId,
+        probeId: event.payload.probeId,
+        probeInstanceId: event.payload.probeInstanceId,
+        weight: event.payload.weight,
+        summary: `挑战已触发（${event.payload.weight}）：${event.payload.probeId} — 请用下一条消息回应以完成计分。`,
+      });
+    }
+    if (event.type === "PROBE_SCORED") {
+      rows.push({
+        timestamp: event.timestamp,
+        kind: "probe_scored",
+        sceneId: event.payload.sceneId,
+        probeId: event.payload.probeId,
+        probeInstanceId: event.payload.probeInstanceId,
+        summary: `探针已结算：${event.payload.probeId}（证据摘录已记录）。`,
+      });
+    }
+    if (event.type === "EVALUATION_SCORE_APPLIED") {
+      rows.push({
+        timestamp: event.timestamp,
+        kind: "evaluation_applied",
+        sceneId: event.payload.sceneId,
+        probeId: "agent_b_signal",
+        summary: `规则/Agent B 信号汇总已计入：${event.payload.reason}`,
+      });
+    }
+  }
+  return rows;
+}
+
 export function buildSessionResult(snapshot: SessionState, events: SessionEvent[]): SessionResultPayload {
   const mbtiAxes = aggregateMbtiFromEvents(events);
   const faa = aggregateFaaFromEvents(events);
   const typeCode = buildMbtiTypeCode(mbtiAxes).code;
   const contextVariation = buildContextVariation(mbtiAxes);
   const probeTimeline = events.filter((event) => event.type === "PROBE_FIRED" || event.type === "PROBE_SCORED");
-  const sceneDeltaSources = events
-    .filter((event) => event.type === "PROBE_SCORED")
-    .map((event) => ({
-      sceneId: event.payload.sceneId,
-      probeId: event.payload.probeId,
-      mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
-      faaScores: event.payload.faaScores as Record<string, number>,
-    }));
+  const probeLifecycleReadable = buildProbeLifecycleReadable(events);
+  const sceneDeltaSources: SessionResultPayload["audit"]["sceneDeltaSources"] = [];
+  for (const event of events) {
+    if (event.type === "PROBE_SCORED") {
+      sceneDeltaSources.push({
+        sceneId: event.payload.sceneId,
+        source: "probe",
+        probeId: event.payload.probeId,
+        probeInstanceId: event.payload.probeInstanceId,
+        mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
+        faaScores: event.payload.faaScores as Record<string, number>,
+        note: event.payload.evidenceExcerpt.slice(0, 120),
+      });
+    }
+    if (event.type === "EVALUATION_SCORE_APPLIED") {
+      sceneDeltaSources.push({
+        sceneId: event.payload.sceneId,
+        source: "evaluation",
+        probeId: "agent_b_signal",
+        mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
+        faaScores: event.payload.faaScores as Record<string, number>,
+        note: event.payload.reason,
+      });
+    }
+  }
 
   const sceneContribution: SceneContribution[] = (["apartment-tradeoff", "brand-naming-sprint"] as const).map((sceneId) => ({
     sceneId,
@@ -168,6 +241,7 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
     audit: {
       rawSnapshot: snapshot,
       probeTimeline,
+      probeLifecycleReadable,
       sceneDeltaSources,
     },
   };

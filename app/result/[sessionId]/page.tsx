@@ -130,18 +130,49 @@ export default function ResultPage() {
                 </Button>
               </div>
               {showAudit ? (
-                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   <div className="rounded-lg border border-lab bg-lab-panel p-3">
-                    <p className="text-xs text-lab-muted">raw snapshot</p>
-                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.rawSnapshot, null, 2)}</pre>
+                    <p className="text-xs text-lab-muted">探针与评分轨迹（可读）</p>
+                    <ul className="mt-2 max-h-80 space-y-2 overflow-auto text-[11px] text-lab-muted">
+                      {result.audit.probeLifecycleReadable.length === 0 ? (
+                        <li>暂无探针事件。</li>
+                      ) : (
+                        result.audit.probeLifecycleReadable.map((row) => (
+                          <li className="border-b border-lab/50 pb-2 last:border-0" key={`${row.timestamp}-${row.kind}-${row.probeInstanceId ?? row.probeId ?? ""}`}>
+                            <span className="text-cyan-200/90">{row.timestamp.slice(11, 19)}</span> ·{" "}
+                            <span className="text-lab-muted/80">{row.kind}</span>
+                            <div className="mt-1 text-lab-muted">{row.summary}</div>
+                          </li>
+                        ))
+                      )}
+                    </ul>
                   </div>
                   <div className="rounded-lg border border-lab bg-lab-panel p-3">
-                    <p className="text-xs text-lab-muted">probe timeline</p>
-                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.probeTimeline, null, 2)}</pre>
+                    <p className="text-xs text-lab-muted">分数来源（探针 vs Agent B 信号）</p>
+                    <ul className="mt-2 max-h-80 space-y-2 overflow-auto text-[11px] text-lab-muted">
+                      {result.audit.sceneDeltaSources.length === 0 ? (
+                        <li>暂无分项来源。</li>
+                      ) : (
+                        result.audit.sceneDeltaSources.map((row, index) => (
+                          <li className="border-b border-lab/50 pb-2 last:border-0" key={`${row.sceneId}-${row.source}-${index}`}>
+                            <span className="text-cyan-200/90">{row.sceneId}</span> · {row.source === "probe" ? "探针结算" : "信号汇总"}{" "}
+                            <span className="text-lab-muted/70">({row.probeId})</span>
+                            {row.note ? <div className="mt-1 text-lab-muted/90">{row.note}</div> : null}
+                          </li>
+                        ))
+                      )}
+                    </ul>
                   </div>
-                  <div className="rounded-lg border border-lab bg-lab-panel p-3">
-                    <p className="text-xs text-lab-muted">scene delta sources</p>
-                    <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.sceneDeltaSources, null, 2)}</pre>
+                  <div className="rounded-lg border border-lab bg-lab-panel p-3 lg:col-span-2">
+                    <p className="text-xs text-lab-muted">技术快照（仅调试）</p>
+                    <div className="mt-2 grid gap-3 md:grid-cols-2">
+                      <pre className="max-h-48 overflow-auto rounded border border-lab/40 p-2 text-[10px]">
+                        {JSON.stringify(result.audit.rawSnapshot, null, 2)}
+                      </pre>
+                      <pre className="max-h-48 overflow-auto rounded border border-lab/40 p-2 text-[10px]">
+                        {JSON.stringify({ probeTimeline: result.audit.probeTimeline, sceneDeltaSources: result.audit.sceneDeltaSources }, null, 2)}
+                      </pre>
+                    </div>
                   </div>
                 </div>
               ) : null}

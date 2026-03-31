@@ -28,8 +28,36 @@ export interface FaaAggregateResult {
   overall: number;
 }
 
+function collectFaaScoringEvents(events: SessionEvent[]): Array<{
+  sceneId: SceneId;
+  faaScores: Record<string, number | undefined>;
+  excerpt: string;
+  probeId: string;
+}> {
+  const rows: Array<{ sceneId: SceneId; faaScores: Record<string, number | undefined>; excerpt: string; probeId: string }> = [];
+  for (const event of events) {
+    if (event.type === "PROBE_SCORED") {
+      rows.push({
+        sceneId: event.payload.sceneId,
+        faaScores: event.payload.faaScores,
+        excerpt: event.payload.evidenceExcerpt,
+        probeId: event.payload.probeId,
+      });
+    }
+    if (event.type === "EVALUATION_SCORE_APPLIED") {
+      rows.push({
+        sceneId: event.payload.sceneId,
+        faaScores: event.payload.faaScores,
+        excerpt: event.payload.reason,
+        probeId: "agent_b_signal",
+      });
+    }
+  }
+  return rows;
+}
+
 export function aggregateFaaFromEvents(events: SessionEvent[]): FaaAggregateResult {
-  const probeScored = events.filter((event) => event.type === "PROBE_SCORED");
+  const scoringRows = collectFaaScoringEvents(events);
   const dimensions = DIMENSION_IDS.map((dimensionId) => {
     const sceneContribution = {
       "apartment-tradeoff": 0,
@@ -37,14 +65,14 @@ export function aggregateFaaFromEvents(events: SessionEvent[]): FaaAggregateResu
     } as Record<SceneId, number>;
     const evidences: Array<{ sceneId: SceneId; excerpt: string; probeId: string; delta: number }> = [];
 
-    for (const event of probeScored) {
-      const delta = event.payload.faaScores[dimensionId] ?? 0;
+    for (const row of scoringRows) {
+      const delta = row.faaScores[dimensionId] ?? 0;
       if (delta === 0) continue;
-      sceneContribution[event.payload.sceneId] += delta;
+      sceneContribution[row.sceneId] += delta;
       evidences.push({
-        sceneId: event.payload.sceneId,
-        excerpt: event.payload.evidenceExcerpt,
-        probeId: event.payload.probeId,
+        sceneId: row.sceneId,
+        excerpt: row.excerpt,
+        probeId: row.probeId,
         delta,
       });
     }

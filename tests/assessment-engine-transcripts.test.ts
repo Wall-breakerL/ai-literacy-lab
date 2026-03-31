@@ -65,24 +65,26 @@ const CASES: TranscriptCase[] = [
 
 describe("dual-agent post engine transcripts", () => {
   for (const c of CASES) {
-    it(c.name, () => {
+    it(c.name, async () => {
       const engine = new EngineService();
       const session = engine.createSession();
       const seenSignals = new Set<string>();
       const firedProbes = new Set<string>();
 
       for (const turn of c.turns) {
-        const output = engine.runTurn(session.sessionId, turn);
+        const output = await engine.runTurn(session.sessionId, turn);
         output.ruleSignals.forEach((signal) => seenSignals.add(signal));
         output.firedProbeIds.forEach((probeId) => firedProbes.add(probeId));
       }
 
       const replay = engine.getState(session.sessionId);
       const stageEvents = replay.events.filter((event) => event.type === "STAGE_CHANGED");
-      const probeScoreEvents = replay.events.filter((event) => event.type === "PROBE_SCORED");
+      const scoringEvents = replay.events.filter(
+        (event) => event.type === "PROBE_SCORED" || event.type === "EVALUATION_SCORE_APPLIED",
+      );
 
       expect(stageEvents.length).toBeGreaterThan(0);
-      expect(probeScoreEvents.length).toBeGreaterThan(0);
+      expect(scoringEvents.length).toBeGreaterThan(0);
       expect(firedProbes.has(c.mustIncludeProbe)).toBe(true);
       expect(seenSignals.size).toBeGreaterThan(0);
       expect(replay.state.sceneStates.every((scene) => scene.completed)).toBe(true);

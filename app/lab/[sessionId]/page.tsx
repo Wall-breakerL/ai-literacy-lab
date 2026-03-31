@@ -142,7 +142,9 @@ export default function LabSessionPage() {
           <MessageList events={events} isThinking={isThinking || loading} stageByScene={stageByScene} />
           <QuickActions disabled={loading} onAction={handleTurn} />
           <Composer disabled={loading} onSubmit={handleTurn} />
-          <p className="text-xs text-lab-muted">原型提示：若回复不稳定，可重试输入或重新创建会话。</p>
+          <p className="text-xs text-lab-muted">
+            原型提示：左侧为当前场景阶段与交付物；结束场景请按任务说明中的约定指令单独发送。若回复不稳定，可重试或新建会话。
+          </p>
 
           <div className="pt-2">
             <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">

@@ -79,6 +79,17 @@ export function buildReplayView(sessionId: string, snapshot: SessionState, event
         mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
         faaScores: event.payload.faaScores as Record<string, number>,
       });
+    } else if (event.type === "EVALUATION_SCORE_APPLIED") {
+      sceneMap[event.payload.sceneId].items.push({
+        eventId: event.id,
+        timestamp: event.timestamp,
+        sceneId: event.payload.sceneId,
+        type: "probe",
+        content: event.payload.reason,
+        probeId: "agent_b_signal",
+        mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
+        faaScores: event.payload.faaScores as Record<string, number>,
+      });
     } else if (event.type === "SCENE_COMPLETED") {
       const next = events.slice(i + 1).find((item) => item.type === "SCENE_ENTERED");
       if (next && next.type === "SCENE_ENTERED") {

@@ -1,3 +1,4 @@
+import type { AgentBOutput } from "@/domain/agent/agent-b-output";
 import type { RuleSignal } from "@/domain/probes/types";
 import type { SceneBlueprint, StageDefinition } from "@/domain/scenes/types";
 
@@ -54,4 +55,42 @@ export function resolveSceneStageTransition(input: {
   }
 
   return { nextStageId: candidate, sceneCompleted: false };
+}
+
+/** Prefer Agent B suggestion when confident and valid; otherwise legacy heuristic. */
+export function resolveTransitionWithAgentB(input: {
+  scene: SceneBlueprint;
+  currentStageId: string;
+  userMessage: string;
+  signals: RuleSignal[];
+  completionRequested: boolean;
+  agentB: AgentBOutput;
+}): { nextStageId: string; sceneCompleted: boolean } {
+  const legacy = resolveSceneStageTransition({
+    scene: input.scene,
+    currentStageId: input.currentStageId,
+    userMessage: input.userMessage,
+    signals: input.signals,
+    completionRequested: input.completionRequested,
+  });
+
+  const stageIds = new Set(input.scene.stages.map((s) => s.id));
+  const suggestion = input.agentB.next_stage_suggestion;
+  if (
+    input.agentB.confidence >= 0.45 &&
+    input.agentB.can_advance_stage &&
+    suggestion &&
+    stageIds.has(suggestion)
+  ) {
+    const sceneCompleted =
+      legacy.sceneCompleted ||
+      (input.agentB.stage_completion_status === "complete" && input.completionRequested);
+    return { nextStageId: suggestion, sceneCompleted };
+  }
+
+  if (input.agentB.stage_completion_status === "complete" && input.completionRequested) {
+    return legacy;
+  }
+
+  return legacy;
 }

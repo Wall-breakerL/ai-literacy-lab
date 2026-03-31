@@ -14,6 +14,7 @@ export const SessionEventTypeSchema = z.enum([
   "AGENT_A_MESSAGE",
   "PROBE_FIRED",
   "PROBE_SCORED",
+  "EVALUATION_SCORE_APPLIED",
   "STAGE_CHANGED",
   "SCENE_COMPLETED",
   "ASSESSMENT_COMPLETED",
@@ -95,6 +96,9 @@ export const ProbeFiredEventSchema = EventMetaSchema.extend({
   payload: z.object({
     sceneId: SceneIdSchema,
     probeId: ProbeIdSchema,
+    /** Stable id for probe lifecycle (fired → scored on resolution). */
+    probeInstanceId: z.string().min(1),
+    weight: z.enum(["high", "medium", "low"]),
     prompt: z.string().min(1),
   }),
 });
@@ -104,9 +108,21 @@ export const ProbeScoredEventSchema = EventMetaSchema.extend({
   payload: z.object({
     sceneId: SceneIdSchema,
     probeId: ProbeIdSchema,
+    probeInstanceId: z.string().min(1),
     mbtiDeltas: MbtiDeltaSchema,
     faaScores: FaaScorePatchSchema,
     evidenceExcerpt: z.string().min(1),
+  }),
+});
+
+/** Non-probe scoring from Agent B (e.g. rule_signals aggregate). */
+export const EvaluationScoreAppliedEventSchema = EventMetaSchema.extend({
+  type: z.literal("EVALUATION_SCORE_APPLIED"),
+  payload: z.object({
+    sceneId: SceneIdSchema,
+    mbtiDeltas: MbtiDeltaSchema,
+    faaScores: FaaScorePatchSchema,
+    reason: z.string().min(1),
   }),
 });
 
@@ -143,6 +159,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   AgentAMessageEventSchema,
   ProbeFiredEventSchema,
   ProbeScoredEventSchema,
+  EvaluationScoreAppliedEventSchema,
   StageChangedEventSchema,
   SceneCompletedEventSchema,
   AssessmentCompletedEventSchema,

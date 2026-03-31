@@ -12,7 +12,7 @@ export async function POST(
     if (body.sessionId !== sessionId) {
       throw new Error("SESSION_ID_MISMATCH");
     }
-    const output = getSessionService().runTurn(sessionId, body.userMessage);
+    const output = await getSessionService().runTurn(sessionId, body.userMessage);
     return Response.json(TurnOutputSchema.parse(output));
   } catch (error) {
     return handleApiError(error);

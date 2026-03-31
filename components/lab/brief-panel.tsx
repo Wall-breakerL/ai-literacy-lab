@@ -1,6 +1,7 @@
 import type { SceneBlueprint } from "@/domain";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 
 interface BriefPanelProps {
   scene: SceneBlueprint;
@@ -30,6 +31,11 @@ export function BriefPanel({ scene }: BriefPanelProps) {
           ))}
         </ul>
       </div>
+
+      <p className="mt-4 rounded-lg border border-lab/60 bg-lab-card/40 px-2 py-1.5 text-[11px] text-lab-muted">
+        结束本段场景：在输入框单独发送{" "}
+        <code className="rounded bg-lab-panel px-1 text-cyan-200/90">{COMPLETE_SCENE_SIGNAL}</code>（原型约定，非自然语言）。
+      </p>
     </Card>
   );
 }

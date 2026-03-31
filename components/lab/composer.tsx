@@ -25,10 +25,11 @@ export function Composer({ disabled, onSubmit }: ComposerProps) {
         placeholder="写下你的判断、证据和下一步..."
         value={value}
       />
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex flex-col items-end gap-1">
         <Button disabled={disabled} onClick={() => void handleSubmit()} variant="primary">
-          提交当前回合
+          发送消息
         </Button>
+        <p className="text-[11px] text-lab-muted">将本条内容提交给引擎；阶段是否变化由评估逻辑判定，非本按钮强制跳转。</p>
       </div>
     </div>
   );

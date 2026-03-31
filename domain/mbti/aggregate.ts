@@ -23,8 +23,36 @@ export interface MbtiAxisAggregate {
   keyEvidence: Array<{ sceneId: SceneId; excerpt: string; probeId: string; delta: number }>;
 }
 
+function collectMbtiScoringEvents(events: SessionEvent[]): Array<{
+  sceneId: SceneId;
+  mbtiDeltas: Record<string, number | undefined>;
+  excerpt: string;
+  probeId: string;
+}> {
+  const rows: Array<{ sceneId: SceneId; mbtiDeltas: Record<string, number | undefined>; excerpt: string; probeId: string }> = [];
+  for (const event of events) {
+    if (event.type === "PROBE_SCORED") {
+      rows.push({
+        sceneId: event.payload.sceneId,
+        mbtiDeltas: event.payload.mbtiDeltas,
+        excerpt: event.payload.evidenceExcerpt,
+        probeId: event.payload.probeId,
+      });
+    }
+    if (event.type === "EVALUATION_SCORE_APPLIED") {
+      rows.push({
+        sceneId: event.payload.sceneId,
+        mbtiDeltas: event.payload.mbtiDeltas,
+        excerpt: event.payload.reason,
+        probeId: "agent_b_signal",
+      });
+    }
+  }
+  return rows;
+}
+
 export function aggregateMbtiFromEvents(events: SessionEvent[]): MbtiAxisAggregate[] {
-  const probeScored = events.filter((event) => event.type === "PROBE_SCORED");
+  const scoringRows = collectMbtiScoringEvents(events);
 
   return AXIS_IDS.map((axisId) => {
     const sceneContribution = {
@@ -33,14 +61,14 @@ export function aggregateMbtiFromEvents(events: SessionEvent[]): MbtiAxisAggrega
     } as Record<SceneId, number>;
     const evidences: Array<{ sceneId: SceneId; excerpt: string; probeId: string; delta: number }> = [];
 
-    for (const event of probeScored) {
-      const delta = event.payload.mbtiDeltas[axisId] ?? 0;
+    for (const row of scoringRows) {
+      const delta = row.mbtiDeltas[axisId] ?? 0;
       if (delta === 0) continue;
-      sceneContribution[event.payload.sceneId] += delta;
+      sceneContribution[row.sceneId] += delta;
       evidences.push({
-        sceneId: event.payload.sceneId,
-        excerpt: event.payload.evidenceExcerpt,
-        probeId: event.payload.probeId,
+        sceneId: row.sceneId,
+        excerpt: row.excerpt,
+        probeId: row.probeId,
         delta,
       });
     }

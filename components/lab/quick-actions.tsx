@@ -13,7 +13,9 @@ interface QuickActionsProps {
 
 export function QuickActions({ disabled, onAction }: QuickActionsProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="space-y-2">
+      <p className="text-xs text-lab-muted">快捷插入（会作为一条用户消息发送，不单独推进阶段）</p>
+      <div className="flex flex-wrap gap-2">
       {QUICK_ACTIONS.map((action) => (
         <Button
           className="px-3 py-1.5 text-xs"
@@ -25,6 +27,7 @@ export function QuickActions({ disabled, onAction }: QuickActionsProps) {
           {action.label}
         </Button>
       ))}
+      </div>
     </div>
   );
 }

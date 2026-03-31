@@ -25,7 +25,7 @@ export function AssessmentProgress({ assessmentState }: AssessmentProgressProps)
     <div>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs text-lab-muted">原型流程</p>
+          <p className="text-xs text-lab-muted">原型流程（粗粒度示意，不等同于引擎内部阶段机）</p>
           <h1 className="text-lg font-semibold">双任务协作体验</h1>
         </div>
         <Badge className="text-lab-accent">{STEPS[currentIndex]?.label ?? "进行中"}</Badge>

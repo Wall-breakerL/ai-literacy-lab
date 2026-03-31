@@ -70,7 +70,20 @@ export function reduceSessionState(events: SessionEvent[], sessionId: string): S
       state.currentSceneId = event.payload.sceneId;
       state.assessmentState = event.payload.sceneId === "apartment-tradeoff" ? "apartment" : "brand";
     }
+    if (event.type === "USER_MESSAGE") {
+      const run = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
+      if (run) run.turnCount += 1;
+    }
+    if (event.type === "PROBE_FIRED") {
+      const run = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
+      if (run && event.payload.weight === "high" && !run.firedHighWeightProbeIds.includes(event.payload.probeId)) {
+        run.firedHighWeightProbeIds = [...run.firedHighWeightProbeIds, event.payload.probeId];
+      }
+    }
     if (event.type === "PROBE_SCORED") {
+      state = applyProbeDeltas(state, [{ mbti: event.payload.mbtiDeltas, faa: event.payload.faaScores }]);
+    }
+    if (event.type === "EVALUATION_SCORE_APPLIED") {
       state = applyProbeDeltas(state, [{ mbti: event.payload.mbtiDeltas, faa: event.payload.faaScores }]);
     }
     if (event.type === "ASSESSMENT_COMPLETED") {
