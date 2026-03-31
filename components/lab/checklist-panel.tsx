@@ -15,23 +15,23 @@ export function ChecklistPanel({ scene, events }: ChecklistPanelProps) {
 
   const confirmedAssumptions = messageEvents.slice(-2).map((event) => {
     if (event.type === "USER_MESSAGE") {
-      return `用户：${event.payload.message.slice(0, 48)}`;
+      return `你刚刚提到：${event.payload.message.slice(0, 48)}`;
     }
     if (event.type === "AGENT_A_MESSAGE") {
-      return `Agent A：${event.payload.message.slice(0, 48)}`;
+      return `协作助手建议：${event.payload.message.slice(0, 48)}`;
     }
-    return "系统消息";
+    return "流程消息";
   });
-  const pendingValidations = probeEvents
-    .slice(-3)
-    .map((event) => (event.type === "PROBE_FIRED" ? `Probe: ${event.payload.probeId}` : "Probe"));
+  const pendingValidations = probeEvents.slice(-3).map((event, index) =>
+    event.type === "PROBE_FIRED" ? `待验证点 ${index + 1}：补充一条依据或反例来确认当前判断` : "待验证点",
+  );
 
   return (
     <Card className="lab-layer-panel p-4">
-      <Badge className="text-lab-accent">Checklist</Badge>
+      <Badge className="text-lab-accent">行动检查清单</Badge>
 
       <div className="mt-3">
-        <p className="type-code text-xs text-lab-muted">当前 Scene 检查项</p>
+        <p className="text-xs text-lab-muted">当前任务目标</p>
         <ul className="mt-2 space-y-1 text-sm">
           {scene.deliverables.map((item) => (
             <li key={item}>- {item}</li>
@@ -40,18 +40,22 @@ export function ChecklistPanel({ scene, events }: ChecklistPanelProps) {
       </div>
 
       <div className="mt-4">
-        <p className="type-code text-xs text-lab-muted">已确认假设</p>
+        <p className="text-xs text-lab-muted">近期判断与依据</p>
         <ul className="mt-2 space-y-1 text-sm text-lab-muted">
-          {(confirmedAssumptions.length > 0 ? confirmedAssumptions : ["尚未形成稳定假设"]).map((item) => (
+          {(confirmedAssumptions.length > 0 ? confirmedAssumptions : ["还没有形成清晰判断，可先列出两种可选方案"]).map((item) => (
             <li key={item}>- {item}</li>
           ))}
         </ul>
       </div>
 
       <div className="mt-4">
-        <p className="type-code text-xs text-lab-muted">待验证项</p>
+        <p className="text-xs text-lab-muted">下一步建议动作</p>
         <ul className="mt-2 space-y-1 text-sm text-amber-200">
-          {(pendingValidations.length > 0 ? pendingValidations : ["暂无待验证 probe"]).map((item) => (
+          {(
+            pendingValidations.length > 0
+              ? pendingValidations
+              : ["先确认约束条件，再比较 2-3 个方案并说明取舍理由"]
+          ).map((item) => (
             <li key={item}>- {item}</li>
           ))}
         </ul>

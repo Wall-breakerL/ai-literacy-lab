@@ -5,8 +5,8 @@ import { MessageCard } from "@/components/lab/message-card";
 import { TypingIndicator } from "@/components/lab/typing-indicator";
 
 const SCENE_LABEL: Record<SceneId, string> = {
-  "apartment-tradeoff": "Apartment Trade-off",
-  "brand-naming-sprint": "Brand Naming Sprint",
+  "apartment-tradeoff": "任务 1：租房权衡",
+  "brand-naming-sprint": "任务 2：品牌命名",
 };
 
 interface MessageListProps {

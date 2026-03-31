@@ -5,14 +5,14 @@ interface EvidenceCardsProps {
 }
 
 function sceneLabel(sceneId: string): string {
-  return sceneId === "apartment-tradeoff" ? "Apartment" : "Brand";
+  return sceneId === "apartment-tradeoff" ? "任务 1" : "任务 2";
 }
 
 export function EvidenceCards({ items }: EvidenceCardsProps) {
   return (
     <Card className="lab-layer-panel p-5">
-      <h2 className="text-lg font-semibold">Evidence Chain</h2>
-      <p className="mt-1 text-xs text-lab-muted">每个维度展示关键引文，并标注来源 scene</p>
+      <h2 className="text-lg font-semibold">关键证据摘录</h2>
+      <p className="mt-1 text-xs text-lab-muted">以下引文用于支撑结论，帮助你理解建议从何而来。</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {items.map((item) => (
           <div className="rounded-lg border border-lab bg-lab-panel p-4" key={item.dimensionId}>
@@ -24,9 +24,7 @@ export function EvidenceCards({ items }: EvidenceCardsProps) {
               ).map((evidence) => (
                 <blockquote className="rounded border border-lab/80 bg-black/20 p-2 text-sm text-lab-muted" key={`${item.dimensionId}-${evidence.probeId}-${evidence.excerpt}`}>
                   <p>“{evidence.excerpt}”</p>
-                  <p className="mt-1 type-code text-[11px] text-lab-accent">
-                    {sceneLabel(evidence.sceneId)} · {evidence.probeId}
-                  </p>
+                  <p className="mt-1 text-[11px] text-lab-accent">{sceneLabel(evidence.sceneId)} 片段</p>
                 </blockquote>
               ))}
             </div>

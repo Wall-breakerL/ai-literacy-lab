@@ -33,8 +33,7 @@ export function SceneProgress({ scene, run }: SceneProgressProps) {
             )}
             key={stage.id}
           >
-            <p className="type-code text-[11px] uppercase">{stage.id}</p>
-            <p className="mt-1">{stage.titleZh}</p>
+            <p>{stage.titleZh}</p>
           </div>
         ))}
       </div>

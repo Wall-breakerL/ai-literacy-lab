@@ -33,7 +33,7 @@ export function ExportActions({ sessionId, resultJson, shareCopy }: ExportAction
 
   return (
     <Card className="lab-layer-panel p-5">
-      <h2 className="text-lg font-semibold">导出与分享</h2>
+      <h2 className="text-lg font-semibold">导出与分享（高级）</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button onClick={handleDownloadJson} variant="subtle">
           导出 result JSON

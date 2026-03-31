@@ -13,12 +13,12 @@ interface SceneDividerProps {
 
 export function SceneDivider({ fromSceneId, toSceneId, timestamp }: SceneDividerProps) {
   return (
-    <div className="my-4 rounded-xl border border-cyan-300/30 bg-gradient-to-r from-cyan-950/35 to-indigo-950/35 p-4">
-      <p className="type-code text-[11px] text-cyan-200">{timestamp}</p>
+    <div className="my-4 rounded-xl border border-lab bg-lab-panel p-4">
+      <p className="text-[11px] text-lab-muted">{timestamp}</p>
       <p className="mt-1 text-sm">
         {SCENE_TITLE[fromSceneId]}已完成，进入{SCENE_TITLE[toSceneId]}
       </p>
-      <div className="mt-3 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
+      <div className="mt-3 h-px bg-[rgb(var(--lab-border))]/70" />
     </div>
   );
 }

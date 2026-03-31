@@ -22,6 +22,7 @@ export default function ResultPage() {
   const sessionId = params.sessionId;
   const { snapshot, events, loading, error, loadSession } = useAssessmentUiStore();
   const [showAudit, setShowAudit] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     void loadSession(sessionId);
@@ -64,29 +65,20 @@ export default function ResultPage() {
   }
 
   return (
-    <main className="lab-grid-bg mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-6 py-10">
       <Panel>
         <Badge className="text-lab-accent">测评结果 / {sessionId}</Badge>
-        <h1 className="mt-2 text-2xl font-semibold">Human-AI Performance Lab 结果概览（双场景聚合）</h1>
+        <h1 className="mt-2 text-2xl font-semibold">协作结果概览</h1>
         <p className="mt-2 text-sm text-lab-muted">
-          结果基于 Apartment Trade-off 与 Brand Naming Sprint 两段连续任务的行为证据聚合，强调协作风格与适配能力，而非人格定型。
+          结果基于两段连续任务的行为证据聚合，优先展示对你下一次协作最有帮助的结论与建议。
         </p>
       </Panel>
 
       <TypeCard lowConfidenceNotes={result.lowConfidenceNotes} summary={result.summary} typeCode={result.mbtiTypeCode} />
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <MbtiBars axes={result.mbtiAxes} />
-        <FaaChart dimensions={result.faaDimensions} overall={result.faaOverall} />
-      </section>
-
-      <SceneContribution items={result.sceneContribution} />
-      <ContextVariationNote items={result.contextVariation} />
-      <EvidenceCards items={result.evidenceCards} />
-
       <section className="grid gap-4 md:grid-cols-3">
         <Card className="lab-layer-panel p-4">
-          <p className="type-code text-xs text-lab-accent">优势</p>
+          <p className="text-xs text-lab-muted">关键优势</p>
           <ul className="mt-2 space-y-1 text-sm text-lab-muted">
             {result.strengths.map((item) => (
               <li key={item}>- {item}</li>
@@ -94,7 +86,7 @@ export default function ResultPage() {
           </ul>
         </Card>
         <Card className="lab-layer-panel p-4">
-          <p className="type-code text-xs text-lab-accent">盲点</p>
+          <p className="text-xs text-lab-muted">成长空间</p>
           <ul className="mt-2 space-y-1 text-sm text-lab-muted">
             {result.blindspots.map((item) => (
               <li key={item}>- {item}</li>
@@ -102,7 +94,7 @@ export default function ResultPage() {
           </ul>
         </Card>
         <Card className="lab-layer-panel p-4">
-          <p className="type-code text-xs text-lab-accent">建议</p>
+          <p className="text-xs text-lab-muted">实用建议</p>
           <ul className="mt-2 space-y-1 text-sm text-lab-muted">
             {result.suggestions.map((item) => (
               <li key={item}>- {item}</li>
@@ -111,11 +103,32 @@ export default function ResultPage() {
         </Card>
       </section>
 
-      <ExportActions resultJson={result} sessionId={sessionId} shareCopy={result.shareCopy} />
+      <EvidenceCards items={result.evidenceCards} />
 
       <Card className="lab-layer-panel p-4">
         <div className="flex items-center justify-between">
-          <p className="type-code text-xs text-lab-accent">开发者可审计视图</p>
+          <p className="text-xs text-lab-muted">高级分析（研究与开发视角）</p>
+          <Button onClick={() => setShowAdvanced((prev) => !prev)} variant="subtle">
+            {showAdvanced ? "收起" : "展开"}
+          </Button>
+        </div>
+        {showAdvanced ? (
+          <div className="mt-4 space-y-6">
+            <section className="grid gap-6 lg:grid-cols-2">
+              <MbtiBars axes={result.mbtiAxes} />
+              <FaaChart dimensions={result.faaDimensions} overall={result.faaOverall} />
+            </section>
+
+            <SceneContribution items={result.sceneContribution} />
+            <ContextVariationNote items={result.contextVariation} />
+            <ExportActions resultJson={result} sessionId={sessionId} shareCopy={result.shareCopy} />
+          </div>
+        ) : null}
+      </Card>
+
+      <Card className="lab-layer-panel p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-lab-muted">审计视图（原始技术数据）</p>
           <Button onClick={() => setShowAudit((prev) => !prev)} variant="subtle">
             {showAudit ? "隐藏" : "展开"}
           </Button>
@@ -123,15 +136,15 @@ export default function ResultPage() {
         {showAudit ? (
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="type-code text-xs text-lab-muted">raw snapshot</p>
+              <p className="text-xs text-lab-muted">raw snapshot</p>
               <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.rawSnapshot, null, 2)}</pre>
             </div>
             <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="type-code text-xs text-lab-muted">probe timeline</p>
+              <p className="text-xs text-lab-muted">probe timeline</p>
               <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.probeTimeline, null, 2)}</pre>
             </div>
             <div className="rounded-lg border border-lab bg-lab-panel p-3">
-              <p className="type-code text-xs text-lab-muted">scene delta sources</p>
+              <p className="text-xs text-lab-muted">scene delta sources</p>
               <pre className="mt-2 max-h-72 overflow-auto text-[11px]">{JSON.stringify(result.audit.sceneDeltaSources, null, 2)}</pre>
             </div>
           </div>

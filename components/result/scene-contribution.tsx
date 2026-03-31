@@ -8,7 +8,8 @@ interface SceneContributionProps {
 export function SceneContribution({ items }: SceneContributionProps) {
   return (
     <Card className="lab-layer-panel p-5">
-      <h2 className="text-lg font-semibold">Scene Contribution</h2>
+      <h2 className="text-lg font-semibold">分任务贡献明细</h2>
+      <p className="mt-1 text-xs text-lab-muted">用于查看每个任务在各维度上的影响，适合深入复盘时参考。</p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         {items.map((scene) => (
           <div className="rounded-lg border border-lab bg-lab-panel p-4" key={scene.sceneId}>
@@ -29,7 +30,7 @@ export function SceneContribution({ items }: SceneContributionProps) {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-lab-muted">Probe IDs: {scene.probeIds.join(", ") || "-"}</p>
+            <p className="mt-3 text-xs text-lab-muted">技术追踪标识：{scene.probeIds.join(", ") || "-"}</p>
           </div>
         ))}
       </div>

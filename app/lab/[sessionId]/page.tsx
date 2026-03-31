@@ -101,7 +101,7 @@ export default function LabSessionPage() {
   const handleTurn = async (message: string) => {
     const ok = await submitTurn(message);
     if (!ok) {
-      setTransitionError("turn 提交中断，请重试。");
+      setTransitionError("消息提交中断，请重试。");
     }
   };
 
@@ -114,16 +114,13 @@ export default function LabSessionPage() {
       center={
         <Panel className="lab-layer-panel flex h-full flex-col gap-3 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <Badge className="text-lab-accent">统一时间线</Badge>
+            <Badge className="text-lab-accent">协作时间线</Badge>
             <div className="flex items-center gap-2">
               <Button className="px-2 py-1 text-xs lg:hidden" onClick={() => setLeftDrawerOpen(!isLeftDrawerOpen)} variant="subtle">
-                Brief
+                任务说明
               </Button>
               <Button className="px-2 py-1 text-xs lg:hidden" onClick={() => setRightDrawerOpen(!isRightDrawerOpen)} variant="subtle">
-                Checklist
-              </Button>
-              <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">
-                Debug
+                行动清单
               </Button>
             </div>
           </div>
@@ -140,8 +137,8 @@ export default function LabSessionPage() {
           ) : null}
 
           {interludeVisible ? (
-            <div className="rounded-xl border border-cyan-300/35 bg-gradient-to-r from-cyan-950/40 to-indigo-950/40 p-4">
-              <p className="type-code text-xs text-cyan-200">INTERLUDE</p>
+            <div className="rounded-xl border border-lab bg-lab-panel p-4">
+              <p className="text-xs text-lab-muted">流程过渡</p>
               <p className="mt-1 text-sm">第一段输出已锁定，系统正在将你的决策风格迁移到第二段品牌命名冲刺。</p>
             </div>
           ) : null}
@@ -150,12 +147,7 @@ export default function LabSessionPage() {
           <QuickActions disabled={loading} onAction={handleTurn} />
           <Composer disabled={loading} onSubmit={handleTurn} />
 
-          <DebugDrawer
-            onToggle={() => setDebugOpen(!isDebugOpen)}
-            open={isDebugOpen}
-            snapshot={snapshot}
-            turnOutput={lastTurnOutput}
-          />
+          <DebugDrawer onToggle={() => setDebugOpen(!isDebugOpen)} open={isDebugOpen} snapshot={snapshot} turnOutput={lastTurnOutput} />
         </Panel>
       }
       left={<BriefPanel scene={activeSceneBlueprint} />}
@@ -163,7 +155,7 @@ export default function LabSessionPage() {
         isLeftDrawerOpen ? (
           <div className="rounded-xl border border-lab bg-lab-panel p-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="type-code text-xs text-lab-muted">BRIEF DRAWER</p>
+              <p className="text-xs text-lab-muted">任务说明</p>
               <Button className="px-2 py-1 text-xs" onClick={() => setLeftDrawerOpen(false)} variant="subtle">
                 收起
               </Button>
@@ -176,7 +168,7 @@ export default function LabSessionPage() {
         isRightDrawerOpen ? (
           <div className="rounded-xl border border-lab bg-lab-panel p-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="type-code text-xs text-lab-muted">CHECKLIST DRAWER</p>
+              <p className="text-xs text-lab-muted">行动清单</p>
               <Button className="px-2 py-1 text-xs" onClick={() => setRightDrawerOpen(false)} variant="subtle">
                 收起
               </Button>

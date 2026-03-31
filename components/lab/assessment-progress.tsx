@@ -3,12 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 
 const STEPS: Array<{ id: AssessmentFlowState; label: string }> = [
-  { id: "onboarding", label: "Onboarding" },
-  { id: "apartment", label: "Scene 1" },
-  { id: "bridge", label: "Transition" },
-  { id: "brand", label: "Scene 2" },
-  { id: "synthesis", label: "Synthesis" },
-  { id: "completed", label: "Completed" },
+  { id: "onboarding", label: "进入流程" },
+  { id: "apartment", label: "任务 1" },
+  { id: "bridge", label: "过渡" },
+  { id: "brand", label: "任务 2" },
+  { id: "synthesis", label: "总结" },
+  { id: "completed", label: "完成" },
 ];
 
 interface AssessmentProgressProps {
@@ -26,10 +26,10 @@ export function AssessmentProgress({ assessmentState, sessionId }: AssessmentPro
     <div>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs text-lab-muted">Human-AI Performance Lab</p>
-          <h1 className="text-lg font-semibold">连续人机协作实验</h1>
+          <p className="text-xs text-lab-muted">Human-AI 协作测评</p>
+          <h1 className="text-lg font-semibold">连续双任务协作流程</h1>
         </div>
-        <Badge className="text-lab-accent">Session {sessionId}</Badge>
+        <Badge className="text-lab-accent">会话 {sessionId}</Badge>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-6">
         {STEPS.map((step, index) => (

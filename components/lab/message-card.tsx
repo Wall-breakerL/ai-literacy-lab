@@ -16,7 +16,7 @@ export function MessageCard({ role, content, timestamp, sceneLabel, stageLabel }
     <article
       className={cn(
         "rounded-xl border p-3",
-        role === "user" && "border-cyan-300/35 bg-cyan-950/25",
+        role === "user" && "border-[rgb(var(--lab-accent))]/35 bg-[rgb(var(--lab-accent))]/10",
         role === "agent" && "border-lab bg-lab-panel",
         role === "system" && "border-violet-300/25 bg-violet-950/20",
       )}

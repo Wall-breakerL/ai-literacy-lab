@@ -13,7 +13,7 @@ export function DebugDrawer({ open, snapshot, turnOutput, onToggle }: DebugDrawe
   return (
     <Card className="lab-layer-panel p-4">
       <div className="flex items-center justify-between">
-        <p className="type-code text-xs text-lab-muted">DEBUG</p>
+        <p className="text-xs text-lab-muted">高级视图（研究与调试）</p>
         <Button className="px-2 py-1 text-xs" onClick={onToggle} variant="subtle">
           {open ? "隐藏" : "展开"}
         </Button>

@@ -38,12 +38,14 @@ export default function HomePage() {
   };
 
   return (
-    <main className="lab-grid-bg mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-6 py-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-6 py-10">
       <Hero />
       <IntroGrid />
-      <FrameworkStrip />
-      <TestFlow />
+      <section id="flow-section">
+        <TestFlow />
+      </section>
       <StartCta error={error} loading={loading} onStart={handleStart} />
+      <FrameworkStrip />
     </main>
   );
 }

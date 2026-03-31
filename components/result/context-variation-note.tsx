@@ -7,7 +7,7 @@ interface ContextVariationNoteProps {
 export function ContextVariationNote({ items }: ContextVariationNoteProps) {
   return (
     <Card className="lab-layer-panel p-5">
-      <h2 className="text-lg font-semibold">跨情境提示（谨慎解释）</h2>
+      <h2 className="text-lg font-semibold">跨情境稳定性提示</h2>
       <div className="mt-3 space-y-2">
         {items.map((item) => (
           <div className="rounded-lg border border-lab bg-lab-panel px-3 py-2" key={item.axisId}>
