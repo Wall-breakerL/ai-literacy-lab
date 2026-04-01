@@ -10,6 +10,7 @@ import { FaaChart } from "@/components/result/faa-chart";
 import { MbtiBars } from "@/components/result/mbti-bars";
 import { SceneContribution } from "@/components/result/scene-contribution";
 import { TypeCard } from "@/components/result/type-card";
+import { ResultGuide } from "@/components/result/result-guide";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,8 @@ export default function ResultPage() {
           当前为原型版结果解释，主要用于体验流程与交互反馈，不代表正式模型能力或最终评估结论。
         </p>
       </Panel>
+
+      <ResultGuide sessionId={sessionId} />
 
       <TypeCard lowConfidenceNotes={result.lowConfidenceNotes} summary={result.summary} typeCode={result.mbtiTypeCode} />
 

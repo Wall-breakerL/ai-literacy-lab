@@ -1,6 +1,8 @@
 import type { SceneBlueprint } from "@/domain";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { DeliverablesProgress } from "@/components/lab/deliverables-progress";
+import { useAssessmentUiStore } from "@/stores/assessment-ui-store";
 
 interface BriefPanelProps {
   scene: SceneBlueprint;
@@ -29,6 +31,7 @@ const blockerClass: Record<string, string> = {
 
 export function BriefPanel({ scene }: BriefPanelProps) {
   const dc = scene.decisionContext;
+  const { events } = useAssessmentUiStore();
 
   return (
     <Card className="lab-layer-panel min-h-0 p-0">
@@ -203,6 +206,8 @@ export function BriefPanel({ scene }: BriefPanelProps) {
           </div>
         </>
       )}
+
+      <DeliverablesProgress sceneId={scene.id} events={events} />
 
       <p className="mt-4 rounded-lg border border-lab/60 bg-lab-card/40 px-2 py-1.5 text-[11px] text-lab-muted">
         像平常聊天一样推进即可；需要核对的事实记得落到书面或实测。

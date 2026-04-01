@@ -5,12 +5,14 @@ import type { TurnOutput } from "@/domain";
 
 interface LabUiState {
   isDebugOpen: boolean;
+  isDebugCapable: boolean;
   isLeftDrawerOpen: boolean;
   isRightDrawerOpen: boolean;
   isThinking: boolean;
   transitionError: string | null;
   lastTurnOutput: TurnOutput | null;
   setDebugOpen: (open: boolean) => void;
+  setDebugCapable: (capable: boolean) => void;
   setLeftDrawerOpen: (open: boolean) => void;
   setRightDrawerOpen: (open: boolean) => void;
   setThinking: (thinking: boolean) => void;
@@ -21,6 +23,7 @@ interface LabUiState {
 
 const initialState = {
   isDebugOpen: false,
+  isDebugCapable: false,
   isLeftDrawerOpen: false,
   isRightDrawerOpen: false,
   isThinking: false,
@@ -31,6 +34,7 @@ const initialState = {
 export const useLabUiStore = create<LabUiState>((set) => ({
   ...initialState,
   setDebugOpen: (open) => set({ isDebugOpen: open }),
+  setDebugCapable: (capable) => set({ isDebugCapable: capable }),
   setLeftDrawerOpen: (open) => set({ isLeftDrawerOpen: open }),
   setRightDrawerOpen: (open) => set({ isRightDrawerOpen: open }),
   setThinking: (thinking) => set({ isThinking: thinking }),

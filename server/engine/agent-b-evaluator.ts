@@ -39,6 +39,7 @@ export async function evaluateAgentB(input: {
   llmEnabled: boolean;
 }): Promise<{ output: AgentBOutput; observations: ScoreObservation[]; source: "llm" | "fallback" }> {
   const cfg = getLlmEnvConfig();
+  const canUseLlm = Boolean(input.llmEnabled && cfg.apiKey);
   const signals: RuleSignal[] = input.completionRequested ? [] : extractRuleSignals(input.normalizedUserMessage);
 
   const openProbes = getOpenProbeInstances(input.events, input.scene.id);
@@ -47,7 +48,18 @@ export async function evaluateAgentB(input: {
 
   const recentTranscript = buildRecentTranscript(input.events);
 
-  if (input.llmEnabled && cfg.apiKey) {
+  console.debug("[AgentB][LLM] runtime", {
+    sceneId: input.scene.id,
+    llmEnabledFlag: input.llmEnabled,
+    cfgEnabled: cfg.enabled,
+    hasApiKey: Boolean(cfg.apiKey),
+    baseUrl: cfg.baseUrl,
+    model: cfg.modelAgentB,
+    timeoutMs: cfg.timeoutMs,
+    canUseLlm,
+  });
+
+  if (canUseLlm) {
     const llmOut = await tryEvaluateAgentBWithLlm({
       scene: input.scene,
       stageId: input.stageId,
@@ -58,8 +70,16 @@ export async function evaluateAgentB(input: {
       hasOpenProbe,
     });
     if (llmOut) {
+      console.debug("[AgentB][LLM] using llm output");
       return { output: llmOut, observations: [], source: "llm" };
     }
+    console.debug("[AgentB][LLM] fallback reason=llm_returned_null");
+  } else {
+    console.debug("[AgentB][LLM] fallback reason=disabled_or_missing_key", {
+      llmEnabledFlag: input.llmEnabled,
+      cfgEnabled: cfg.enabled,
+      hasApiKey: Boolean(cfg.apiKey),
+    });
   }
 
   const fb = buildFallbackAgentBOutput({
@@ -81,6 +101,10 @@ export async function evaluateAgentB(input: {
     userTurnIndex: input.turnIndex,
     sessionId: input.sessionId,
     similarPastSignals: [],
+  });
+  console.debug("[AgentB][LLM] using fallback output", {
+    observations: observations.length,
+    signals: signals.length,
   });
   return { output, observations, source: "fallback" };
 }

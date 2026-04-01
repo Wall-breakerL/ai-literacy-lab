@@ -10,6 +10,7 @@ import { Composer } from "@/components/lab/composer";
 import { DebugDrawer } from "@/components/lab/debug-drawer";
 import { MessageList } from "@/components/lab/message-list";
 import { QuickActions } from "@/components/lab/quick-actions";
+import { StageIndicator } from "@/components/lab/stage-indicator";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { SCENE_BLUEPRINT_BY_ID } from "@/domain";
@@ -31,11 +32,13 @@ export default function LabSessionPage() {
   const { submitTurn } = useSessionTurn(sessionId);
   const {
     isDebugOpen,
+    isDebugCapable,
     isThinking,
     transitionError,
     lastTurnOutput,
     isLeftDrawerOpen,
     setDebugOpen,
+    setDebugCapable,
     setLeftDrawerOpen,
     setTransitionError,
   } = useLabUiStore();
@@ -51,8 +54,9 @@ export default function LabSessionPage() {
   useEffect(() => {
     if (debugEnabledByQuery) {
       setDebugOpen(true);
+      setDebugCapable(true);
     }
-  }, [debugEnabledByQuery, setDebugOpen]);
+  }, [debugEnabledByQuery, setDebugOpen, setDebugCapable]);
 
   const activeSceneBlueprint = activeScene ? SCENE_BLUEPRINT_BY_ID[activeScene.sceneId] : null;
 
@@ -119,6 +123,7 @@ export default function LabSessionPage() {
           <p className="text-sm font-medium text-lab-muted">协作对话</p>
         </div>
       }
+      subTop={snapshot ? <StageIndicator snapshot={snapshot} /> : null}
       center={
         <Panel
           className={cn(
@@ -146,16 +151,24 @@ export default function LabSessionPage() {
             </div>
           ) : null}
 
-          <MessageList events={events} isThinking={isThinking || loading} />
+          <MessageList
+            events={events}
+            isThinking={isThinking || loading}
+            stageId={activeScene?.stageId}
+            stageIndex={activeSceneBlueprint?.stages.findIndex((s) => s.id === activeScene?.stageId)}
+            stageTotal={activeSceneBlueprint?.stages.length}
+          />
 
           <QuickActions disabled={loading} onAction={handleTurn} sceneId={activeScene.sceneId} />
           <Composer disabled={loading} onSubmit={handleTurn} />
 
-          <div className="pt-2">
-            <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">
-              {isDebugOpen ? "隐藏高级视图" : "查看高级视图（研究/调试）"}
-            </Button>
-          </div>
+          {shouldRenderDebug ? (
+            <div className="pt-2">
+              <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">
+                {isDebugOpen ? "隐藏" : "关闭高级视图"}
+              </Button>
+            </div>
+          ) : null}
           {shouldRenderDebug ? (
             <DebugDrawer
               events={events}

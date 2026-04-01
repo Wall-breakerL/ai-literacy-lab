@@ -23,20 +23,22 @@ export function QuickActions({ sceneId, disabled, onAction }: QuickActionsProps)
   const actions = sceneId === "apartment-tradeoff" ? APARTMENT_ACTIONS : BRAND_ACTIONS;
   const hint =
     sceneId === "apartment-tradeoff"
-      ? "与当前租房权衡任务相关的快捷句（会作为一条用户消息发送）。"
-      : "与当前命名冲刺相关的快捷句（会作为一条用户消息发送）。";
+      ? "参考句式（点击发送，也可直接打字）"
+      : "参考句式（点击发送，也可直接打字）";
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-lab-muted">{hint}</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] text-lab-muted/70">{hint}</p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
         {actions.map((action) => (
           <Button
-            className="px-3 py-1.5 text-xs"
+            className="border border-lab/50 bg-lab-panel/50 px-2.5 py-1 text-[11px] text-lab-muted hover:border-cyan-500/40 hover:bg-cyan-950/20 hover:text-cyan-200/80"
             disabled={disabled}
             key={action.label}
             onClick={() => void onAction(action.value)}
-            variant="subtle"
+            variant="ghost"
           >
             {action.label}
           </Button>

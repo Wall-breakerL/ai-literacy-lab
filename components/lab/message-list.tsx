@@ -12,9 +12,12 @@ const SCENE_LABEL: Record<SceneId, string> = {
 interface MessageListProps {
   events: SessionEvent[];
   isThinking: boolean;
+  stageId?: string;
+  stageIndex?: number;
+  stageTotal?: number;
 }
 
-export function MessageList({ events, isThinking }: MessageListProps) {
+export function MessageList({ events, isThinking, stageId, stageIndex, stageTotal }: MessageListProps) {
   const nodes: Array<ReactElement> = [];
 
   for (let i = 0; i < events.length; i += 1) {
@@ -63,7 +66,7 @@ export function MessageList({ events, isThinking }: MessageListProps) {
   return (
     <div className="space-y-3">
       {nodes.length > 0 ? nodes : <p className="text-sm text-lab-muted">等待对话开始...</p>}
-      {isThinking ? <TypingIndicator /> : null}
+      {isThinking ? <TypingIndicator stageId={stageId} stageIndex={stageIndex} stageTotal={stageTotal} /> : null}
     </div>
   );
 }
