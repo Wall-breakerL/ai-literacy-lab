@@ -92,9 +92,17 @@ export default function Home() {
         }
       } catch (error) {
         console.error('Error checking progress:', error);
+        // 进度检查失败不影响主流程，静默处理
       }
     } catch (error) {
       console.error('Error getting response:', error);
+      // 显示错误消息给用户
+      const errorMsg: ConversationMessage = {
+        role: 'agent',
+        content: '抱歉，AI 响应出现了问题，请稍后再试。',
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     }
 
     processingRef.current = false;
