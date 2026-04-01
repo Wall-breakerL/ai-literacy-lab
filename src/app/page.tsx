@@ -1,0 +1,199 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { housingData } from '@/data/housing';
+import { HARD_CONSTRAINTS, SOFT_CONSTRAINTS } from '@/data/constraints';
+import { getAgentResponse } from '@/lib/agentA';
+import { checkProgress, evaluate } from '@/lib/agentB';
+import { resetProbes, addMessage } from '@/lib/probes';
+import { Housing, ConversationMessage, EvaluationResult } from '@/types';
+import HousingCard from '@/components/HousingCard';
+import HousingModal from '@/components/HousingModal';
+import ChatInterface from '@/components/ChatInterface';
+import ResultDisplay from '@/components/ResultDisplay';
+
+type Stage = 'chat' | 'result';
+
+export default function Home() {
+  const [stage, setStage] = useState<Stage>('chat');
+  const [modalHouse, setModalHouse] = useState<Housing | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [result, setResult] = useState<EvaluationResult | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // 进度状态
+  const [selectedHouse, setSelectedHouse] = useState<string | null>(null);
+  const [reasonGiven, setReasonGiven] = useState(false);
+
+  const processingRef = useRef(false);
+
+  useEffect(() => {
+    resetProbes();
+    const initialMessage: ConversationMessage = {
+      role: 'agent',
+      content: '你好！我来帮你找一套合适的房子。我这里有6套房源，你可以先看看，有问题随时问我。',
+      timestamp: Date.now(),
+    };
+    addMessage('agent', initialMessage.content);
+    setMessages([initialMessage]);
+  }, []);
+
+  const handleHouseClick = (housing: Housing) => {
+    setModalHouse(housing);
+  };
+
+  // 检查是否可以查看结果
+  const canShowResult = selectedHouse !== null;
+
+  const handleShowResult = async () => {
+    if (!canShowResult || isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      const evaluation = await evaluate(messages, selectedHouse, reasonGiven);
+      setResult(evaluation);
+      setStage('result');
+    } catch (error) {
+      console.error('Evaluation error:', error);
+    }
+
+    setIsProcessing(false);
+  };
+
+  const handleUserMessage = async (message: string) => {
+    if (processingRef.current || isProcessing) return;
+    processingRef.current = true;
+    setIsProcessing(true);
+
+    addMessage('user', message);
+    const currentMessages = [...messages, { role: 'user' as const, content: message, timestamp: Date.now() }];
+    setMessages(currentMessages);
+
+    // 获取 AI 回复
+    try {
+      const response = await getAgentResponse(currentMessages, message);
+      const aiMsg: ConversationMessage = {
+        role: 'agent',
+        content: response,
+        timestamp: Date.now(),
+      };
+      addMessage('agent', response);
+      const messagesWithAI = [...currentMessages, aiMsg];
+      setMessages(messagesWithAI);
+
+      // 调用 B 检查进度
+      try {
+        const progress = await checkProgress(messagesWithAI);
+        if (progress.selectedHouse) {
+          setSelectedHouse(progress.selectedHouse);
+        }
+        if (progress.reasonGiven) {
+          setReasonGiven(true);
+        }
+      } catch (error) {
+        console.error('Error checking progress:', error);
+      }
+    } catch (error) {
+      console.error('Error getting response:', error);
+    }
+
+    processingRef.current = false;
+    setIsProcessing(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+      {/* Header */}
+      <header className="bg-white/5 backdrop-blur-sm border-b border-white/10 py-4 px-6">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-xl font-bold text-white">Human-AI Performance Lab</h1>
+          <p className="text-sm text-slate-400">租房选房源场景</p>
+        </div>
+      </header>
+
+      {/* Constraints Display */}
+      <div className="bg-white/5 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-md font-medium text-xs">硬约束</span>
+            <span className="text-slate-300">{HARD_CONSTRAINTS[0].description}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md font-medium text-xs">软约束</span>
+            <div className="flex gap-3 text-slate-400">
+              {SOFT_CONSTRAINTS.map((c) => (
+                <span key={c.id}>{c.description}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      {stage === 'chat' && (
+        <main className="flex-1 max-w-6xl mx-auto w-full p-4 flex gap-4 relative">
+          {/* Left: Housing Cards */}
+          <div className="w-80 flex-shrink-0">
+            <h3 className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">房源列表 · 点击查看详情</h3>
+            <div className="space-y-2">
+              {housingData.map((housing) => (
+                <HousingCard
+                  key={housing.id}
+                  housing={housing}
+                  onClick={() => handleHouseClick(housing)}
+                  isSelected={selectedHouse === housing.id}
+                  compact
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Chat */}
+          <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-white/10 bg-white/5">
+              <h2 className="font-semibold text-white flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                与AI助手对话
+              </h2>
+            </div>
+            <ChatInterface
+              messages={messages}
+              onUserMessage={handleUserMessage}
+              isProcessing={isProcessing}
+            />
+          </div>
+
+          {/* Result Button - Bottom Left */}
+          <div className="absolute bottom-6 left-6">
+            <button
+              onClick={handleShowResult}
+              disabled={!canShowResult || isProcessing}
+              className={`px-6 py-3 rounded-xl font-medium transition-all ${
+                canShowResult
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg'
+                  : 'bg-white/10 text-white/40 cursor-not-allowed border border-white/10'
+              }`}
+            >
+              {isProcessing ? '生成中...' : '查看结果'}
+            </button>
+          </div>
+        </main>
+      )}
+
+      {/* Result */}
+      {stage === 'result' && result && (
+        <main className="flex-1 flex justify-center items-center p-8">
+          <ResultDisplay result={result} />
+        </main>
+      )}
+
+      {/* Modal */}
+      {modalHouse && (
+        <HousingModal
+          housing={modalHouse}
+          onClose={() => setModalHouse(null)}
+        />
+      )}
+    </div>
+  );
+}
