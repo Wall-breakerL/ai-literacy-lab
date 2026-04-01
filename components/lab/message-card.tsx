@@ -8,10 +8,9 @@ interface MessageCardProps {
   content: string;
   timestamp: string;
   sceneLabel: string;
-  stageLabel?: string;
 }
 
-export function MessageCard({ role, content, timestamp, sceneLabel, stageLabel }: MessageCardProps) {
+export function MessageCard({ role, content, timestamp, sceneLabel }: MessageCardProps) {
   return (
     <article
       className={cn(
@@ -23,8 +22,7 @@ export function MessageCard({ role, content, timestamp, sceneLabel, stageLabel }
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Badge>{role === "user" ? "你" : role === "agent" ? "Agent A" : "System"}</Badge>
-        <Badge>{sceneLabel}</Badge>
-        {stageLabel ? <Badge>{stageLabel}</Badge> : null}
+        <Badge className="border-lab/60 text-[11px] text-lab-muted">{sceneLabel}</Badge>
         <span className="type-code ml-auto text-[11px] text-lab-muted">{timestamp}</span>
       </div>
       <p className="whitespace-pre-wrap text-sm leading-6">{content}</p>

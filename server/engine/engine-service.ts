@@ -3,13 +3,19 @@ import { SessionStateSchema, TurnOutputSchema, type SessionState, type TurnOutpu
 import type { ProbeDefinition, ProbeScoreDelta } from "@/domain/probes/types";
 import { ProbeScoreDeltaSchema } from "@/domain/probes/types";
 import { buildSceneContextPacket, sceneContextPacketForPrompt } from "@/domain/scenes/scene-context-packet";
+import type { ScenarioProbeRuntime } from "@/domain/scenes/scenario-data";
+import type { SceneId } from "@/domain/scenes/types";
 import { SessionEventSchema, type SessionEvent } from "@/domain/session/events";
 import { createId } from "@/lib/id";
 import { nowIso } from "@/lib/time";
 import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 import { generateAgentAReply } from "@/server/engine/agent-a-llm";
 import { evaluateAgentB } from "@/server/engine/agent-b-evaluator";
+import { buildChatTurnsForScene } from "@/server/engine/chat-history";
+import { ProbeInjector } from "@/server/engine/probe-injector";
+import { trackProbeDetection } from "@/server/engine/probe-tracker";
 import { extractRuleSignals } from "@/server/engine/rule-extractor";
+import { cloneScenarioProbeRuntimes, getScenarioDataLayer } from "@/server/engine/scenarios/registry";
 import { reduceSessionState } from "@/server/engine/session-reducer";
 import { resolveTransitionWithAgentB } from "@/server/engine/scene-transition";
 import { getLlmEnvConfig } from "@/server/providers/llm-env";
@@ -44,6 +50,21 @@ function hasNonZeroDelta(d: ProbeScoreDelta): boolean {
 
 export class EngineService {
   private readonly eventsBySession = new Map<string, SessionEvent[]>();
+  /** Server-only runtime state for scenario-data injection probes (not in client schemas). */
+  private readonly injectionBySession = new Map<string, Map<SceneId, ScenarioProbeRuntime[]>>();
+
+  private getRuntimeProbes(sessionId: string, sceneId: SceneId): ScenarioProbeRuntime[] {
+    let sceneMap = this.injectionBySession.get(sessionId);
+    if (!sceneMap) {
+      sceneMap = new Map();
+      this.injectionBySession.set(sessionId, sceneMap);
+    }
+    if (!sceneMap.has(sceneId)) {
+      const layer = getScenarioDataLayer(sceneId);
+      sceneMap.set(sceneId, cloneScenarioProbeRuntimes(layer));
+    }
+    return sceneMap.get(sceneId)!;
+  }
 
   listSessionIds(): string[] {
     return [...this.eventsBySession.keys()];
@@ -66,6 +87,7 @@ export class EngineService {
       }),
     ];
     this.eventsBySession.set(sessionId, initialEvents);
+    void this.getRuntimeProbes(sessionId, "apartment-tradeoff");
     return SessionStateSchema.parse(reduceSessionState(initialEvents, sessionId));
   }
 
@@ -97,8 +119,17 @@ export class EngineService {
     const currentRun = state.sceneStates.find((item) => item.sceneId === state.currentSceneId);
     if (!currentRun) throw new Error("STATE_CORRUPTED");
 
-    const scene = SCENE_REGISTRY[state.currentSceneId];
     const completionRequested = userMessage.trim() === COMPLETE_SCENE_SIGNAL;
+    if (!completionRequested && userMessage.trim().length > 0) {
+      const nextUserTurn = currentRun.turnCount + 1;
+      trackProbeDetection({
+        probes: this.getRuntimeProbes(sessionId, state.currentSceneId),
+        userMessage: userMessage.trim(),
+        currentUserTurn: nextUserTurn,
+      });
+    }
+
+    const scene = SCENE_REGISTRY[state.currentSceneId];
     const normalizedMessage = completionRequested ? "用户点击了完成当前场景按钮。" : userMessage;
     const signals = completionRequested ? [] : extractRuleSignals(normalizedMessage);
 
@@ -271,16 +302,32 @@ export class EngineService {
     const activeSceneId = stateBeforeAgent.currentSceneId;
     const runForAgent = stateBeforeAgent.sceneStates.find((item) => item.sceneId === activeSceneId);
     const agentScene = SCENE_REGISTRY[activeSceneId];
-    const currentStage = runForAgent?.stageId ?? "brief";
 
     const packetForAgent = runForAgent ? buildSceneContextPacket(agentScene, runForAgent) : buildSceneContextPacket(agentScene, currentRun);
     const sceneContextPromptForAgent = sceneContextPacketForPrompt(packetForAgent);
 
+    const histForInject = buildChatTurnsForScene([...pack.events, ...freshEvents], activeSceneId);
+    const currentTurnForInject = histForInject.filter((m) => m.role === "user").length;
+
+    let scenarioDataForLLM: Record<string, unknown> | null = null;
+    if (!bridgeToNextScene) {
+      const layer = getScenarioDataLayer(activeSceneId);
+      const probes = this.getRuntimeProbes(sessionId, activeSceneId);
+      const injector = new ProbeInjector();
+      const injected = injector.processBeforeLLMCall({
+        layer,
+        conversationHistory: histForInject,
+        currentTurn: Math.max(1, currentTurnForInject),
+        probes,
+      });
+      scenarioDataForLLM = injected.scenarioDataForLLM;
+    }
+
     const agentAMessage = await generateAgentAReply({
       scene: agentScene,
-      stageId: currentStage,
       bridgeToNextScene,
       sceneContextPrompt: sceneContextPromptForAgent,
+      scenarioDataForLLM,
       userMessagePreview: normalizedMessage,
       agentBIntentSummary: agentB.user_intent_summary,
       llmEnabled,

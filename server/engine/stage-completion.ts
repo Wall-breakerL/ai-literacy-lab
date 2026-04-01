@@ -29,9 +29,14 @@ function apartmentStressGate(msg: string): boolean {
 }
 
 function apartmentDecideGate(msg: string): boolean {
-  return (
-    /排序|第一|第二|第三|第四|推荐|最不|首选|垫底|梯队|从好到坏|从坏到好/.test(msg) && msg.trim().length > 18
-  );
+  const t = msg.trim();
+  const ranking =
+    /排序|第一|第二|第三|第四|推荐|最不|首选|垫底|梯队|从好到坏|从坏到好/.test(t) && t.length > 18;
+  /** 允许「权重+追问清单」式交付，避免只靠排序关键词 */
+  const deliverableBundle =
+    /(权重|追问).{0,80}(问题|清单|中介|房东)|问题.{0,40}(权重|补齐|五个|5\s*个)|交付|输出.{0,40}(排序|推荐)/.test(t) &&
+    t.length > 16;
+  return ranking || deliverableBundle;
 }
 
 function brandCriteriaGate(msg: string): boolean {
@@ -128,11 +133,18 @@ export function computeStageTransition(input: {
 
   const lastStageId = order[order.length - 1];
   if (currentStageId === lastStageId) {
+    /** 末段：满足交付门控即静默结束本场景，无需「完成」按钮信号（仍兼容 COMPLETE_SCENE_SIGNAL）。 */
+    const autoCompleteApartment = scene.id === "apartment-tradeoff" && apartmentDecideGate(msg);
+    const autoCompleteBrand = scene.id === "brand-naming-sprint" && brandFinalizeGate(msg);
     const completed =
       scene.id === "apartment-tradeoff"
-        ? apartmentSceneComplete(msg, completionRequested)
+        ? completionRequested
+          ? apartmentSceneComplete(msg, true)
+          : autoCompleteApartment
         : scene.id === "brand-naming-sprint"
-          ? brandSceneComplete(msg, completionRequested)
+          ? completionRequested
+            ? brandSceneComplete(msg, true)
+            : autoCompleteBrand
           : false;
     return {
       nextStageId: currentStageId,

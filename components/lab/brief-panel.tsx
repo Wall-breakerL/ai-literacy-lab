@@ -205,7 +205,7 @@ export function BriefPanel({ scene }: BriefPanelProps) {
       )}
 
       <p className="mt-4 rounded-lg border border-lab/60 bg-lab-card/40 px-2 py-1.5 text-[11px] text-lab-muted">
-        结束本段场景：在对话区点击「完成当前场景」按钮（与任务进度门控一致）。
+        像平常聊天一样推进即可；需要核对的事实记得落到书面或实测。
       </p>
       </div>
     </Card>

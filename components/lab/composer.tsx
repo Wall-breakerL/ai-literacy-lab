@@ -29,7 +29,7 @@ export function Composer({ disabled, onSubmit }: ComposerProps) {
         <Button disabled={disabled} onClick={() => void handleSubmit()} variant="primary">
           发送消息
         </Button>
-        <p className="text-[11px] text-lab-muted">将本条内容提交给引擎；阶段是否变化由评估逻辑判定，非本按钮强制跳转。</p>
+        <p className="text-[11px] text-lab-muted">将本条内容发送给协作助手。</p>
       </div>
     </div>
   );

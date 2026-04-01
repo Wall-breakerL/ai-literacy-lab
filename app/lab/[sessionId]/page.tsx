@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
-import { AssessmentProgress } from "@/components/lab/assessment-progress";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AssessmentShell } from "@/components/lab/assessment-shell";
 import { BriefPanel } from "@/components/lab/brief-panel";
 import { ChecklistPanel } from "@/components/lab/checklist-panel";
@@ -11,24 +10,20 @@ import { Composer } from "@/components/lab/composer";
 import { DebugDrawer } from "@/components/lab/debug-drawer";
 import { MessageList } from "@/components/lab/message-list";
 import { QuickActions } from "@/components/lab/quick-actions";
-import { SceneProgress } from "@/components/lab/scene-progress";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
-import type { SceneId } from "@/domain";
 import { SCENE_BLUEPRINT_BY_ID } from "@/domain";
-import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 import { useSessionRecovery } from "@/hooks/use-session-recovery";
 import { useSessionTurn } from "@/hooks/use-session-turn";
 import { useAssessmentUiStore } from "@/stores/assessment-ui-store";
 import { useLabUiStore } from "@/stores/lab-ui-store";
+import { cn } from "@/lib/cn";
 
 export default function LabSessionPage() {
   const params = useParams<{ sessionId: string }>();
   const searchParams = useSearchParams();
   const sessionId = params.sessionId;
   const debugEnabledByQuery = searchParams.get("debug") === "1";
-  /** 默认展示任务核对（交付物与待核验）；`?assist=0` 可隐藏右栏。 */
   const showAssistantPanel = searchParams.get("assist") !== "0";
 
   const { snapshot, events, loading, error } = useAssessmentUiStore();
@@ -50,6 +45,9 @@ export default function LabSessionPage() {
     return snapshot.sceneStates.find((scene) => scene.sceneId === snapshot.currentSceneId) ?? null;
   }, [snapshot]);
 
+  const [sceneFade, setSceneFade] = useState(false);
+  const prevSceneRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (debugEnabledByQuery) {
       setDebugOpen(true);
@@ -57,16 +55,22 @@ export default function LabSessionPage() {
   }, [debugEnabledByQuery, setDebugOpen]);
 
   const activeSceneBlueprint = activeScene ? SCENE_BLUEPRINT_BY_ID[activeScene.sceneId] : null;
-  const stageByScene = useMemo(
-    () =>
-      snapshot
-        ? snapshot.sceneStates.reduce<Record<string, string>>((acc, item) => {
-            acc[item.sceneId] = item.stageId;
-            return acc;
-          }, {})
-        : {},
-    [snapshot],
-  );
+
+  useEffect(() => {
+    const cur = snapshot?.currentSceneId;
+    if (!cur) return;
+    const prev = prevSceneRef.current;
+    if (prev !== null && prev !== cur) {
+      const start = window.setTimeout(() => setSceneFade(true), 0);
+      const end = window.setTimeout(() => setSceneFade(false), 420);
+      prevSceneRef.current = cur;
+      return () => {
+        window.clearTimeout(start);
+        window.clearTimeout(end);
+      };
+    }
+    prevSceneRef.current = cur;
+  }, [snapshot?.currentSceneId]);
 
   useEffect(() => {
     const completedApartment = events.some(
@@ -108,28 +112,25 @@ export default function LabSessionPage() {
   };
   const shouldRenderDebug = debugEnabledByQuery || isDebugOpen;
 
-  const resolveStageTitle = (sceneId: SceneId, stageId: string) =>
-    SCENE_BLUEPRINT_BY_ID[sceneId]?.stages.find((s) => s.id === stageId)?.titleZh;
-
-  const canCompleteScene =
-    !loading &&
-    !isThinking &&
-    snapshot.assessmentState !== "completed" &&
-    !activeScene.completed;
-
-  const interludeVisible =
-    events.some((event) => event.type === "SCENE_COMPLETED" && event.payload.sceneId === "apartment-tradeoff") &&
-    snapshot.currentSceneId === "brand-naming-sprint";
-
   return (
     <AssessmentShell
+      top={
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-lab-muted">协作对话</p>
+        </div>
+      }
       center={
-        <Panel className="lab-layer-panel flex h-full flex-col gap-3 p-4">
+        <Panel
+          className={cn(
+            "lab-layer-panel flex h-full flex-col gap-3 p-4 transition-opacity duration-300",
+            sceneFade ? "opacity-0" : "opacity-100",
+          )}
+        >
           <div className="mb-2 flex items-center justify-between">
-            <Badge className="text-lab-accent">任务对话</Badge>
+            <p className="text-sm font-medium text-lab-muted">对话</p>
             <div className="flex items-center gap-2">
               <Button className="px-2 py-1 text-xs lg:hidden" onClick={() => setLeftDrawerOpen(!isLeftDrawerOpen)} variant="subtle">
-                任务说明
+                参考说明
               </Button>
             </div>
           </div>
@@ -145,35 +146,10 @@ export default function LabSessionPage() {
             </div>
           ) : null}
 
-          {interludeVisible ? (
-            <div className="rounded-xl border border-lab bg-lab-panel p-4">
-              <p className="text-xs text-lab-muted">流程过渡</p>
-              <p className="mt-1 text-sm">第一段输出已锁定，系统正在将你的决策风格迁移到第二段品牌命名冲刺。</p>
-            </div>
-          ) : null}
+          <MessageList events={events} isThinking={isThinking || loading} />
 
-          <MessageList
-            events={events}
-            isThinking={isThinking || loading}
-            resolveStageTitle={resolveStageTitle}
-            stageByScene={stageByScene}
-          />
           <QuickActions disabled={loading} onAction={handleTurn} sceneId={activeScene.sceneId} />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="px-3 py-1.5 text-xs"
-              disabled={!canCompleteScene}
-              onClick={() => void handleTurn(COMPLETE_SCENE_SIGNAL)}
-              variant="subtle"
-            >
-              完成当前场景
-            </Button>
-            <p className="text-[11px] text-lab-muted">满足本段交付后点此结束；与发送消息共用同一引擎。</p>
-          </div>
           <Composer disabled={loading} onSubmit={handleTurn} />
-          <p className="text-xs text-lab-muted">
-            原型提示：上方进度为任务阶段（中文标题）；若回复不稳定，可重试或新建会话。
-          </p>
 
           <div className="pt-2">
             <Button className="px-2 py-1 text-xs" onClick={() => setDebugOpen(!isDebugOpen)} variant="subtle">
@@ -196,7 +172,7 @@ export default function LabSessionPage() {
         isLeftDrawerOpen ? (
           <div className="rounded-xl border border-lab bg-lab-panel p-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs text-lab-muted">任务说明</p>
+              <p className="text-xs text-lab-muted">参考说明</p>
               <Button className="px-2 py-1 text-xs" onClick={() => setLeftDrawerOpen(false)} variant="subtle">
                 收起
               </Button>
@@ -207,13 +183,6 @@ export default function LabSessionPage() {
       }
       mobileRightDrawer={null}
       right={showAssistantPanel ? <ChecklistPanel scene={activeSceneBlueprint} /> : null}
-      subTop={
-        <SceneProgress
-          run={activeScene}
-          scene={activeSceneBlueprint}
-        />
-      }
-      top={<AssessmentProgress assessmentState={snapshot.assessmentState} />}
     />
   );
 }

@@ -14,7 +14,7 @@ export default defineConfig({
       LLM_ENABLED: "false",
     },
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "server/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
