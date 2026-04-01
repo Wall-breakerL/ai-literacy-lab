@@ -3,12 +3,14 @@ import { AssessmentBlueprintSchema } from "@/domain/assessment/registry";
 import { FaaDimensionIdSchema } from "@/domain/faa/dimensions";
 import { MbtiAxisIdSchema } from "@/domain/mbti/axes";
 import { ProbeIdSchema } from "@/domain/probes/types";
+import { ScenePhaseSchema } from "@/domain/scenes/scene-phase";
 import { SceneIdSchema } from "@/domain/scenes/types";
 
 export const SessionEventTypeSchema = z.enum([
   "SESSION_CREATED",
   "ASSESSMENT_STARTED",
   "SCENE_ENTERED",
+  "SCENE_CONTEXT_SYNC",
   "BRIEF_SHOWN",
   "USER_MESSAGE",
   "AGENT_A_MESSAGE",
@@ -67,6 +69,16 @@ export const SceneEnteredEventSchema = EventMetaSchema.extend({
   }),
 });
 
+/** Updates coarse phase + rolling working summary for SceneContextPacket. */
+export const SceneContextSyncEventSchema = EventMetaSchema.extend({
+  type: z.literal("SCENE_CONTEXT_SYNC"),
+  payload: z.object({
+    sceneId: SceneIdSchema,
+    phase: ScenePhaseSchema,
+    workingSummaryZh: z.string(),
+  }),
+});
+
 export const BriefShownEventSchema = EventMetaSchema.extend({
   type: z.literal("BRIEF_SHOWN"),
   payload: z.object({
@@ -101,6 +113,8 @@ export const ProbeFiredEventSchema = EventMetaSchema.extend({
     weight: z.enum(["high", "medium", "low"]),
     /** Internal template / evaluator hint (not shown raw to user in Agent A path). */
     prompt: z.string().min(1),
+    /** Natural-language hidden objective for Agent A (preferred over raw template). */
+    hiddenObjectiveZh: z.string().min(1).optional(),
     /** Why this probe matched (stage + signals), for audit / results. */
     triggerReason: z.string().min(1),
   }),
@@ -133,6 +147,8 @@ export const EvaluationScoreAppliedEventSchema = EventMetaSchema.extend({
     mbtiDeltas: MbtiDeltaSchema,
     faaScores: FaaScorePatchSchema,
     reason: z.string().min(1),
+    evidenceExcerpt: z.string().min(1).optional(),
+    sourceType: z.enum(["ordinary_collaboration", "probe_response"]).optional(),
   }),
 });
 
@@ -164,6 +180,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   SessionCreatedEventSchema,
   AssessmentStartedEventSchema,
   SceneEnteredEventSchema,
+  SceneContextSyncEventSchema,
   BriefShownEventSchema,
   UserMessageEventSchema,
   AgentAMessageEventSchema,

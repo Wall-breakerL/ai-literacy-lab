@@ -30,7 +30,7 @@ export function SceneContribution({ items }: SceneContributionProps) {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-lab-muted">技术追踪标识：{scene.probeIds.join(", ") || "-"}</p>
+            <p className="mt-3 text-xs text-lab-muted">协作追问记录 id（研究/调试）：{scene.probeIds.join(", ") || "-"}</p>
           </div>
         ))}
       </div>

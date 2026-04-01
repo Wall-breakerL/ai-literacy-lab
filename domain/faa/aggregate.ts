@@ -48,7 +48,7 @@ function collectFaaScoringEvents(events: SessionEvent[]): Array<{
       rows.push({
         sceneId: event.payload.sceneId,
         faaScores: event.payload.faaScores,
-        excerpt: event.payload.reason,
+        excerpt: event.payload.evidenceExcerpt ?? event.payload.reason,
         probeId: "agent_b_signal",
       });
     }

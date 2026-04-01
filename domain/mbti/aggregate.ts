@@ -43,7 +43,7 @@ function collectMbtiScoringEvents(events: SessionEvent[]): Array<{
       rows.push({
         sceneId: event.payload.sceneId,
         mbtiDeltas: event.payload.mbtiDeltas,
-        excerpt: event.payload.reason,
+        excerpt: event.payload.evidenceExcerpt ?? event.payload.reason,
         probeId: "agent_b_signal",
       });
     }

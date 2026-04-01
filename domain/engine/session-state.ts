@@ -3,6 +3,7 @@ import { AssessmentFlowStateSchema, AssessmentBlueprintSchema } from "@/domain/a
 import { FaaDimensionIdSchema } from "@/domain/faa/dimensions";
 import { MbtiAxisIdSchema } from "@/domain/mbti/axes";
 import { ProbeIdSchema, ProbeScoreDeltaSchema, RuleSignalSchema } from "@/domain/probes/types";
+import { ScenePhaseSchema } from "@/domain/scenes/scene-phase";
 import { SceneIdSchema } from "@/domain/scenes/types";
 
 export const SceneRunStateSchema = z.object({
@@ -11,6 +12,11 @@ export const SceneRunStateSchema = z.object({
   completed: z.boolean(),
   turnCount: z.number().int().min(0),
   firedHighWeightProbeIds: z.array(ProbeIdSchema),
+  /** Coarse phase for context packet (not user-facing gates). */
+  scenePhase: ScenePhaseSchema.default("orient"),
+  workingSummaryZh: z.string().default(""),
+  /** Hidden objective for Agent A while a probe is open; cleared when closed. */
+  openProbeObjectiveZh: z.string().nullable().default(null),
 });
 export type SceneRunState = z.infer<typeof SceneRunStateSchema>;
 

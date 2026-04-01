@@ -5,6 +5,8 @@ export * from "@/domain/faa/dimensions";
 export * from "@/domain/mbti/axes";
 export * from "@/domain/probes/types";
 export * from "@/domain/scenes/types";
+export * from "@/domain/scenes/scene-phase";
+export * from "@/domain/scenes/scene-context-packet";
 export * from "@/domain/scenes/decision-context";
 export * from "@/domain/scenes/apartment-tradeoff";
 export * from "@/domain/scenes/brand-naming-sprint";

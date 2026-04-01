@@ -26,7 +26,7 @@ export default function LabSessionPage() {
   const searchParams = useSearchParams();
   const sessionId = params.sessionId;
   const debugEnabledByQuery = searchParams.get("debug") === "1";
-  /** 默认展示任务辅助（探针与待核验）；`?assist=0` 可隐藏右栏。 */
+  /** 默认展示任务核对（交付物与待核验）；`?assist=0` 可隐藏右栏。 */
   const showAssistantPanel = searchParams.get("assist") !== "0";
 
   const { snapshot, events, loading, error } = useAssessmentUiStore();
@@ -173,7 +173,7 @@ export default function LabSessionPage() {
         ) : null
       }
       mobileRightDrawer={null}
-      right={showAssistantPanel ? <ChecklistPanel events={events} scene={activeSceneBlueprint} /> : null}
+      right={showAssistantPanel ? <ChecklistPanel scene={activeSceneBlueprint} /> : null}
       subTop={
         <SceneProgress
           run={activeScene}

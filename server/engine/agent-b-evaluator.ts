@@ -1,20 +1,16 @@
 import { AgentBOutputSchema, type AgentBOutput } from "@/domain/agent/agent-b-output";
-import type { ProbeDefinition, ProbeId, RuleSignal } from "@/domain/probes/types";
+import { AgentBScoringEventSchema } from "@/domain/agent/agent-b-output";
+import type { ProbeId, RuleSignal } from "@/domain/probes/types";
 import type { SceneBlueprint } from "@/domain/scenes/types";
 import type { SessionEvent } from "@/domain/session/events";
-import { mergeSignalOnlyDeltas } from "@/server/engine/agent-b-scorer";
-import { selectTriggeredProbes } from "@/server/engine/probe-orchestrator";
+import { buildFallbackAgentBOutput } from "@/server/engine/probe-behavior-fallback";
 import { extractRuleSignals } from "@/server/engine/rule-extractor";
-import { computeStageTransition } from "@/server/engine/stage-completion";
 import { getLlmEnvConfig } from "@/server/providers/llm-env";
 import { getLlmProvider } from "@/server/providers/llm-provider";
+import { ProbeScoreDeltaSchema } from "@/domain/probes/types";
 
-function extractRuleSignalsFromMessage(msg: string): RuleSignal[] {
-  return extractRuleSignals(msg);
-}
-
-function getOpenProbeInstances(events: SessionEvent[], sceneId: string): Array<{ probeInstanceId: string; probeId: string }> {
-  const fired = new Map<string, { probeId: string }>();
+function getOpenProbeInstances(events: SessionEvent[], sceneId: string): Array<{ probeInstanceId: string; probeId: ProbeId }> {
+  const fired = new Map<string, { probeId: ProbeId }>();
   for (const e of events) {
     if (e.type === "PROBE_FIRED" && e.payload.sceneId === sceneId) {
       fired.set(e.payload.probeInstanceId, { probeId: e.payload.probeId });
@@ -29,23 +25,25 @@ function getOpenProbeInstances(events: SessionEvent[], sceneId: string): Array<{
 function buildAgentBPrompt(input: {
   scene: SceneBlueprint;
   stageId: string;
+  sceneContextPrompt: string;
   userMessage: string;
   recentTranscript: string;
-  deliverables: string[];
   openProbes: Array<{ probeInstanceId: string; probeId: string }>;
-  probeCatalog: ProbeDefinition[];
+  probeCatalog: { id: string; purpose: string; probeIntentZh: string }[];
 }): string {
   const open = input.openProbes.length
-    ? input.openProbes.map((p) => `- ${p.probeInstanceId} (${p.probeId})`).join("\n")
-    : "(none)";
+    ? input.openProbes.map((p) => `- instance ${p.probeInstanceId} probe ${p.probeId}`).join("\n")
+    : "(none — at most one open probe allowed)";
   return [
-    "You are Agent B: an invisible evaluator. Output ONLY valid JSON matching the schema discussed in the system message.",
+    "You are Agent B: an invisible evaluator. Output ONLY valid JSON matching the system schema.",
     "",
-    `Scene: ${input.scene.titleZh}`,
-    `Stage: ${input.stageId}`,
-    `Deliverables: ${input.deliverables.join(" | ")}`,
+    "--- Scene context packet (full; use for judgments) ---",
+    input.sceneContextPrompt,
+    "--- End scene context ---",
     "",
-    "Open probe instances awaiting user response:",
+    `Legacy internal stage id: ${input.stageId}`,
+    "",
+    "Open probe instances (user is expected to respond naturally; do not mention probes to the user):",
     open,
     "",
     "Recent dialogue (truncated):",
@@ -54,16 +52,102 @@ function buildAgentBPrompt(input: {
     "Latest user message:",
     input.userMessage,
     "",
-    "Probe catalog (ids you may recommend; probeIntentZh is hidden from end user, purpose is evaluator-facing):",
-    input.probeCatalog.map((p) => `- ${p.id}: ${p.purpose}`).join("\n"),
+    "Probe catalog (choose at most ONE to recommend per turn when should_fire_probe is true):",
+    input.probeCatalog.map((p) => `- ${p.id}: ${p.purpose} | hidden intent for Agent A: ${p.probeIntentZh}`).join("\n"),
     "",
-    "Stage advancement should reflect deliverable-style evidence (constraints, comparisons, stress handling, final ranking), not message length alone.",
+    "Rules:",
+    "- Prefer evidence-driven scoring_events over empty scoring.",
+    "- Each scoring_event must include evidence_excerpt (short quote or paraphrase tied to user text) and why_this_matters.",
+    "- should_fire_probe true ONLY if open list is empty and user behavior warrants a hidden challenge (early closure, single metric, ignoring must-verify items, etc.).",
+    "- If open probe exists: set should_fire_probe false; fill probe_resolution about whether the user adequately responded.",
+    "- When should_fire_probe true: set recommended_probe_id and hidden_conversational_objective_zh (natural Chinese, colleague tone, NOT a system alert).",
+    "- Do NOT reward merely because a probe fired; reward quality of user collaboration and probe responses.",
+    "- working_summary_update: 1-3 short Chinese sentences capturing what the user has committed to so far.",
+    "- phase_suggestion: orient | work | wrap (internal coarse phase).",
   ].join("\n");
+}
+
+function normalizeLlmAgentBOutput(raw: unknown, scene: SceneBlueprint): AgentBOutput | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+
+  const scoring_events: unknown[] = [];
+  if (Array.isArray(o.scoring_events) && o.scoring_events.length > 0) {
+    scoring_events.push(...o.scoring_events);
+  } else if (Array.isArray(o.score_deltas) && o.score_deltas.length > 0) {
+    for (const d of o.score_deltas) {
+      const delta = ProbeScoreDeltaSchema.safeParse(d);
+      if (delta.success) {
+        scoring_events.push({
+          source_type: "ordinary_collaboration",
+          evidence_excerpt: typeof o.user_intent_summary === "string" ? o.user_intent_summary.slice(0, 200) : "（无摘录）",
+          why_this_matters: "模型返回了 score_deltas（兼容字段），已转为证据评分事件。",
+          score_delta: delta.data,
+        });
+      }
+    }
+  }
+
+  const merged = {
+    ...o,
+    user_intent_summary:
+      typeof o.user_intent_summary === "string" && o.user_intent_summary.trim().length > 0
+        ? o.user_intent_summary
+        : "（模型未提供意图摘要）",
+    scoring_events,
+    score_deltas: [],
+    rule_signals: Array.isArray(o.rule_signals) ? o.rule_signals : [],
+    risk_flags: Array.isArray(o.risk_flags) ? o.risk_flags : [],
+    recommended_probe_ids: [],
+    working_summary_update:
+      typeof o.working_summary_update === "string" && o.working_summary_update.trim().length > 0
+        ? o.working_summary_update
+        : typeof o.user_intent_summary === "string"
+          ? o.user_intent_summary.slice(0, 400)
+          : "（无摘要）",
+    phase_suggestion: typeof o.phase_suggestion === "string" ? o.phase_suggestion : "work",
+    should_fire_probe: Boolean(o.should_fire_probe),
+    recommended_probe_id: typeof o.recommended_probe_id === "string" ? o.recommended_probe_id : null,
+  };
+
+  const parsed = AgentBOutputSchema.safeParse(merged);
+  if (!parsed.success) return null;
+
+  let out = parsed.data;
+  const validIds = new Set(scene.probes.map((p) => p.id));
+
+  if (out.should_fire_probe && out.recommended_probe_id && !validIds.has(out.recommended_probe_id)) {
+    out = { ...out, should_fire_probe: false, recommended_probe_id: null };
+  }
+
+  return out;
+}
+
+function clampSingleProbe(output: AgentBOutput, hasOpenProbe: boolean, scene: SceneBlueprint): AgentBOutput {
+  const validIds = new Set(scene.probes.map((p) => p.id));
+  if (hasOpenProbe) {
+    return {
+      ...output,
+      should_fire_probe: false,
+      recommended_probe_id: null,
+      hidden_conversational_objective_zh: undefined,
+    };
+  }
+  if (!output.should_fire_probe || !output.recommended_probe_id || !validIds.has(output.recommended_probe_id)) {
+    return { ...output, should_fire_probe: false, recommended_probe_id: null, hidden_conversational_objective_zh: undefined };
+  }
+  const def = scene.probes.find((p) => p.id === output.recommended_probe_id);
+  return {
+    ...output,
+    hidden_conversational_objective_zh:
+      output.hidden_conversational_objective_zh?.trim() || def?.probeIntentZh || output.hidden_conversational_objective_zh,
+  };
 }
 
 export async function evaluateAgentB(input: {
   scene: SceneBlueprint;
   stageId: string;
+  sceneContextPrompt: string;
   userMessage: string;
   normalizedUserMessage: string;
   events: SessionEvent[];
@@ -74,9 +158,12 @@ export async function evaluateAgentB(input: {
   llmEnabled: boolean;
 }): Promise<{ output: AgentBOutput; source: "llm" | "fallback" }> {
   const cfg = getLlmEnvConfig();
-  const signals: RuleSignal[] = input.completionRequested ? [] : extractRuleSignalsFromMessage(input.normalizedUserMessage);
+  const signals: RuleSignal[] = input.completionRequested ? [] : extractRuleSignals(input.normalizedUserMessage);
 
   const openProbes = getOpenProbeInstances(input.events, input.scene.id);
+  const hasOpenProbe = openProbes.length > 0;
+  const firstOpen = hasOpenProbe ? openProbes[0]! : null;
+
   const recentTranscript = input.events
     .filter((e) => e.type === "USER_MESSAGE" || e.type === "AGENT_A_MESSAGE")
     .slice(-12)
@@ -90,30 +177,38 @@ export async function evaluateAgentB(input: {
     try {
       const provider = getLlmProvider();
       const system = [
-        "You are Agent B (evaluator). Return a single JSON object with these keys:",
+        "You are Agent B (evaluator). Return a single JSON object with EXACTLY these keys:",
         "user_intent_summary (string),",
-        "evidence_excerpts (array of {text, source in user_message|agent_a|probe|system}),",
-        "rule_signals (array of known signal strings from the catalog in instructions),",
-        "score_deltas (array of objects with mbti and faa numeric patches),",
-        "risk_flags (string array),",
-        "recommended_probe_ids (probe ids from catalog),",
-        "stage_completion_status: incomplete|ready|complete,",
-        "next_stage_suggestion (string or null),",
+        "working_summary_update (string Chinese),",
+        "phase_suggestion (orient|work|wrap),",
+        "evidence_excerpts (array of {text, source}),",
+        "rule_signals (string[]),",
+        "scoring_events (array of {source_type: ordinary_collaboration|probe_response, evidence_excerpt, why_this_matters, score_delta:{mbti:{...}, faa:{...}}}),",
+        "risk_flags (string[]),",
+        "should_fire_probe (boolean),",
+        "recommended_probe_id (probe id or null),",
+        "hidden_conversational_objective_zh (string, optional),",
+        "stage_completion_status (incomplete|ready|complete),",
+        "next_stage_suggestion (string|null),",
         "can_advance_stage (boolean),",
-        "confidence (0-1 number),",
-        "probe_resolution: optional { probe_instance_id, should_apply_score, outcome resolved|unresolved, score_delta {mbti,faa}, evidence_excerpt, reason }.",
-        "If open probes exist: if the user adequately addresses the challenge set should_apply_score true, outcome resolved, fill score_delta from catalog.",
-        "If the user clearly does not engage with the open challenge and you must close it without score, set outcome unresolved and should_apply_score false.",
+        "confidence (0-1),",
+        "probe_resolution optional { probe_instance_id, should_apply_score, outcome resolved|unresolved, score_delta, evidence_excerpt, reason }.",
+        "If an open probe exists, focus probe_resolution; set should_fire_probe false.",
+        "Never include score_deltas top-level key; use scoring_events.",
       ].join(" ");
 
       const user = buildAgentBPrompt({
         scene: input.scene,
         stageId: input.stageId,
+        sceneContextPrompt: input.sceneContextPrompt,
         userMessage: input.userMessage,
         recentTranscript,
-        deliverables: input.scene.deliverables,
         openProbes,
-        probeCatalog: input.scene.probes,
+        probeCatalog: input.scene.probes.map((p) => ({
+          id: p.id,
+          purpose: p.purpose,
+          probeIntentZh: p.probeIntentZh,
+        })),
       });
 
       const { rawText } = await provider.completeStructuredJson({
@@ -124,66 +219,31 @@ export async function evaluateAgentB(input: {
         ],
       });
 
-      const parsed = JSON.parse(rawText) as unknown;
-      const safe = AgentBOutputSchema.safeParse(parsed);
-      if (safe.success) return { output: safe.data, source: "llm" };
+      const parsedJson = JSON.parse(rawText) as unknown;
+      const normalized = normalizeLlmAgentBOutput(parsedJson, input.scene);
+      if (normalized) {
+        const coerced = clampSingleProbe(normalized, hasOpenProbe, input.scene);
+        /** Validate scoring event shapes */
+        const eventsClean = coerced.scoring_events
+          .map((e) => AgentBScoringEventSchema.safeParse(e))
+          .filter((r): r is { success: true; data: (typeof coerced.scoring_events)[0] } => r.success)
+          .map((r) => r.data);
+        return { output: { ...coerced, scoring_events: eventsClean }, source: "llm" };
+      }
     } catch {
       // fall through
     }
   }
 
-  const firedProbes = selectTriggeredProbes(
-    input.scene.probes,
-    {
-      sessionId: input.sessionId,
-      sceneId: input.scene.id,
-      stageId: input.stageId,
-      turnIndex: input.turnIndex,
-      ruleSignals: signals,
-      userMessage: input.normalizedUserMessage,
-    },
-    input.firedHighWeightProbeIds,
-  );
-
-  const signalDelta = mergeSignalOnlyDeltas(signals);
-  let probeResolution: AgentBOutput["probe_resolution"];
-  if (openProbes.length > 0) {
-    const target = openProbes[0];
-    const def = input.scene.probes.find((p) => p.id === target.probeId);
-    const adequate = input.normalizedUserMessage.length > 24 && signals.length > 0;
-    probeResolution = {
-      probe_instance_id: target.probeInstanceId,
-      should_apply_score: adequate,
-      outcome: adequate ? "resolved" : undefined,
-      score_delta: adequate && def ? def.scoreDelta : undefined,
-      evidence_excerpt: input.normalizedUserMessage.slice(0, 160),
-      reason: adequate ? "用户回应包含可核验信号且长度足够，视为完成观察挑战。" : undefined,
-    };
-  }
-
-  const transition = computeStageTransition({
+  const fb = buildFallbackAgentBOutput({
     scene: input.scene,
-    currentStageId: input.stageId,
-    userMessage: input.normalizedUserMessage,
+    stageId: input.stageId,
+    normalizedUserMessage: input.normalizedUserMessage,
     signals,
     completionRequested: input.completionRequested,
+    openProbeInstanceId: firstOpen?.probeInstanceId ?? null,
+    openProbeId: firstOpen?.probeId ?? null,
+    firedHighWeightProbeIds: input.firedHighWeightProbeIds,
   });
-
-  const canAdvance = transition.nextStageId !== input.stageId || transition.sceneCompleted;
-
-  const output = AgentBOutputSchema.parse({
-    user_intent_summary: "（规则回退）基于关键词信号与阶段启发式给出的本地评估。",
-    evidence_excerpts: [{ text: input.normalizedUserMessage.slice(0, 200), source: "user_message" }],
-    rule_signals: signals,
-    score_deltas: probeResolution?.should_apply_score ? [] : [signalDelta],
-    risk_flags: [],
-    recommended_probe_ids: firedProbes.map((p) => p.id),
-    stage_completion_status: transition.sceneCompleted ? "complete" : transition.gateMet ? "ready" : "incomplete",
-    next_stage_suggestion: transition.nextStageId,
-    can_advance_stage: canAdvance,
-    confidence: transition.confidence,
-    probe_resolution: probeResolution,
-  });
-
-  return { output, source: "fallback" };
+  return { output: clampSingleProbe(fb, hasOpenProbe, input.scene), source: "fallback" };
 }

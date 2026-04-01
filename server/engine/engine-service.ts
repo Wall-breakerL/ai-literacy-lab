@@ -2,6 +2,7 @@ import { CORE_ASSESSMENT_BLUEPRINT, SCENE_REGISTRY } from "@/domain/assessment/r
 import { SessionStateSchema, TurnOutputSchema, type SessionState, type TurnOutput } from "@/domain/engine/session-state";
 import type { ProbeDefinition, ProbeScoreDelta } from "@/domain/probes/types";
 import { ProbeScoreDeltaSchema } from "@/domain/probes/types";
+import { buildSceneContextPacket, sceneContextPacketForPrompt } from "@/domain/scenes/scene-context-packet";
 import { SessionEventSchema, type SessionEvent } from "@/domain/session/events";
 import { createId } from "@/lib/id";
 import { nowIso } from "@/lib/time";
@@ -9,7 +10,6 @@ import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 import { generateAgentAReply } from "@/server/engine/agent-a-llm";
 import { evaluateAgentB } from "@/server/engine/agent-b-evaluator";
 import { extractRuleSignals } from "@/server/engine/rule-extractor";
-import { selectTriggeredProbes } from "@/server/engine/probe-orchestrator";
 import { reduceSessionState } from "@/server/engine/session-reducer";
 import { resolveTransitionWithAgentB } from "@/server/engine/scene-transition";
 import { getLlmEnvConfig } from "@/server/providers/llm-env";
@@ -55,6 +55,11 @@ export class EngineService {
       event(sessionId, "SESSION_CREATED", { assessmentId: CORE_ASSESSMENT_BLUEPRINT.id }),
       event(sessionId, "ASSESSMENT_STARTED", { assessmentId: CORE_ASSESSMENT_BLUEPRINT.id }),
       event(sessionId, "SCENE_ENTERED", { sceneId: "apartment-tradeoff", sceneIndex: 0 }),
+      event(sessionId, "SCENE_CONTEXT_SYNC", {
+        sceneId: "apartment-tradeoff",
+        phase: "orient",
+        workingSummaryZh: "",
+      }),
       event(sessionId, "BRIEF_SHOWN", {
         sceneId: "apartment-tradeoff",
         briefing: SCENE_REGISTRY["apartment-tradeoff"].briefingZh,
@@ -97,9 +102,13 @@ export class EngineService {
     const normalizedMessage = completionRequested ? "用户点击了完成当前场景按钮。" : userMessage;
     const signals = completionRequested ? [] : extractRuleSignals(normalizedMessage);
 
+    const packetBefore = buildSceneContextPacket(scene, currentRun);
+    const sceneContextPromptBefore = sceneContextPacketForPrompt(packetBefore);
+
     const { output: rawAgentB, source: agentBSource } = await evaluateAgentB({
       scene,
       stageId: currentRun.stageId,
+      sceneContextPrompt: sceneContextPromptBefore,
       userMessage,
       normalizedUserMessage: normalizedMessage,
       events: pack.events,
@@ -109,10 +118,13 @@ export class EngineService {
       completionRequested,
       llmEnabled,
     });
-    /** Probe 结案回合：不把同一轮的 Agent B 信号汇总与探针分重复计入。 */
+
     const agentB =
       rawAgentB.probe_resolution?.should_apply_score === true
-        ? { ...rawAgentB, score_deltas: [] }
+        ? {
+            ...rawAgentB,
+            scoring_events: rawAgentB.scoring_events.filter((e) => e.source_type !== "probe_response"),
+          }
         : rawAgentB;
 
     const transition = resolveTransitionWithAgentB({
@@ -124,44 +136,7 @@ export class EngineService {
       agentB,
     });
 
-    const validProbeIds = new Set(scene.probes.map((p) => p.id));
-    let recommendedIds = agentB.recommended_probe_ids.filter((id) => validProbeIds.has(id));
-    if (agentBSource === "fallback") {
-      const ruleFired = selectTriggeredProbes(
-        scene.probes,
-        {
-          sessionId,
-          sceneId: scene.id,
-          stageId: currentRun.stageId,
-          turnIndex: currentRun.turnCount,
-          ruleSignals: signals,
-          userMessage: normalizedMessage,
-        },
-        currentRun.firedHighWeightProbeIds,
-      );
-      recommendedIds = ruleFired.map((p) => p.id);
-    }
-    const weightRank: Record<"high" | "medium" | "low", number> = { high: 0, medium: 1, low: 2 };
-    recommendedIds = [...new Set(recommendedIds)]
-      .sort((a, b) => {
-        const da = scene.probes.find((p) => p.id === a);
-        const db = scene.probes.find((p) => p.id === b);
-        if (!da || !db) return 0;
-        return weightRank[da.weight] - weightRank[db.weight] || a.localeCompare(b);
-      })
-      .slice(0, 4);
-
-    const firedProbeDefs: ProbeDefinition[] = [];
-    for (const id of recommendedIds) {
-      const def = scene.probes.find((p) => p.id === id);
-      if (!def) continue;
-      if (def.weight === "high" && currentRun.firedHighWeightProbeIds.includes(def.id)) continue;
-      firedProbeDefs.push(def);
-    }
-
-    const freshEvents: SessionEvent[] = [
-      event(sessionId, "USER_MESSAGE", { sceneId: scene.id, message: normalizedMessage }),
-    ];
+    const freshEvents: SessionEvent[] = [event(sessionId, "USER_MESSAGE", { sceneId: scene.id, message: normalizedMessage })];
 
     const pr = agentB.probe_resolution;
     if (pr?.probe_instance_id && pr.outcome === "unresolved" && !pr.should_apply_score) {
@@ -179,7 +154,7 @@ export class EngineService {
             probeId: lastFire.payload.probeId,
             probeInstanceId: pr.probe_instance_id,
             outcome: "unresolved",
-            reason: pr.reason ?? "观察挑战未形成可评分回应，已结案（不计分）。",
+            reason: pr.reason ?? "隐藏追问未形成可评分回应，已结案（不计分）。",
             evidenceExcerpt: pr.evidence_excerpt ?? normalizedMessage.slice(0, 160),
             userResponseExcerpt: normalizedMessage.slice(0, 200),
             mbtiDeltas: {},
@@ -203,7 +178,7 @@ export class EngineService {
             probeId: lastFire.payload.probeId,
             probeInstanceId: pr.probe_instance_id,
             outcome: "resolved",
-            reason: pr.reason ?? "用户回应满足观察挑战，按探针定义计分。",
+            reason: pr.reason ?? "用户对隐藏追问给出了可评估的回应，按探针定义计分。",
             evidenceExcerpt: pr.evidence_excerpt ?? normalizedMessage.slice(0, 160),
             userResponseExcerpt: normalizedMessage.slice(0, 200),
             mbtiDeltas: pr.score_delta.mbti,
@@ -214,31 +189,40 @@ export class EngineService {
       }
     }
 
-    const mergedEval = mergeProbeScoreDeltas(agentB.score_deltas);
-    if (hasNonZeroDelta(mergedEval)) {
+    for (const se of agentB.scoring_events) {
+      const merged = mergeProbeScoreDeltas([se.score_delta]);
+      if (!hasNonZeroDelta(merged)) continue;
       freshEvents.push(
         event(sessionId, "EVALUATION_SCORE_APPLIED", {
           sceneId: scene.id,
-          mbtiDeltas: mergedEval.mbti,
-          faaScores: mergedEval.faa,
-          reason: `Agent B (${agentBSource}) signal aggregate`,
+          mbtiDeltas: merged.mbti,
+          faaScores: merged.faa,
+          reason: se.why_this_matters,
+          evidenceExcerpt: se.evidence_excerpt,
+          sourceType: se.source_type,
         }),
       );
     }
 
-    for (const probe of firedProbeDefs) {
-      const probeInstanceId = createId("probe");
-      const sigLabel = signals.length > 0 ? signals.join("、") : "无关键词信号";
-      freshEvents.push(
-        event(sessionId, "PROBE_FIRED", {
-          sceneId: scene.id,
-          probeId: probe.id,
-          probeInstanceId,
-          weight: probe.weight,
-          prompt: probe.injectMessageTemplate,
-          triggerReason: `阶段「${currentRun.stageId}」；规则信号：${sigLabel}；探针「${probe.label}」`,
-        }),
-      );
+    const firedProbeDefs: ProbeDefinition[] = [];
+    if (agentB.should_fire_probe && agentB.recommended_probe_id) {
+      const def = scene.probes.find((p) => p.id === agentB.recommended_probe_id);
+      if (def && !(def.weight === "high" && currentRun.firedHighWeightProbeIds.includes(def.id))) {
+        firedProbeDefs.push(def);
+        const probeInstanceId = createId("probe");
+        const hiddenZh = agentB.hidden_conversational_objective_zh?.trim() || def.probeIntentZh;
+        freshEvents.push(
+          event(sessionId, "PROBE_FIRED", {
+            sceneId: scene.id,
+            probeId: def.id,
+            probeInstanceId,
+            weight: def.weight,
+            prompt: def.injectMessageTemplate,
+            hiddenObjectiveZh: hiddenZh,
+            triggerReason: `行为评估（${agentBSource}）建议插入一条自然协作追问；探针「${def.label}」`,
+          }),
+        );
+      }
     }
 
     if (transition.nextStageId !== currentRun.stageId) {
@@ -251,12 +235,27 @@ export class EngineService {
       );
     }
 
+    freshEvents.push(
+      event(sessionId, "SCENE_CONTEXT_SYNC", {
+        sceneId: scene.id,
+        phase: agentB.phase_suggestion,
+        workingSummaryZh: agentB.working_summary_update.slice(0, 2000),
+      }),
+    );
+
     let bridgeToNextScene = false;
     if (transition.sceneCompleted) {
       freshEvents.push(event(sessionId, "SCENE_COMPLETED", { sceneId: scene.id, sceneIndex: scene.id === "apartment-tradeoff" ? 0 : 1 }));
       if (scene.id === "apartment-tradeoff") {
         bridgeToNextScene = true;
         freshEvents.push(event(sessionId, "SCENE_ENTERED", { sceneId: "brand-naming-sprint", sceneIndex: 1 }));
+        freshEvents.push(
+          event(sessionId, "SCENE_CONTEXT_SYNC", {
+            sceneId: "brand-naming-sprint",
+            phase: "orient",
+            workingSummaryZh: "",
+          }),
+        );
         freshEvents.push(
           event(sessionId, "BRIEF_SHOWN", {
             sceneId: "brand-naming-sprint",
@@ -269,28 +268,34 @@ export class EngineService {
     }
 
     const stateBeforeAgent = reduceSessionState([...pack.events, ...freshEvents], sessionId);
-    const currentStage =
-      stateBeforeAgent.sceneStates.find((item) => item.sceneId === stateBeforeAgent.currentSceneId)?.stageId ?? "brief";
+    const activeSceneId = stateBeforeAgent.currentSceneId;
+    const runForAgent = stateBeforeAgent.sceneStates.find((item) => item.sceneId === activeSceneId);
+    const agentScene = SCENE_REGISTRY[activeSceneId];
+    const currentStage = runForAgent?.stageId ?? "brief";
 
-    const agentScene = SCENE_REGISTRY[stateBeforeAgent.currentSceneId];
+    const packetForAgent = runForAgent ? buildSceneContextPacket(agentScene, runForAgent) : buildSceneContextPacket(agentScene, currentRun);
+    const sceneContextPromptForAgent = sceneContextPacketForPrompt(packetForAgent);
+
     const agentAMessage = await generateAgentAReply({
       scene: agentScene,
       stageId: currentStage,
       bridgeToNextScene,
-      firedProbes: firedProbeDefs,
+      sceneContextPrompt: sceneContextPromptForAgent,
       userMessagePreview: normalizedMessage,
       agentBIntentSummary: agentB.user_intent_summary,
       llmEnabled,
     });
 
-    freshEvents.push(event(sessionId, "AGENT_A_MESSAGE", { sceneId: stateBeforeAgent.currentSceneId, message: agentAMessage }));
+    freshEvents.push(event(sessionId, "AGENT_A_MESSAGE", { sceneId: activeSceneId, message: agentAMessage }));
     const merged = [...pack.events, ...freshEvents];
     this.eventsBySession.set(sessionId, merged);
     const updated = reduceSessionState(merged, sessionId);
 
     const probeDeltasForOutput: ProbeScoreDelta[] = [];
     if (pr?.should_apply_score && pr.score_delta) probeDeltasForOutput.push(pr.score_delta);
-    if (hasNonZeroDelta(mergedEval)) probeDeltasForOutput.push(mergedEval);
+    for (const se of agentB.scoring_events) {
+      if (hasNonZeroDelta(se.score_delta)) probeDeltasForOutput.push(se.score_delta);
+    }
 
     return TurnOutputSchema.parse({
       agentAMessage,

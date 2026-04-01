@@ -39,7 +39,7 @@ export interface SessionResultPayload {
   suggestions: string[];
   lowConfidenceNotes: string[];
   shareCopy: string;
-  /** 默认视图：观察挑战与回应的可读摘要（非调试字段）。 */
+  /** 研究视图：协作追问时间线可读摘要（不向默认用户强调「探针」）。 */
   probeHighlights: string[];
   audit: {
     rawSnapshot: SessionState;
@@ -88,20 +88,21 @@ function buildProbeHighlights(events: SessionEvent[]): string[] {
   for (const event of events) {
     if (event.type === "PROBE_FIRED") {
       const label = resolveProbeLabel(event.payload.sceneId, event.payload.probeId);
+      const hid = event.payload.hiddenObjectiveZh ? ` 协作意图：${event.payload.hiddenObjectiveZh.slice(0, 120)}` : "";
       lines.push(
-        `「${sceneTitleZh(event.payload.sceneId)}」观察挑战「${label}」触发：${event.payload.triggerReason.slice(0, 140)}${event.payload.triggerReason.length > 140 ? "…" : ""}`,
+        `「${sceneTitleZh(event.payload.sceneId)}」插入协作追问「${label}」：${event.payload.triggerReason.slice(0, 120)}${event.payload.triggerReason.length > 120 ? "…" : ""}${hid}`,
       );
     }
     if (event.type === "PROBE_CLOSED") {
       const label = resolveProbeLabel(event.payload.sceneId, event.payload.probeId);
       if (event.payload.scoreApplied) {
-        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」挑战「${label}」已回应并计入评分：${event.payload.reason.slice(0, 100)}`);
+        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」追问「${label}」已高质量回应并纳入评分：${event.payload.reason.slice(0, 100)}`);
       } else {
-        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」挑战「${label}」结案（未计分）：${event.payload.reason.slice(0, 100)}`);
+        lines.push(`「${sceneTitleZh(event.payload.sceneId)}」追问「${label}」结束（未计分）：${event.payload.reason.slice(0, 100)}`);
       }
     }
   }
-  return lines.slice(-8);
+  return lines.slice(-12);
 }
 
 function buildContextVariation(axes: ReturnType<typeof aggregateMbtiFromEvents>): ContextVariation[] {
@@ -161,12 +162,19 @@ function buildProbeLifecycleReadable(events: SessionEvent[]): SessionResultPaylo
       });
     }
     if (event.type === "EVALUATION_SCORE_APPLIED") {
+      const src =
+        event.payload.sourceType === "probe_response"
+          ? "追问回应后的行为评分"
+          : event.payload.sourceType === "ordinary_collaboration"
+            ? "日常协作行为评分"
+            : "行为评分";
+      const ex = event.payload.evidenceExcerpt ? ` 证据摘录：${event.payload.evidenceExcerpt.slice(0, 120)}` : "";
       rows.push({
         timestamp: event.timestamp,
         kind: "evaluation_applied",
         sceneId: event.payload.sceneId,
         probeId: "agent_b_signal",
-        summary: `规则/Agent B 信号汇总已计入：${event.payload.reason}`,
+        summary: `${src}：${event.payload.reason}${ex}`,
       });
     }
   }
@@ -194,13 +202,20 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
       });
     }
     if (event.type === "EVALUATION_SCORE_APPLIED") {
+      const st =
+        event.payload.sourceType === "probe_response"
+          ? "追问回应"
+          : event.payload.sourceType === "ordinary_collaboration"
+            ? "日常协作"
+            : "行为评分";
+      const ex = event.payload.evidenceExcerpt ? ` · 证据：${event.payload.evidenceExcerpt.slice(0, 100)}` : "";
       sceneDeltaSources.push({
         sceneId: event.payload.sceneId,
         source: "evaluation",
         probeId: "agent_b_signal",
         mbtiDeltas: event.payload.mbtiDeltas as Record<string, number>,
         faaScores: event.payload.faaScores as Record<string, number>,
-        note: event.payload.reason,
+        note: `${st} · ${event.payload.reason}${ex}`,
       });
     }
   }

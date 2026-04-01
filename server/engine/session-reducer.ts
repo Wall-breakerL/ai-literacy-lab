@@ -22,6 +22,9 @@ export function initialSessionState(sessionId: string, updatedAt: string): Sessi
         completed: false,
         turnCount: 0,
         firedHighWeightProbeIds: [],
+        scenePhase: "orient",
+        workingSummaryZh: "",
+        openProbeObjectiveZh: null,
       },
       {
         sceneId: "brand-naming-sprint",
@@ -29,6 +32,9 @@ export function initialSessionState(sessionId: string, updatedAt: string): Sessi
         completed: false,
         turnCount: 0,
         firedHighWeightProbeIds: [],
+        scenePhase: "orient",
+        workingSummaryZh: "",
+        openProbeObjectiveZh: null,
       },
     ],
     mbti: Object.fromEntries(MBTI_AXIS_DEFINITIONS.map((axis) => [axis.id, 0])),
@@ -69,6 +75,19 @@ export function reduceSessionState(events: SessionEvent[], sessionId: string): S
     if (event.type === "SCENE_ENTERED") {
       state.currentSceneId = event.payload.sceneId;
       state.assessmentState = event.payload.sceneId === "apartment-tradeoff" ? "apartment" : "brand";
+      const entered = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
+      if (entered) {
+        entered.scenePhase = "orient";
+        entered.workingSummaryZh = "";
+        entered.openProbeObjectiveZh = null;
+      }
+    }
+    if (event.type === "SCENE_CONTEXT_SYNC") {
+      const run = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
+      if (run) {
+        run.scenePhase = event.payload.phase;
+        run.workingSummaryZh = event.payload.workingSummaryZh;
+      }
     }
     if (event.type === "USER_MESSAGE") {
       const run = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
@@ -79,6 +98,13 @@ export function reduceSessionState(events: SessionEvent[], sessionId: string): S
       if (run && event.payload.weight === "high" && !run.firedHighWeightProbeIds.includes(event.payload.probeId)) {
         run.firedHighWeightProbeIds = [...run.firedHighWeightProbeIds, event.payload.probeId];
       }
+      if (run && event.payload.hiddenObjectiveZh) {
+        run.openProbeObjectiveZh = event.payload.hiddenObjectiveZh;
+      }
+    }
+    if (event.type === "PROBE_CLOSED") {
+      const run = state.sceneStates.find((item) => item.sceneId === event.payload.sceneId);
+      if (run) run.openProbeObjectiveZh = null;
     }
     if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
       state = applyProbeDeltas(state, [{ mbti: event.payload.mbtiDeltas, faa: event.payload.faaScores }]);
