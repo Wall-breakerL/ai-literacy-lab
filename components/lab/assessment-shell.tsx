@@ -25,7 +25,7 @@ export function AssessmentShell({
       <section className="lab-layer-panel rounded-xl p-4">{top}</section>
       {subTop ? <section className="lab-layer-panel rounded-xl p-4">{subTop}</section> : null}
       <section className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="hidden lg:block">{left}</aside>
+        <aside className="hidden min-h-0 min-w-0 lg:block">{left}</aside>
         <section className={cn("min-h-[56vh]")}>{center}</section>
         {right ? <aside className="hidden lg:block">{right}</aside> : null}
       </section>

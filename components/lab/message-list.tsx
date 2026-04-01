@@ -12,22 +12,27 @@ const SCENE_LABEL: Record<SceneId, string> = {
 interface MessageListProps {
   events: SessionEvent[];
   stageByScene: Partial<Record<SceneId, string>>;
+  /** Map legacy stage id to user-facing title (default view hides raw ids). */
+  resolveStageTitle?: (sceneId: SceneId, stageId: string) => string | undefined;
   isThinking: boolean;
 }
 
-export function MessageList({ events, stageByScene, isThinking }: MessageListProps) {
+export function MessageList({ events, stageByScene, resolveStageTitle, isThinking }: MessageListProps) {
   const nodes: Array<ReactElement> = [];
 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     if (event.type === "USER_MESSAGE") {
+      const rawStage = stageByScene[event.payload.sceneId];
+      const stageLabel =
+        rawStage && resolveStageTitle ? resolveStageTitle(event.payload.sceneId, rawStage) ?? rawStage : rawStage;
       nodes.push(
         <MessageCard
           content={event.payload.message}
           key={event.id}
           role="user"
           sceneLabel={SCENE_LABEL[event.payload.sceneId]}
-          stageLabel={stageByScene[event.payload.sceneId]}
+          stageLabel={stageLabel}
           timestamp={event.timestamp}
         />,
       );
@@ -35,13 +40,16 @@ export function MessageList({ events, stageByScene, isThinking }: MessageListPro
     }
 
     if (event.type === "AGENT_A_MESSAGE") {
+      const rawStage = stageByScene[event.payload.sceneId];
+      const stageLabel =
+        rawStage && resolveStageTitle ? resolveStageTitle(event.payload.sceneId, rawStage) ?? rawStage : rawStage;
       nodes.push(
         <MessageCard
           content={event.payload.message}
           key={event.id}
           role="agent"
           sceneLabel={SCENE_LABEL[event.payload.sceneId]}
-          stageLabel={stageByScene[event.payload.sceneId]}
+          stageLabel={stageLabel}
           timestamp={event.timestamp}
         />,
       );

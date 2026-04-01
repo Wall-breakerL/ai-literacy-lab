@@ -1,3 +1,8 @@
+/**
+ * Deterministic Agent B fallback when LLM is disabled or fails.
+ * Responsibilities: stage/heuristic gates (via computeStageTransition), rule-signal scoring merge,
+ * open-probe resolution heuristics, and should_fire_probe keyword rules — not the primary eval path.
+ */
 import type { ProbeDefinition, ProbeId } from "@/domain/probes/types";
 import type { SceneBlueprint } from "@/domain/scenes/types";
 import type { ScenePhase } from "@/domain/scenes/scene-phase";

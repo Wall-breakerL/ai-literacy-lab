@@ -6,6 +6,7 @@ import {
   type SessionState,
 } from "@/domain";
 import { SCENE_REGISTRY } from "@/domain/assessment/registry";
+import { buildProbeLifecycleDebugView } from "@/lib/probe-lifecycle-debug";
 import { aggregateFaaFromEvents } from "@/domain/faa/aggregate";
 import { aggregateMbtiFromEvents } from "@/domain/mbti/aggregate";
 import { buildMbtiTypeCode } from "@/domain/mbti/type-mapping";
@@ -64,6 +65,8 @@ export interface SessionResultPayload {
       faaScores: Record<string, number>;
       note?: string;
     }>;
+    /** Per-instance open/closed summary (aligned with lab debug view). */
+    probeInstanceAggregated: Array<{ sceneId: SceneId; line: string }>;
   };
 }
 
@@ -133,6 +136,26 @@ function buildContextVariation(axes: ReturnType<typeof aggregateMbtiFromEvents>)
   });
 }
 
+function buildProbeInstanceAggregated(events: SessionEvent[]): SessionResultPayload["audit"]["probeInstanceAggregated"] {
+  const lines: SessionResultPayload["audit"]["probeInstanceAggregated"] = [];
+  for (const sceneId of ["apartment-tradeoff", "brand-naming-sprint"] as const) {
+    const { openInstances, recentClosed } = buildProbeLifecycleDebugView(events, sceneId);
+    for (const p of openInstances) {
+      lines.push({
+        sceneId,
+        line: `[awaiting] ${p.probeInstanceId} · ${p.probeId} (${p.weight}) · ${sceneTitleZh(sceneId)}`,
+      });
+    }
+    for (const p of recentClosed) {
+      lines.push({
+        sceneId,
+        line: `[${p.scoreApplied ? "closed·scored" : "closed·no_score"}] ${p.probeInstanceId} · ${p.probeId} · ${p.closeReason?.slice(0, 100) ?? ""}`,
+      });
+    }
+  }
+  return lines;
+}
+
 function buildProbeLifecycleReadable(events: SessionEvent[]): SessionResultPayload["audit"]["probeLifecycleReadable"] {
   const rows: SessionResultPayload["audit"]["probeLifecycleReadable"] = [];
   for (const event of events) {
@@ -188,6 +211,7 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
   const contextVariation = buildContextVariation(mbtiAxes);
   const probeTimeline = events.filter((event) => event.type === "PROBE_FIRED" || event.type === "PROBE_CLOSED");
   const probeLifecycleReadable = buildProbeLifecycleReadable(events);
+  const probeInstanceAggregated = buildProbeInstanceAggregated(events);
   const sceneDeltaSources: SessionResultPayload["audit"]["sceneDeltaSources"] = [];
   for (const event of events) {
     if (event.type === "PROBE_CLOSED" && event.payload.scoreApplied) {
@@ -295,6 +319,7 @@ export function buildSessionResult(snapshot: SessionState, events: SessionEvent[
       probeTimeline,
       probeLifecycleReadable,
       sceneDeltaSources,
+      probeInstanceAggregated,
     },
   };
 }

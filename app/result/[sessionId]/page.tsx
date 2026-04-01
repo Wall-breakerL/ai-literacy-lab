@@ -180,13 +180,35 @@ export default function ResultPage() {
                     </ul>
                   </div>
                   <div className="rounded-lg border border-lab bg-lab-panel p-3 lg:col-span-2">
+                    <p className="text-xs text-lab-muted">追问实例聚合（awaiting / closed·scored / closed·no_score）</p>
+                    <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[11px] text-lab-muted">
+                      {result.audit.probeInstanceAggregated.length === 0 ? (
+                        <li>暂无实例摘要。</li>
+                      ) : (
+                        result.audit.probeInstanceAggregated.map((row, index) => (
+                          <li key={`${row.sceneId}-${index}-${row.line.slice(0, 24)}`}>
+                            <span className="text-cyan-200/90">{row.sceneId}</span> · {row.line}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                  <div className="rounded-lg border border-lab bg-lab-panel p-3 lg:col-span-2">
                     <p className="text-xs text-lab-muted">技术快照（仅调试）</p>
                     <div className="mt-2 grid gap-3 md:grid-cols-2">
                       <pre className="max-h-48 overflow-auto rounded border border-lab/40 p-2 text-[10px]">
                         {JSON.stringify(result.audit.rawSnapshot, null, 2)}
                       </pre>
                       <pre className="max-h-48 overflow-auto rounded border border-lab/40 p-2 text-[10px]">
-                        {JSON.stringify({ probeTimeline: result.audit.probeTimeline, sceneDeltaSources: result.audit.sceneDeltaSources }, null, 2)}
+                        {JSON.stringify(
+                          {
+                            probeTimeline: result.audit.probeTimeline,
+                            probeInstanceAggregated: result.audit.probeInstanceAggregated,
+                            sceneDeltaSources: result.audit.sceneDeltaSources,
+                          },
+                          null,
+                          2,
+                        )}
                       </pre>
                     </div>
                   </div>

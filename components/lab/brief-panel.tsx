@@ -1,11 +1,9 @@
 import type { SceneBlueprint } from "@/domain";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 
 interface BriefPanelProps {
   scene: SceneBlueprint;
-  currentStageId?: string;
 }
 
 const certaintyLabel: Record<string, string> = {
@@ -29,18 +27,15 @@ const blockerClass: Record<string, string> = {
   unknown: "border-lab/50 bg-lab-panel/60 text-lab-muted",
 };
 
-export function BriefPanel({ scene, currentStageId }: BriefPanelProps) {
+export function BriefPanel({ scene }: BriefPanelProps) {
   const dc = scene.decisionContext;
 
   return (
-    <Card className="lab-layer-panel max-h-[min(85vh,920px)] overflow-y-auto p-4">
+    <Card className="lab-layer-panel min-h-0 p-0">
+      <div className="min-w-0 max-h-[min(85vh,920px)] overflow-y-auto overflow-x-hidden p-4 [scrollbar-gutter:stable]">
       <Badge className="text-lab-accent">任务说明</Badge>
       <h3 className="mt-2 text-base font-semibold">{scene.titleZh}</h3>
       <p className="mt-2 text-sm text-lab-muted">{scene.briefingZh}</p>
-
-      {currentStageId ? (
-        <p className="mt-2 text-[11px] text-lab-muted/70">内部进度标记（兼容）: {currentStageId}</p>
-      ) : null}
 
       {dc ? (
         <>
@@ -210,9 +205,9 @@ export function BriefPanel({ scene, currentStageId }: BriefPanelProps) {
       )}
 
       <p className="mt-4 rounded-lg border border-lab/60 bg-lab-card/40 px-2 py-1.5 text-[11px] text-lab-muted">
-        结束本段场景：在输入框单独发送{" "}
-        <code className="rounded bg-lab-panel px-1 text-cyan-200/90">{COMPLETE_SCENE_SIGNAL}</code>（原型约定，非自然语言）。
+        结束本段场景：在对话区点击「完成当前场景」按钮（与任务进度门控一致）。
       </p>
+      </div>
     </Card>
   );
 }

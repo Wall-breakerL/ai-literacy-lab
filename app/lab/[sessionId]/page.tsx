@@ -15,7 +15,9 @@ import { SceneProgress } from "@/components/lab/scene-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
+import type { SceneId } from "@/domain";
 import { SCENE_BLUEPRINT_BY_ID } from "@/domain";
+import { COMPLETE_SCENE_SIGNAL } from "@/lib/turn-signals";
 import { useSessionRecovery } from "@/hooks/use-session-recovery";
 import { useSessionTurn } from "@/hooks/use-session-turn";
 import { useAssessmentUiStore } from "@/stores/assessment-ui-store";
@@ -106,6 +108,15 @@ export default function LabSessionPage() {
   };
   const shouldRenderDebug = debugEnabledByQuery || isDebugOpen;
 
+  const resolveStageTitle = (sceneId: SceneId, stageId: string) =>
+    SCENE_BLUEPRINT_BY_ID[sceneId]?.stages.find((s) => s.id === stageId)?.titleZh;
+
+  const canCompleteScene =
+    !loading &&
+    !isThinking &&
+    snapshot.assessmentState !== "completed" &&
+    !activeScene.completed;
+
   const interludeVisible =
     events.some((event) => event.type === "SCENE_COMPLETED" && event.payload.sceneId === "apartment-tradeoff") &&
     snapshot.currentSceneId === "brand-naming-sprint";
@@ -141,11 +152,27 @@ export default function LabSessionPage() {
             </div>
           ) : null}
 
-          <MessageList events={events} isThinking={isThinking || loading} stageByScene={stageByScene} />
+          <MessageList
+            events={events}
+            isThinking={isThinking || loading}
+            resolveStageTitle={resolveStageTitle}
+            stageByScene={stageByScene}
+          />
           <QuickActions disabled={loading} onAction={handleTurn} sceneId={activeScene.sceneId} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              className="px-3 py-1.5 text-xs"
+              disabled={!canCompleteScene}
+              onClick={() => void handleTurn(COMPLETE_SCENE_SIGNAL)}
+              variant="subtle"
+            >
+              完成当前场景
+            </Button>
+            <p className="text-[11px] text-lab-muted">满足本段交付后点此结束；与发送消息共用同一引擎。</p>
+          </div>
           <Composer disabled={loading} onSubmit={handleTurn} />
           <p className="text-xs text-lab-muted">
-            原型提示：左侧为当前场景阶段与交付物；结束场景请按任务说明中的约定指令单独发送。若回复不稳定，可重试或新建会话。
+            原型提示：上方进度为任务阶段（中文标题）；若回复不稳定，可重试或新建会话。
           </p>
 
           <div className="pt-2">
@@ -154,11 +181,17 @@ export default function LabSessionPage() {
             </Button>
           </div>
           {shouldRenderDebug ? (
-            <DebugDrawer onToggle={() => setDebugOpen(!isDebugOpen)} open={isDebugOpen} snapshot={snapshot} turnOutput={lastTurnOutput} />
+            <DebugDrawer
+              events={events}
+              onToggle={() => setDebugOpen(!isDebugOpen)}
+              open={isDebugOpen}
+              snapshot={snapshot}
+              turnOutput={lastTurnOutput}
+            />
           ) : null}
         </Panel>
       }
-      left={<BriefPanel currentStageId={activeScene.stageId} scene={activeSceneBlueprint} />}
+      left={<BriefPanel scene={activeSceneBlueprint} />}
       mobileLeftDrawer={
         isLeftDrawerOpen ? (
           <div className="rounded-xl border border-lab bg-lab-panel p-3">
@@ -168,7 +201,7 @@ export default function LabSessionPage() {
                 收起
               </Button>
             </div>
-            <BriefPanel currentStageId={activeScene.stageId} scene={activeSceneBlueprint} />
+            <BriefPanel scene={activeSceneBlueprint} />
           </div>
         ) : null
       }

@@ -54,7 +54,7 @@ export function buildSceneContextPacket(scene: SceneBlueprint, run: SceneRunStat
   const soft: string[] = [];
   let userCtx = "";
   let roommateCtx = "";
-  let mustVerify: string[] = [];
+  const mustVerify: string[] = [];
   let optionSummary = "";
 
   if (dc) {
