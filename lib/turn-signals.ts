@@ -1,1 +1,0 @@
-export const COMPLETE_SCENE_SIGNAL = "__COMPLETE_SCENE__";
