@@ -99,7 +99,7 @@ export default function Home() {
       // 显示错误消息给用户
       const errorMsg: ConversationMessage = {
         role: 'agent',
-        content: '抱歉，AI 响应出现了问题，请稍后再试。',
+        content: `抱歉，AI 响应出现了问题：${error instanceof Error ? error.message : '未知错误'}。请稍后再试。`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);

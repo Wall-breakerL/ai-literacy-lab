@@ -23,6 +23,7 @@ export async function chatCompletion(
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`LLM API error: ${response.status}`, error);
     throw new Error(`LLM API error: ${response.status} ${error}`);
   }
 
