@@ -2,11 +2,13 @@ import type { ProbeId, RuleSignal } from "@/domain/probes/types";
 import type { SceneBlueprint } from "@/domain/scenes/types";
 import type { SessionEvent } from "@/domain/session/events";
 import type { AgentBOutput } from "@/domain/agent/agent-b-output";
+import type { ScoreObservation } from "@/domain/observations/types";
 import { tryEvaluateAgentBWithLlm } from "@/server/engine/agent-b-llm-path";
 import { clampSingleProbe } from "@/server/engine/agent-b-output-post";
 import { getOpenProbeInstances } from "@/server/engine/agent-b-probe-context";
 import { buildFallbackAgentBOutput } from "@/server/engine/probe-behavior-fallback";
 import { extractRuleSignals } from "@/server/engine/rule-extractor";
+import { buildObservations } from "@/server/engine/scoring-aggregator";
 import { getLlmEnvConfig } from "@/server/providers/llm-env";
 
 function buildRecentTranscript(events: SessionEvent[]): string {
@@ -35,7 +37,7 @@ export async function evaluateAgentB(input: {
   firedHighWeightProbeIds: ProbeId[];
   completionRequested: boolean;
   llmEnabled: boolean;
-}): Promise<{ output: AgentBOutput; source: "llm" | "fallback" }> {
+}): Promise<{ output: AgentBOutput; observations: ScoreObservation[]; source: "llm" | "fallback" }> {
   const cfg = getLlmEnvConfig();
   const signals: RuleSignal[] = input.completionRequested ? [] : extractRuleSignals(input.normalizedUserMessage);
 
@@ -56,7 +58,7 @@ export async function evaluateAgentB(input: {
       hasOpenProbe,
     });
     if (llmOut) {
-      return { output: llmOut, source: "llm" };
+      return { output: llmOut, observations: [], source: "llm" };
     }
   }
 
@@ -70,5 +72,15 @@ export async function evaluateAgentB(input: {
     openProbeId: firstOpen?.probeId ?? null,
     firedHighWeightProbeIds: input.firedHighWeightProbeIds,
   });
-  return { output: clampSingleProbe(fb, hasOpenProbe, input.scene), source: "fallback" };
+  const output = clampSingleProbe(fb, hasOpenProbe, input.scene);
+  const observations = buildObservations({
+    scene: input.scene,
+    signals,
+    activeProbe: null,
+    evidenceText: input.normalizedUserMessage,
+    userTurnIndex: input.turnIndex,
+    sessionId: input.sessionId,
+    similarPastSignals: [],
+  });
+  return { output, observations, source: "fallback" };
 }

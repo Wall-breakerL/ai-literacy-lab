@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AssessmentBlueprintSchema } from "@/domain/assessment/registry";
 import { FaaDimensionIdSchema } from "@/domain/faa/dimensions";
 import { MbtiAxisIdSchema } from "@/domain/mbti/axes";
+import { ScoreObservationSchema } from "@/domain/observations/types";
 import { ProbeIdSchema } from "@/domain/probes/types";
 import { ScenePhaseSchema } from "@/domain/scenes/scene-phase";
 import { SceneIdSchema } from "@/domain/scenes/types";
@@ -17,6 +18,7 @@ export const SessionEventTypeSchema = z.enum([
   "PROBE_FIRED",
   "PROBE_CLOSED",
   "EVALUATION_SCORE_APPLIED",
+  "OBSERVATION_RECORDED",
   "STAGE_CHANGED",
   "SCENE_COMPLETED",
   "ASSESSMENT_COMPLETED",
@@ -161,6 +163,11 @@ export const StageChangedEventSchema = EventMetaSchema.extend({
   }),
 });
 
+export const ObservationRecordedEventSchema = EventMetaSchema.extend({
+  type: z.literal("OBSERVATION_RECORDED"),
+  payload: ScoreObservationSchema,
+});
+
 export const SceneCompletedEventSchema = EventMetaSchema.extend({
   type: z.literal("SCENE_COMPLETED"),
   payload: z.object({
@@ -187,6 +194,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   ProbeFiredEventSchema,
   ProbeClosedEventSchema,
   EvaluationScoreAppliedEventSchema,
+  ObservationRecordedEventSchema,
   StageChangedEventSchema,
   SceneCompletedEventSchema,
   AssessmentCompletedEventSchema,

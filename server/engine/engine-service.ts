@@ -136,7 +136,7 @@ export class EngineService {
     const packetBefore = buildSceneContextPacket(scene, currentRun);
     const sceneContextPromptBefore = sceneContextPacketForPrompt(packetBefore);
 
-    const { output: rawAgentB, source: agentBSource } = await evaluateAgentB({
+    const { output: rawAgentB, observations, source: agentBSource } = await evaluateAgentB({
       scene,
       stageId: currentRun.stageId,
       sceneContextPrompt: sceneContextPromptBefore,
@@ -168,6 +168,9 @@ export class EngineService {
     });
 
     const freshEvents: SessionEvent[] = [event(sessionId, "USER_MESSAGE", { sceneId: scene.id, message: normalizedMessage })];
+    for (const obs of observations) {
+      freshEvents.push(event(sessionId, "OBSERVATION_RECORDED", obs));
+    }
 
     const pr = agentB.probe_resolution;
     if (pr?.probe_instance_id && pr.outcome === "unresolved" && !pr.should_apply_score) {

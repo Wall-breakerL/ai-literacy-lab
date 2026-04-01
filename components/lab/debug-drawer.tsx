@@ -2,6 +2,7 @@ import type { SessionEvent, SessionState, TurnOutput } from "@/domain";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { buildProbeLifecycleDebugView } from "@/lib/probe-lifecycle-debug";
+import { DebugScoringTrace } from "@/components/lab/debug-scoring-trace";
 
 interface DebugDrawerProps {
   open: boolean;
@@ -114,6 +115,10 @@ export function DebugDrawer({ open, snapshot, events, turnOutput, onToggle }: De
             上一回合评分增量:{" "}
             {turnOutput?.probeDeltas.length ? JSON.stringify(turnOutput.probeDeltas) : "-"}
           </p>
+          <div>
+            <p className="mb-1 text-[11px] text-lab-muted">Scoring Trace</p>
+            <DebugScoringTrace events={events} />
+          </div>
           <div>
             <p className="mb-1 text-[11px] text-lab-muted">可读提示</p>
             <ul className="list-inside list-disc space-y-1 text-[11px] text-lab-muted/90">

@@ -3,23 +3,21 @@ import { z } from "zod";
 const ProbeSceneIdSchema = z.enum(["apartment-tradeoff", "brand-naming-sprint"]);
 
 export const RuleSignalSchema = z.enum([
-  "direct_recommend",
-  "weight_first",
-  "rubric_then_adjust",
-  "multi_factor_reject",
+  "direct_delegate",
+  "criteria_first",
+  "ask_matrix",
   "spot_hidden_blocker",
-  "ask_comparison_matrix",
-  "rebuild_model",
-  "reweight_existing_model",
-  "criteria_before_ideation",
-  "direction_first_then_expand",
   "flag_hidden_violation",
-  "restate_tone_rubric",
-  "ask_cluster_matrix",
-  "reframe_naming_thesis",
-  "synthesize_fragments",
-  "brief_consistency_check",
-  "accept_without_source_check",
+  "global_reset",
+  "local_patch",
+  "restate_brief",
+  "request_unknowns",
+  "conservative_assumption",
+  "compare_before_decide",
+  "pick_by_vibe",
+  "style_drift",
+  "role_contract",
+  "brief_conflict_check",
 ]);
 export type RuleSignal = z.infer<typeof RuleSignalSchema>;
 
@@ -85,8 +83,10 @@ export const ProbeDefinitionSchema = z.object({
    * no meta words like probe/评分/系统.
    */
   probeIntentZh: z.string().min(1),
+  tailType: z.enum(["priority", "comparison", "uncertainty", "repair"]).default("comparison"),
   triggerOnSignalsAny: z.array(RuleSignalSchema).default([]),
   triggerStageIds: z.array(z.string().min(1)).default([]),
   scoreDelta: ProbeScoreDeltaSchema,
 });
 export type ProbeDefinition = z.infer<typeof ProbeDefinitionSchema>;
+export type TailType = z.infer<typeof ProbeDefinitionSchema.shape.tailType>;
