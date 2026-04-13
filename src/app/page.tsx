@@ -110,25 +110,26 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-black via-slate-950 to-black flex flex-col">
       {/* Header */}
-      <header className="bg-white/5 backdrop-blur-sm border-b border-white/10 py-4 px-6">
-        <div className="max-w-6xl mx-auto">
+      <header className="relative bg-black/50 backdrop-blur-xl border-b border-white/5 py-4 px-6">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+        <div className="max-w-6xl mx-auto relative">
           <h1 className="text-xl font-bold text-white">Human-AI Performance Lab</h1>
-          <p className="text-sm text-slate-400">租房选房源场景</p>
+          <p className="text-sm text-slate-500">租房选房源场景</p>
         </div>
       </header>
 
       {/* Constraints Display */}
-      <div className="bg-white/5 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <div className="bg-black/30 backdrop-blur-xl border-b border-white/5 px-6 py-4">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-md font-medium text-xs">硬约束</span>
-            <span className="text-slate-300">{HARD_CONSTRAINTS[0].description}</span>
+            <span className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-full font-medium text-xs border border-red-500/20">硬约束</span>
+            <span className="text-slate-400">{HARD_CONSTRAINTS[0].description}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md font-medium text-xs">软约束</span>
-            <div className="flex gap-3 text-slate-400">
+            <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-full font-medium text-xs border border-blue-500/20">软约束</span>
+            <div className="flex gap-3 text-slate-500">
               {SOFT_CONSTRAINTS.map((c) => (
                 <span key={c.id}>{c.description}</span>
               ))}
@@ -142,7 +143,7 @@ export default function Home() {
         <main className="flex-1 max-w-6xl mx-auto w-full p-4 flex gap-4 relative">
           {/* Left: Housing Cards */}
           <div className="w-80 flex-shrink-0">
-            <h3 className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">房源列表 · 点击查看详情</h3>
+            <h3 className="text-xs font-medium text-slate-600 mb-2 uppercase tracking-wider">房源列表 · 点击查看详情</h3>
             <div className="space-y-2">
               {housingData.map((housing) => (
                 <HousingCard
@@ -157,10 +158,10 @@ export default function Home() {
           </div>
 
           {/* Right: Chat */}
-          <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-white/10 bg-white/5">
+          <div className="flex-1 bg-white/[0.03] backdrop-blur-xl rounded-2xl border border-white/[0.05] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-white/5 bg-white/[0.02]">
               <h2 className="font-semibold text-white flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
                 与AI助手对话
               </h2>
             </div>
@@ -178,8 +179,8 @@ export default function Home() {
               disabled={!canShowResult || isProcessing}
               className={`px-6 py-3 rounded-xl font-medium transition-all ${
                 canShowResult
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg'
-                  : 'bg-white/10 text-white/40 cursor-not-allowed border border-white/10'
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20'
+                  : 'bg-white/[0.05] text-white/30 cursor-not-allowed border border-white/[0.05]'
               }`}
             >
               {isProcessing ? '生成中...' : '查看结果'}

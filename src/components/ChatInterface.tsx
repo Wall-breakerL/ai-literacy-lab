@@ -40,19 +40,19 @@ export default function ChatInterface({
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex animate-message-in ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+              className={`max-w-[85%] px-4 py-3 ${
                 msg.role === 'user'
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-800'
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-2xl rounded-tl-xl rounded-tr-2xl rounded-bl-sm'
+                  : 'bg-white/[0.08] text-slate-200 rounded-bl-2xl rounded-tl-xl rounded-tr-2xl rounded-br-sm border border-white/[0.05]'
               }`}
             >
               {msg.role === 'user' ? (
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               ) : (
-                <div className="prose prose-sm max-w-none">
+                <div className="prose prose-sm max-w-none prose-invert">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
               )}
@@ -62,13 +62,13 @@ export default function ChatInterface({
 
         {/* Loading indicator */}
         {isProcessing && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-2 text-gray-500">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="flex justify-start animate-message-in">
+            <div className="bg-white/[0.08] rounded-bl-2xl rounded-tl-xl rounded-tr-2xl rounded-br-sm px-4 py-3 border border-white/[0.05]">
+              <div className="flex items-center gap-2 text-slate-400">
+                <div className="flex gap-1.5">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse-dot" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse-dot" style={{ animationDelay: '200ms' }} />
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse-dot" style={{ animationDelay: '400ms' }} />
                 </div>
                 <span className="text-sm">AI思考中...</span>
               </div>
@@ -79,7 +79,7 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t bg-white">
+      <form onSubmit={handleSubmit} className="p-4 border-t border-white/5 bg-black/20">
         <div className="flex gap-3">
           <input
             type="text"
@@ -87,12 +87,12 @@ export default function ChatInterface({
             onChange={(e) => setInput(e.target.value)}
             placeholder={isProcessing ? '等待AI回复...' : '输入消息...'}
             disabled={isProcessing}
-            className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 text-gray-800"
+            className="flex-1 px-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 focus:bg-white/[0.08] disabled:bg-white/[0.02] text-white placeholder:text-slate-500 transition-all"
           />
           <button
             type="submit"
             disabled={!input.trim() || isProcessing}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed font-medium transition-all"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-700 hover:to-blue-600 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed font-medium transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30"
           >
             发送
           </button>

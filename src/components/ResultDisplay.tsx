@@ -8,12 +8,15 @@ interface ResultDisplayProps {
 
 export default function ResultDisplay({ result }: ResultDisplayProps) {
   return (
-    <div className="bg-slate-800 rounded-2xl p-6 shadow-2xl border border-white/10 max-w-md w-full">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center">评测结果</h2>
+    <div className="bg-black/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-white/[0.05] max-w-md w-full relative overflow-hidden">
+      {/* Glow effect */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      <h2 className="text-2xl font-bold text-white mb-6 text-center relative">评测结果</h2>
 
       {/* Decision Result */}
-      <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
-        <div className="text-sm text-slate-400 mb-1">最终选择</div>
+      <div className="mb-6 p-4 bg-white/[0.03] rounded-xl border border-white/[0.05]">
+        <div className="text-sm text-slate-500 mb-1">最终选择</div>
         <div className="text-xl font-bold text-white">
           房源{result.decision.choice}
           {result.decision.isOptimal && (
@@ -26,15 +29,15 @@ export default function ResultDisplay({ result }: ResultDisplayProps) {
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-slate-300 mb-3">FAA 能力评分</h3>
         <div className="space-y-2">
-          <ScoreBar label="Frame" value={result.faa.frame} color="blue" />
-          <ScoreBar label="Ask" value={result.faa.ask} color="blue" />
-          <ScoreBar label="Review" value={result.faa.review} color="blue" />
-          <ScoreBar label="Edit" value={result.faa.edit} color="blue" />
-          <ScoreBar label="Synthesize" value={result.faa.synthesize} color="blue" />
+          <ScoreBar label="Frame" value={result.faa.frame} />
+          <ScoreBar label="Ask" value={result.faa.ask} />
+          <ScoreBar label="Review" value={result.faa.review} />
+          <ScoreBar label="Edit" value={result.faa.edit} />
+          <ScoreBar label="Synthesize" value={result.faa.synthesize} />
         </div>
-        <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
+        <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
           <span className="font-semibold text-slate-300">综合得分</span>
-          <span className="text-2xl font-bold text-blue-400">{result.faa.total}</span>
+          <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">{result.faa.total}</span>
         </div>
       </div>
 
@@ -70,14 +73,14 @@ export default function ResultDisplay({ result }: ResultDisplayProps) {
       </div>
 
       {/* Profile */}
-      <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+      <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-white/5">
         <div className="text-sm text-blue-400 mb-2">风格描述</div>
-        <div className="text-slate-200 mb-3">{result.profile.summary}</div>
+        <div className="text-slate-300 mb-3">{result.profile.summary}</div>
         <div className="flex flex-wrap gap-2">
           {result.profile.tags.map((tag) => (
             <span
               key={tag}
-              className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full"
+              className="px-2 py-1 bg-white/5 text-slate-300 text-xs rounded-full border border-white/10"
             >
               {tag}
             </span>
@@ -88,23 +91,17 @@ export default function ResultDisplay({ result }: ResultDisplayProps) {
   );
 }
 
-function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
-  const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-500',
-    purple: 'bg-purple-500',
-    green: 'bg-green-500',
-  };
-
+function ScoreBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-slate-400 w-20">{label}</span>
-      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+      <span className="text-sm text-slate-500 w-20">{label}</span>
+      <div className="flex-1 h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
         <div
-          className={`h-full ${colorClasses[color]} rounded-full transition-all`}
+          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
           style={{ width: `${value}%` }}
         />
       </div>
-      <span className="text-sm font-semibold w-10 text-right text-slate-300">{value}</span>
+      <span className="text-sm font-semibold w-10 text-right text-slate-400">{value}</span>
     </div>
   );
 }
@@ -122,16 +119,16 @@ function MBTIBar({
 }) {
   return (
     <div>
-      <div className="flex justify-between text-xs text-slate-400 mb-1">
+      <div className="flex justify-between text-xs text-slate-500 mb-1">
         <span>{leftLabel} 0</span>
         <span className="font-medium text-purple-400">
           {label}: {value}%
         </span>
         <span>100 {rightLabel}</span>
       </div>
-      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all"
+          className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
           style={{ width: `${value}%` }}
         />
       </div>
