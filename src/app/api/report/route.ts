@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import client, {
-  MODEL,
-  assertMiniMaxApiKey,
+  REPORT_MODEL,
+  assertQwenApiKey,
   getUpstreamErrorMessage,
 } from "@/lib/minimax";
+import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -11,7 +12,7 @@ import { AGENT_B_REPORT_SYSTEM } from "@/lib/agents";
 import { FinalReport, Message } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
-  const missing = assertMiniMaxApiKey();
+  const missing = assertQwenApiKey();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -34,7 +35,7 @@ ${history}
 请根据以上记录生成AI-MBTI分析报告。`;
 
     const response = await client.chat.completions.create({
-      model: MODEL,
+      model: REPORT_MODEL,
       messages: [
         { role: "system", content: AGENT_B_REPORT_SYSTEM },
         { role: "user", content: prompt },
@@ -42,7 +43,7 @@ ${history}
       temperature: 0.4,
     });
 
-    const raw = response.choices[0].message.content ?? "{}";
+    const raw = stripHiddenReasoning(response.choices[0].message.content ?? "{}");
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     const reportStr = jsonMatch ? jsonMatch[0] : raw;
 

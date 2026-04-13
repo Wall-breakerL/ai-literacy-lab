@@ -1,23 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import client, {
-  MODEL,
-  assertMiniMaxApiKey,
-  getUpstreamErrorMessage,
-} from "@/lib/minimax";
-
-/** Vercel：连续两次模型调用易超过默认 10s；Pro 可生效至 60s。Hobby 仅 10s 时可能超时，需升级或换更快模型。 */
-export const maxDuration = 60;
-export const runtime = "nodejs";
 import {
   AGENT_A_SYSTEM,
   AGENT_B_SYSTEM,
   buildAgentAPrompt,
   buildAgentBPrompt,
 } from "@/lib/agents";
+import client, {
+  AGENT_A_MODEL,
+  AGENT_B_MODEL,
+  assertQwenApiKey,
+  getUpstreamErrorMessage,
+} from "@/lib/minimax";
+import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { AgentBOutput, Message } from "@/lib/types";
 
+/** Vercel：连续两次模型调用易超过默认 10s；Pro 可生效至 60s。Hobby 仅 10s 时可能超时，需升级或换更快模型。 */
+export const maxDuration = 60;
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
-  const missing = assertMiniMaxApiKey();
+  const missing = assertQwenApiKey();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -33,14 +35,14 @@ export async function POST(req: NextRequest) {
     let agentBOutput: AgentBOutput;
     try {
       const bResponse = await client.chat.completions.create({
-        model: MODEL,
+        model: AGENT_B_MODEL,
         messages: [
           { role: "system", content: AGENT_B_SYSTEM },
           { role: "user", content: buildAgentBPrompt(messages, roundCount) },
         ],
         temperature: 0.3,
       });
-      const raw = bResponse.choices[0].message.content ?? "{}";
+      const raw = stripHiddenReasoning(bResponse.choices[0].message.content ?? "{}");
       // Extract JSON from response (handle markdown code blocks)
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       agentBOutput = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
@@ -82,15 +84,18 @@ export async function POST(req: NextRequest) {
     ];
 
     const aResponse = await client.chat.completions.create({
-      model: MODEL,
+      model: AGENT_A_MODEL,
       messages: aMessages,
       temperature: 0.7,
     });
 
-    const agentAMessage = aResponse.choices[0].message.content ?? "感谢你的分享。";
+    const agentAMessage = stripHiddenReasoning(
+      aResponse.choices[0].message.content ?? "感谢你的分享。"
+    );
 
     return NextResponse.json({
       agentAMessage,
+      agentAModel: AGENT_A_MODEL,
       agentBOutput,
       isComplete,
     });

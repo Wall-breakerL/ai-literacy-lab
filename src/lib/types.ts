@@ -6,6 +6,7 @@ export type DirectiveAction = "probe_new" | "follow_up" | "conclude";
 export interface Message {
   role: "user" | "assistant";
   content: string;
+  model?: string;
 }
 
 export interface SignalDetected {

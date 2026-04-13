@@ -1,16 +1,20 @@
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: process.env.MINIMAX_API_KEY ?? "",
-  baseURL: process.env.MINIMAX_BASE_URL?.trim() || "https://api.minimaxi.com/v1",
+  apiKey: process.env.QWEN_API_KEY ?? "",
+  baseURL:
+    process.env.QWEN_BASE_URL?.trim() ||
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
 });
 
-export const MODEL = "MiniMax-M2.7";
+export const AGENT_A_MODEL = process.env.QWEN_AGENT_A_MODEL?.trim() || "Qwen3.5-Flash";
+export const AGENT_B_MODEL = process.env.QWEN_AGENT_B_MODEL?.trim() || "Qwen3.5-Flash";
+export const REPORT_MODEL = process.env.QWEN_REPORT_MODEL?.trim() || "Qwen3.5-Flash";
 
 /** 部署前必须在环境变量中配置（如 Vercel → Environment Variables → Production） */
-export function assertMiniMaxApiKey(): string | null {
-  if (!process.env.MINIMAX_API_KEY?.trim()) {
-    return "未配置 MINIMAX_API_KEY：在 Vercel 打开项目 → Settings → Environment Variables，为 Production 添加该变量并重新部署。";
+export function assertQwenApiKey(): string | null {
+  if (!process.env.QWEN_API_KEY?.trim()) {
+    return "未配置 QWEN_API_KEY：在 Vercel 打开项目 → Settings → Environment Variables，为 Production 添加该变量并重新部署。";
   }
   return null;
 }

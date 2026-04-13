@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Send, FileText } from "lucide-react";
 import { Message, AgentBOutput } from "@/lib/types";
+import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { ChatBubble } from "@/components/ChatBubble";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 
@@ -60,7 +61,11 @@ export default function InterviewPage() {
 
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.agentAMessage },
+          {
+            role: "assistant",
+            content: data.agentAMessage,
+            model: data.agentAModel ?? "Qwen3.5-Flash",
+          },
         ]);
         setCoverage(data.agentBOutput.analysis.coverage);
         setIsComplete(data.isComplete);
@@ -72,13 +77,15 @@ export default function InterviewPage() {
           error instanceof Error && error.message
             ? error.message
             : "未知错误";
+        const safeReason = stripHiddenReasoning(reason);
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content: `抱歉，没能拿到访谈回复。原因：${reason}
+            model: "Qwen3.5-Flash",
+            content: `抱歉，没能拿到访谈回复。原因：${safeReason}
 
-若提示未配置 MINIMAX_API_KEY，请到 Vercel → 项目 → Settings → Environment Variables 为 Production 添加密钥并重新部署。若提示超时，免费套餐单次函数仅约 10 秒，可升级 Pro 或在日志中确认是否 Vercel timeout。`,
+若提示未配置 QWEN_API_KEY，请到 Vercel → 项目 → Settings → Environment Variables 为 Production 添加密钥并重新部署。若提示超时，免费套餐单次函数仅约 10 秒，可升级 Pro 或在日志中确认是否 Vercel timeout。`,
           },
         ]);
       } finally {
