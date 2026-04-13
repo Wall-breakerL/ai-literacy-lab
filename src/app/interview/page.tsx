@@ -154,6 +154,7 @@ export default function InterviewPage() {
 
         let lastMessage = "未知错误";
         let failureCount = 0;
+        const turnStartMs = performance.now();
 
         for (let attempt = 1; attempt <= CLIENT_CHAT_MAX_ATTEMPTS; attempt++) {
           if (signal?.aborted) return;
@@ -161,12 +162,14 @@ export default function InterviewPage() {
           const result = await fetchChatOnce(body, signal);
           if (result.ok) {
             const { data } = result;
+            const thinkDurationSec = (performance.now() - turnStartMs) / 1000;
             setMessages((prev) => [
               ...prev,
               {
                 role: "assistant",
                 content: data.agentAMessage,
                 model: data.agentAModel ?? "qwen-plus",
+                thinkDurationSec,
               },
             ]);
             setCoverage(data.agentBOutput.analysis.coverage);

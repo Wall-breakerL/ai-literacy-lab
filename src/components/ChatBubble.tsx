@@ -61,6 +61,11 @@ const mdComponents = {
   ),
 };
 
+function formatThinkDurationLabel(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 1) return "不到1";
+  return `${Math.round(sec)}`;
+}
+
 export function ChatBubble({ message, isTyping, typingNotice }: ChatBubbleProps) {
   const isUser = message.role === "user";
   const safeContent = stripHiddenReasoning(message.content);
@@ -86,6 +91,9 @@ export function ChatBubble({ message, isTyping, typingNotice }: ChatBubbleProps)
           {!isUser && !isTyping && message.model && (
             <p className="mb-1 text-[12px] text-dim-gray tracking-raycast-small pl-0.5">
               模型：{message.model}
+              {message.thinkDurationSec != null
+                ? `（已思考${formatThinkDurationLabel(message.thinkDurationSec)}秒）`
+                : ""}
             </p>
           )}
           <div

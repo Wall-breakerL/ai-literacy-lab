@@ -7,6 +7,8 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
+  /** 本轮助手回复从发起请求到成功所经历的秒数（含客户端重试与等待），仅展示用 */
+  thinkDurationSec?: number;
 }
 
 export interface SignalDetected {
