@@ -18,6 +18,34 @@ import { AgentBOutput, Message } from "@/lib/types";
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
+const MAX_CHAT_RETRIES = Math.max(
+  1,
+  Number.parseInt(process.env.QWEN_CHAT_MAX_RETRIES ?? "5", 10) || 5
+);
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/** 单次上游调用失败则重试，直至成功或用尽次数（避免无限循环与账单失控）。 */
+async function withChatRetries<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_CHAT_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      if (attempt >= MAX_CHAT_RETRIES) break;
+      const delayMs = Math.min(500 * 2 ** (attempt - 1), 4000);
+      console.warn(
+        `[chat] ${label} attempt ${attempt}/${MAX_CHAT_RETRIES} failed, retry in ${delayMs}ms`
+      );
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 export async function POST(req: NextRequest) {
   const missing = assertQwenApiKey();
   if (missing) {
@@ -34,20 +62,21 @@ export async function POST(req: NextRequest) {
     // Step 1: Agent B analyzes conversation and issues directive
     let agentBOutput: AgentBOutput;
     try {
-      const bResponse = await client.chat.completions.create({
-        model: AGENT_B_MODEL,
-        messages: [
-          { role: "system", content: AGENT_B_SYSTEM },
-          { role: "user", content: buildAgentBPrompt(messages, roundCount) },
-        ],
-        temperature: 0.3,
+      agentBOutput = await withChatRetries("agent-b", async () => {
+        const bResponse = await client.chat.completions.create({
+          model: AGENT_B_MODEL,
+          messages: [
+            { role: "system", content: AGENT_B_SYSTEM },
+            { role: "user", content: buildAgentBPrompt(messages, roundCount) },
+          ],
+          temperature: 0.3,
+        });
+        const raw = stripHiddenReasoning(bResponse.choices[0].message.content ?? "{}");
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        return JSON.parse(jsonMatch ? jsonMatch[0] : raw) as AgentBOutput;
       });
-      const raw = stripHiddenReasoning(bResponse.choices[0].message.content ?? "{}");
-      // Extract JSON from response (handle markdown code blocks)
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      agentBOutput = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
     } catch {
-      // Fallback directive if B fails
+      // Fallback directive if B fails after all retries
       agentBOutput = {
         analysis: {
           signals_detected: [],
@@ -83,11 +112,13 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    const aResponse = await client.chat.completions.create({
-      model: AGENT_A_MODEL,
-      messages: aMessages,
-      temperature: 0.7,
-    });
+    const aResponse = await withChatRetries("agent-a", () =>
+      client.chat.completions.create({
+        model: AGENT_A_MODEL,
+        messages: aMessages,
+        temperature: 0.7,
+      })
+    );
 
     const agentAMessage = stripHiddenReasoning(
       aResponse.choices[0].message.content ?? "感谢你的分享。"

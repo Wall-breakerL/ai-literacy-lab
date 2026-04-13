@@ -8,12 +8,119 @@ import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { ChatBubble } from "@/components/ChatBubble";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 
+/** 客户端对 /api/chat 的最大尝试次数（含首次请求），应对网络抖动与偶发 502。 */
+const CLIENT_CHAT_MAX_ATTEMPTS = 8;
+const CLIENT_CHAT_RETRY_BASE_MS = 500;
+/** 连续失败达到此次数后，在「思考中」旁显示网络提示（仍会继续重试直至上限）。 */
+const CLIENT_CHAT_HINT_AFTER_FAILURES = 5;
+
+type ChatApiSuccess = {
+  agentAMessage: string;
+  agentAModel?: string;
+  agentBOutput: AgentBOutput;
+  isComplete: boolean;
+};
+
+function isChatApiSuccess(data: unknown): data is ChatApiSuccess {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  if (typeof d.agentAMessage !== "string") return false;
+  if (typeof d.isComplete !== "boolean") return false;
+  const out = d.agentBOutput;
+  if (!out || typeof out !== "object") return false;
+  const cov = (out as { analysis?: { coverage?: unknown } }).analysis?.coverage;
+  if (!cov || typeof cov !== "object") return false;
+  return (["Relation", "Workflow", "Epistemic", "RepairScope"] as const).every(
+    (k) => typeof (cov as Record<string, unknown>)[k] === "string"
+  );
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const id = window.setTimeout(() => resolve(), ms);
+    const onAbort = () => {
+      window.clearTimeout(id);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** 单次请求；configuration 503 等不可通过重试修复的情况标记为不可重试。 */
+async function fetchChatOnce(
+  body: { messages: Message[]; identity: string; roundCount: number },
+  signal?: AbortSignal
+): Promise<
+  | { ok: true; data: ChatApiSuccess }
+  | { ok: false; retryable: boolean; message: string }
+> {
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      const retryable = res.status >= 500 || res.status === 429 || res.status === 0;
+      return {
+        ok: false,
+        retryable,
+        message: !res.ok ? `HTTP ${res.status}` : "响应解析失败",
+      };
+    }
+
+    if (res.ok) {
+      if (!isChatApiSuccess(data)) {
+        return { ok: false, retryable: true, message: "返回数据不完整，将重试" };
+      }
+      return { ok: true, data };
+    }
+
+    const rec = data as Record<string, unknown>;
+    const isConfig = res.status === 503 && rec?.error === "configuration";
+    const hint =
+      typeof rec?.detail === "string" && rec.detail.trim()
+        ? rec.detail.trim()
+        : (rec?.error as string) ?? `HTTP ${res.status}`;
+
+    const retryable =
+      !isConfig &&
+      (res.status === 502 ||
+        res.status === 504 ||
+        res.status === 429 ||
+        res.status === 408 ||
+        res.status >= 500);
+
+    return { ok: false, retryable, message: hint };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    if (e instanceof TypeError) {
+      return { ok: false, retryable: true, message: e.message || "网络异常" };
+    }
+    return {
+      ok: false,
+      retryable: true,
+      message: e instanceof Error ? e.message : "未知错误",
+    };
+  }
+}
+
 export default function InterviewPage() {
   const router = useRouter();
   const [identity, setIdentity] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [slowNetworkHint, setSlowNetworkHint] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [roundCount, setRoundCount] = useState(0);
   const [coverage, setCoverage] = useState<AgentBOutput["analysis"]["coverage"]>({
@@ -36,43 +143,55 @@ export default function InterviewPage() {
       const signal = options?.signal;
       inFlightRef.current += 1;
       setIsTyping(true);
+      setSlowNetworkHint(false);
 
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: currentMessages,
-            identity: id,
-            roundCount: currentRound,
-          }),
-          signal,
-        });
+        const body = {
+          messages: currentMessages,
+          identity: id,
+          roundCount: currentRound,
+        };
 
-        const data = await res.json();
-        if (!res.ok) {
-          console.error("Chat API error:", res.status, data);
-          const hint =
-            typeof data?.detail === "string" && data.detail.trim()
-              ? data.detail.trim()
-              : (data?.error as string) ?? `HTTP ${res.status}`;
-          throw new Error(hint);
+        let lastMessage = "未知错误";
+        for (let attempt = 1; attempt <= CLIENT_CHAT_MAX_ATTEMPTS; attempt++) {
+          if (signal?.aborted) return;
+
+          const result = await fetchChatOnce(body, signal);
+          if (result.ok) {
+            const { data } = result;
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: data.agentAMessage,
+                model: data.agentAModel ?? "Qwen3.5-Flash",
+              },
+            ]);
+            setCoverage(data.agentBOutput.analysis.coverage);
+            setIsComplete(data.isComplete);
+            setRoundCount(currentRound + 1);
+            return;
+          }
+
+          lastMessage = result.message;
+          if (!result.retryable || attempt >= CLIENT_CHAT_MAX_ATTEMPTS) {
+            throw new Error(lastMessage);
+          }
+
+          if (attempt >= CLIENT_CHAT_HINT_AFTER_FAILURES) {
+            setSlowNetworkHint(true);
+          }
+
+          const delayMs = Math.min(
+            CLIENT_CHAT_RETRY_BASE_MS * 2 ** (attempt - 1),
+            8000
+          );
+          await sleep(delayMs, signal);
         }
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: data.agentAMessage,
-            model: data.agentAModel ?? "Qwen3.5-Flash",
-          },
-        ]);
-        setCoverage(data.agentBOutput.analysis.coverage);
-        setIsComplete(data.isComplete);
-        setRoundCount(currentRound + 1);
+        throw new Error(lastMessage);
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
-        console.error("Error:", error);
         const reason =
           error instanceof Error && error.message
             ? error.message
@@ -83,14 +202,15 @@ export default function InterviewPage() {
           {
             role: "assistant",
             model: "Qwen3.5-Flash",
-            content: `抱歉，没能拿到访谈回复。原因：${safeReason}
-
-若提示未配置 QWEN_API_KEY，请到 Vercel → 项目 → Settings → Environment Variables 为 Production 添加密钥并重新部署。若提示超时，免费套餐单次函数仅约 10 秒，可升级 Pro 或在日志中确认是否 Vercel timeout。`,
+            content: `抱歉，没能拿到访谈回复。原因：${safeReason}`,
           },
         ]);
       } finally {
         inFlightRef.current -= 1;
-        if (inFlightRef.current === 0) setIsTyping(false);
+        if (inFlightRef.current === 0) {
+          setIsTyping(false);
+          setSlowNetworkHint(false);
+        }
       }
     },
     []
@@ -112,7 +232,7 @@ export default function InterviewPage() {
   useEffect(() => {
     // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, slowNetworkHint]);
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -156,7 +276,14 @@ export default function InterviewPage() {
           <ChatBubble key={idx} message={msg} />
         ))}
         {isTyping && (
-          <ChatBubble message={{ role: "assistant", content: "" }} isTyping={true} />
+          <div className="space-y-2">
+            <ChatBubble message={{ role: "assistant", content: "" }} isTyping={true} />
+            {slowNetworkHint && (
+              <p className="text-[13px] leading-snug text-dim-gray pl-[52px] max-w-[90%]">
+                当前网络情况较差，暂时接收不到模型回复，正在重试…
+              </p>
+            )}
+          </div>
         )}
         <div ref={messagesEndRef} className="h-4" />
       </div>
