@@ -7,14 +7,34 @@ import { DimensionCard } from "@/components/DimensionCard";
 import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { Loader2, ArrowLeft } from "lucide-react";
+import {
+  API_RETRY_MAX_ATTEMPTS,
+  isRetryableApiFailure,
+  nextRetryDelayMs,
+  sleepAbortable,
+} from "@/lib/clientApiRetry";
+
+function isFinalReport(data: unknown): data is FinalReport {
+  if (!data || typeof data !== "object") return false;
+  const o = data as Record<string, unknown>;
+  return (
+    typeof o.summary === "string" &&
+    Array.isArray(o.tags) &&
+    Array.isArray(o.dimensions) &&
+    (o.dimensions as unknown[]).length > 0
+  );
+}
 
 export default function ReportPage() {
   const router = useRouter();
   const [report, setReport] = useState<FinalReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [waitHint, setWaitHint] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const generateReport = async () => {
       const historyStr = sessionStorage.getItem("ai_mbti_history");
       const identityStr = sessionStorage.getItem("ai_mbti_identity");
@@ -24,27 +44,119 @@ export default function ReportPage() {
         return;
       }
 
+      setLoading(true);
+      setError("");
+      setWaitHint(null);
+
+      let messages: Message[];
       try {
-        const messages: Message[] = JSON.parse(historyStr);
-        const res = await fetch("/api/report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages, identity: identityStr }),
-        });
+        messages = JSON.parse(historyStr) as Message[];
+      } catch {
+        if (!cancelled) {
+          setError("访谈记录无效，请重新完成访谈。");
+          setLoading(false);
+        }
+        return;
+      }
 
-        if (!res.ok) throw new Error("Report generation failed");
+      let failureCount = 0;
+      let lastErr = "生成报告失败，请稍后再试。";
 
-        const data = await res.json();
-        setReport(data);
-      } catch (err) {
-        console.error("Error:", err);
-        setError("生成报告时发生错误，请稍后再试。");
-      } finally {
+      for (let attempt = 0; attempt < API_RETRY_MAX_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        try {
+          const res = await fetch("/api/report", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages, identity: identityStr }),
+          });
+
+          let data: unknown = {};
+          try {
+            data = await res.json();
+          } catch {
+            data = {};
+          }
+
+          const d = data as Record<string, unknown>;
+          const detail =
+            typeof d?.detail === "string" && d.detail.trim()
+              ? d.detail.trim()
+              : typeof d?.error === "string"
+                ? d.error
+                : `HTTP ${res.status}`;
+
+          if (!res.ok) {
+            lastErr = detail;
+            failureCount += 1;
+            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
+            console.error("Report API error:", res.status, data, `attempt ${attempt + 1}/${API_RETRY_MAX_ATTEMPTS}`);
+            const retry = isRetryableApiFailure(res.status, detail) && attempt < API_RETRY_MAX_ATTEMPTS - 1;
+            if (retry) {
+              await sleepAbortable(nextRetryDelayMs(attempt));
+              continue;
+            }
+            break;
+          }
+
+          if (typeof d.error === "string" && d.error && !isFinalReport(data)) {
+            lastErr = d.error;
+            failureCount += 1;
+            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
+            const retry = attempt < API_RETRY_MAX_ATTEMPTS - 1;
+            if (retry) {
+              await sleepAbortable(nextRetryDelayMs(attempt));
+              continue;
+            }
+            break;
+          }
+
+          if (!isFinalReport(data)) {
+            lastErr = "报告格式异常，正在重试…";
+            failureCount += 1;
+            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
+            if (attempt < API_RETRY_MAX_ATTEMPTS - 1) {
+              await sleepAbortable(nextRetryDelayMs(attempt));
+              continue;
+            }
+            break;
+          }
+
+          if (cancelled) return;
+          setReport(data);
+          setLoading(false);
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          const msg = err instanceof Error ? err.message : String(err);
+          lastErr = msg;
+          console.error("Report fetch error:", err, `attempt ${attempt + 1}/${API_RETRY_MAX_ATTEMPTS}`);
+          const networkLike =
+            err instanceof TypeError ||
+            /fetch|network|Failed to fetch|Load failed|ECONNRESET|ETIMEDOUT/i.test(msg);
+          if (networkLike) {
+            failureCount += 1;
+            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
+          }
+          const retry = networkLike && attempt < API_RETRY_MAX_ATTEMPTS - 1;
+          if (retry) {
+            await sleepAbortable(nextRetryDelayMs(attempt));
+            continue;
+          }
+          break;
+        }
+      }
+
+      if (!cancelled) {
+        setError(lastErr);
         setLoading(false);
       }
     };
 
-    generateReport();
+    void generateReport();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (loading) {
@@ -52,9 +164,17 @@ export default function ReportPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-void relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[rgba(85,179,255,0.05)] rounded-full blur-[80px] pointer-events-none" />
         <Loader2 className="w-8 h-8 text-raycast-blue animate-spin mb-6" />
-        <p className="text-light-gray text-[16px] tracking-[0.2px]">
+        <p className="text-light-gray text-[16px] tracking-[0.2px] text-center">
           正在深度分析你的 AI-MBTI 特征...
         </p>
+        <p className="text-dim-gray text-[13px] tracking-raycast-small mt-4 text-center max-w-md leading-relaxed px-2">
+          耐心等待，请不要退出浏览器。
+        </p>
+        {waitHint ? (
+          <p className="text-dim-gray text-[12px] tracking-raycast-small mt-2 text-center max-w-md px-2">
+            {waitHint}
+          </p>
+        ) : null}
       </div>
     );
   }

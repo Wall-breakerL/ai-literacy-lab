@@ -4,15 +4,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Send, FileText } from "lucide-react";
 import { Message, AgentBOutput } from "@/lib/types";
-import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { ChatBubble } from "@/components/ChatBubble";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 
 /** 客户端对 /api/chat 的最大尝试次数（含首次请求），应对网络抖动与偶发 502。 */
 const CLIENT_CHAT_MAX_ATTEMPTS = 8;
 const CLIENT_CHAT_RETRY_BASE_MS = 500;
-/** 连续失败达到此次数后，在「思考中」旁显示网络提示（仍会继续重试直至上限）。 */
-const CLIENT_CHAT_HINT_AFTER_FAILURES = 5;
+/** 连续失败达到此次数后，在「思考中」下显示网络提示（仍会继续重试直至上限）。 */
+const CLIENT_CHAT_HINT_AFTER_FAILURES = 3;
 
 type ChatApiSuccess = {
   agentAMessage: string;
@@ -120,7 +119,7 @@ export default function InterviewPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [slowNetworkHint, setSlowNetworkHint] = useState(false);
+  const [typingNotice, setTypingNotice] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [roundCount, setRoundCount] = useState(0);
   const [coverage, setCoverage] = useState<AgentBOutput["analysis"]["coverage"]>({
@@ -143,7 +142,7 @@ export default function InterviewPage() {
       const signal = options?.signal;
       inFlightRef.current += 1;
       setIsTyping(true);
-      setSlowNetworkHint(false);
+      setTypingNotice(null);
 
       try {
         const body = {
@@ -153,6 +152,8 @@ export default function InterviewPage() {
         };
 
         let lastMessage = "未知错误";
+        let failureCount = 0;
+
         for (let attempt = 1; attempt <= CLIENT_CHAT_MAX_ATTEMPTS; attempt++) {
           if (signal?.aborted) return;
 
@@ -164,7 +165,7 @@ export default function InterviewPage() {
               {
                 role: "assistant",
                 content: data.agentAMessage,
-                model: data.agentAModel ?? "Qwen3.5-Flash",
+                model: data.agentAModel ?? "qwen-plus",
               },
             ]);
             setCoverage(data.agentBOutput.analysis.coverage);
@@ -173,43 +174,37 @@ export default function InterviewPage() {
             return;
           }
 
+          failureCount += 1;
+          if (failureCount >= CLIENT_CHAT_HINT_AFTER_FAILURES) {
+            setTypingNotice("网络较差，暂时无法获得模型回复");
+          }
+
           lastMessage = result.message;
           if (!result.retryable || attempt >= CLIENT_CHAT_MAX_ATTEMPTS) {
             throw new Error(lastMessage);
           }
 
-          if (attempt >= CLIENT_CHAT_HINT_AFTER_FAILURES) {
-            setSlowNetworkHint(true);
-          }
-
-          const delayMs = Math.min(
-            CLIENT_CHAT_RETRY_BASE_MS * 2 ** (attempt - 1),
-            8000
-          );
+          const delayMs = Math.min(CLIENT_CHAT_RETRY_BASE_MS * 2 ** (attempt - 1), 8000);
           await sleep(delayMs, signal);
         }
 
         throw new Error(lastMessage);
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
-        const reason =
-          error instanceof Error && error.message
-            ? error.message
-            : "未知错误";
-        const safeReason = stripHiddenReasoning(reason);
+        console.error("Error:", error);
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            model: "Qwen3.5-Flash",
-            content: `抱歉，没能拿到访谈回复。原因：${safeReason}`,
+            model: "qwen-plus",
+            content: "抱歉，没能拿到访谈回复。请稍后再试。",
           },
         ]);
       } finally {
         inFlightRef.current -= 1;
         if (inFlightRef.current === 0) {
           setIsTyping(false);
-          setSlowNetworkHint(false);
+          setTypingNotice(null);
         }
       }
     },
@@ -230,9 +225,8 @@ export default function InterviewPage() {
   }, [router, triggerTurn]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, slowNetworkHint]);
+  }, [messages, isTyping, typingNotice]);
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -259,7 +253,6 @@ export default function InterviewPage() {
 
   return (
     <div className="flex flex-col h-screen bg-void max-w-3xl mx-auto">
-      {/* Header */}
       <header className="flex-shrink-0 h-[72px] flex items-center justify-between px-6 border-b border-[rgba(255,255,255,0.06)] bg-[#07080a]/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-raycast-red shadow-[0_0_8px_rgba(255,99,99,0.5)]" />
@@ -270,25 +263,20 @@ export default function InterviewPage() {
         <ProgressIndicator coverage={coverage} />
       </header>
 
-      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
         {messages.map((msg, idx) => (
           <ChatBubble key={idx} message={msg} />
         ))}
         {isTyping && (
-          <div className="space-y-2">
-            <ChatBubble message={{ role: "assistant", content: "" }} isTyping={true} />
-            {slowNetworkHint && (
-              <p className="text-[13px] leading-snug text-dim-gray pl-[52px] max-w-[90%]">
-                当前网络情况较差，暂时接收不到模型回复，正在重试…
-              </p>
-            )}
-          </div>
+          <ChatBubble
+            message={{ role: "assistant", content: "" }}
+            isTyping={true}
+            typingNotice={typingNotice}
+          />
         )}
         <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      {/* Input Area */}
       <div className="flex-shrink-0 p-6 bg-void border-t border-[rgba(255,255,255,0.06)]">
         {isComplete ? (
           <button

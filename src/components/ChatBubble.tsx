@@ -11,6 +11,8 @@ import remarkGfm from "remark-gfm";
 interface ChatBubbleProps {
   message: Message;
   isTyping?: boolean;
+  /** 显示在「思考中…」下方，例如多次重试仍等待时 */
+  typingNotice?: string | null;
 }
 
 const mdComponents = {
@@ -59,7 +61,7 @@ const mdComponents = {
   ),
 };
 
-export function ChatBubble({ message, isTyping }: ChatBubbleProps) {
+export function ChatBubble({ message, isTyping, typingNotice }: ChatBubbleProps) {
   const isUser = message.role === "user";
   const safeContent = stripHiddenReasoning(message.content);
 
@@ -112,9 +114,14 @@ export function ChatBubble({ message, isTyping }: ChatBubbleProps) {
             )}
           </div>
           {!isUser && isTyping && (
-            <p className="mt-1.5 text-[12px] text-dim-gray tracking-raycast-small pl-0.5">
-              思考中…
-            </p>
+            <div className="mt-1.5 space-y-1 pl-0.5">
+              <p className="text-[12px] text-dim-gray tracking-raycast-small">思考中…</p>
+              {typingNotice ? (
+                <p className="text-[11px] text-dim-gray/90 tracking-raycast-small leading-snug">
+                  {typingNotice}
+                </p>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

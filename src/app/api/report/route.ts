@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AGENT_B_REPORT_SYSTEM } from "@/lib/agents";
+import { withLlmRetry } from "@/lib/llmRetry";
 import client, {
   REPORT_MODEL,
   assertQwenApiKey,
   getUpstreamErrorMessage,
 } from "@/lib/minimax";
 import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
+import { FinalReport, Message } from "@/lib/types";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
-import { AGENT_B_REPORT_SYSTEM } from "@/lib/agents";
-import { FinalReport, Message } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const missing = assertQwenApiKey();
@@ -34,14 +35,16 @@ ${history}
 
 请根据以上记录生成AI-MBTI分析报告。`;
 
-    const response = await client.chat.completions.create({
-      model: REPORT_MODEL,
-      messages: [
-        { role: "system", content: AGENT_B_REPORT_SYSTEM },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.4,
-    });
+    const response = await withLlmRetry(() =>
+      client.chat.completions.create({
+        model: REPORT_MODEL,
+        messages: [
+          { role: "system", content: AGENT_B_REPORT_SYSTEM },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.4,
+      })
+    );
 
     const raw = stripHiddenReasoning(response.choices[0].message.content ?? "{}");
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
