@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import client, { MODEL } from "@/lib/minimax";
+import client, {
+  MODEL,
+  assertMiniMaxApiKey,
+  getUpstreamErrorMessage,
+} from "@/lib/minimax";
+
+export const maxDuration = 60;
+export const runtime = "nodejs";
 import { AGENT_B_REPORT_SYSTEM } from "@/lib/agents";
 import { FinalReport, Message } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
+  const missing = assertMiniMaxApiKey();
+  if (missing) {
+    return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
+  }
+
   try {
     const { messages, identity } = await req.json() as {
       messages: Message[];
@@ -43,6 +55,13 @@ ${history}
     }
   } catch (error) {
     console.error("Report API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const detail = getUpstreamErrorMessage(error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        detail: detail ?? "请查看 Vercel Function Logs。",
+      },
+      { status: 502 }
+    );
   }
 }

@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import client, { MODEL } from "@/lib/minimax";
+import client, {
+  MODEL,
+  assertMiniMaxApiKey,
+  getUpstreamErrorMessage,
+} from "@/lib/minimax";
+
+/** Vercel：连续两次模型调用易超过默认 10s；Pro 可生效至 60s。Hobby 仅 10s 时可能超时，需升级或换更快模型。 */
+export const maxDuration = 60;
+export const runtime = "nodejs";
 import {
   AGENT_A_SYSTEM,
   AGENT_B_SYSTEM,
@@ -9,6 +17,11 @@ import {
 import { AgentBOutput, Message } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
+  const missing = assertMiniMaxApiKey();
+  if (missing) {
+    return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
+  }
+
   try {
     const { messages, identity, roundCount } = await req.json() as {
       messages: Message[];
@@ -83,6 +96,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Chat API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const detail = getUpstreamErrorMessage(error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        detail: detail ?? "请打开 Vercel → 该项目 → Logs / Functions 查看服务端报错。",
+      },
+      { status: 502 }
+    );
   }
 }

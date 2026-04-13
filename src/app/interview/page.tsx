@@ -51,7 +51,11 @@ export default function InterviewPage() {
         const data = await res.json();
         if (!res.ok) {
           console.error("Chat API error:", res.status, data);
-          throw new Error(data?.error ?? `HTTP ${res.status}`);
+          const hint =
+            typeof data?.detail === "string" && data.detail.trim()
+              ? data.detail.trim()
+              : (data?.error as string) ?? `HTTP ${res.status}`;
+          throw new Error(hint);
         }
 
         setMessages((prev) => [
@@ -64,12 +68,17 @@ export default function InterviewPage() {
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
         console.error("Error:", error);
+        const reason =
+          error instanceof Error && error.message
+            ? error.message
+            : "未知错误";
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content:
-              "抱歉，刚才没能从访谈服务拿到回复（通常是服务端暂时不可用或请求超时）。请再发送一次；若多次失败可刷新页面后重试。",
+            content: `抱歉，没能拿到访谈回复。原因：${reason}
+
+若提示未配置 MINIMAX_API_KEY，请到 Vercel → 项目 → Settings → Environment Variables 为 Production 添加密钥并重新部署。若提示超时，免费套餐单次函数仅约 10 秒，可升级 Pro 或在日志中确认是否 Vercel timeout。`,
           },
         ]);
       } finally {
