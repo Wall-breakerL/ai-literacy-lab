@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 
 const MAX_CHAT_RETRIES = Math.max(
   1,
-  Number.parseInt(process.env.QWEN_CHAT_MAX_RETRIES ?? "5", 10) || 5
+  Number.parseInt(process.env.QWEN_CHAT_MAX_RETRIES ?? "3", 10) || 3
 );
 
 function sleep(ms: number) {
@@ -36,7 +36,7 @@ async function withChatRetries<T>(label: string, fn: () => Promise<T>): Promise<
     } catch (e) {
       lastError = e;
       if (attempt >= MAX_CHAT_RETRIES) break;
-      const delayMs = Math.min(500 * 2 ** (attempt - 1), 4000);
+      const delayMs = 20_000;
       console.warn(
         `[chat] ${label} attempt ${attempt}/${MAX_CHAT_RETRIES} failed, retry in ${delayMs}ms`
       );

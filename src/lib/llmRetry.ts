@@ -15,8 +15,10 @@ function isRetryableUpstreamError(err: unknown): boolean {
   return /负载|稍后重试|overloaded|529|503|timeout|rate limit|ECONNRESET|ETIMEDOUT/i.test(msg);
 }
 
+const LLM_RETRY_DELAY_MS = 20_000;
+
 /**
- * 上游短时过载（如 529）时重试；固定间隔 + 抖动，避免打爆 API。
+ * 上游短时过载（如 529）时重试；固定间隔，避免打爆 API。
  */
 export async function withLlmRetry<T>(fn: () => Promise<T>, maxAttempts = 5): Promise<T> {
   let last: unknown;
@@ -27,9 +29,7 @@ export async function withLlmRetry<T>(fn: () => Promise<T>, maxAttempts = 5): Pr
       last = e;
       const retry = isRetryableUpstreamError(e) && attempt < maxAttempts - 1;
       if (!retry) throw e;
-      const base = 1000 * 2 ** attempt;
-      const jitter = Math.floor(Math.random() * 400);
-      await new Promise((r) => setTimeout(r, Math.min(base + jitter, 20000)));
+      await new Promise((r) => setTimeout(r, LLM_RETRY_DELAY_MS));
     }
   }
   throw last;

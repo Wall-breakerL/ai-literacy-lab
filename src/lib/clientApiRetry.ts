@@ -1,7 +1,7 @@
 /** 浏览器端请求 /api/* 时的重试参数（与访谈页一致） */
 export const API_RETRY_MAX_ATTEMPTS = 5;
-export const API_RETRY_BASE_DELAY_MS = 1000;
-export const API_RETRY_DELAY_CAP_MS = 20000;
+/** 每次失败后、下一次请求前的固定等待时间（毫秒）。 */
+export const API_RETRY_DELAY_MS = 20_000;
 
 export function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -31,9 +31,6 @@ export function isRetryableApiFailure(status: number, detail: string): boolean {
   return false;
 }
 
-export function nextRetryDelayMs(attemptIndex: number): number {
-  return Math.min(
-    API_RETRY_DELAY_CAP_MS,
-    API_RETRY_BASE_DELAY_MS * 2 ** attemptIndex + Math.floor(Math.random() * 400)
-  );
+export function nextRetryDelayMs(_attemptIndex: number): number {
+  return API_RETRY_DELAY_MS;
 }

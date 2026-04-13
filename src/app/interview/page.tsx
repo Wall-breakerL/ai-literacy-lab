@@ -8,10 +8,11 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 
 /** 客户端对 /api/chat 的最大尝试次数（含首次请求），应对网络抖动与偶发 502。 */
-const CLIENT_CHAT_MAX_ATTEMPTS = 8;
-const CLIENT_CHAT_RETRY_BASE_MS = 500;
-/** 连续失败达到此次数后，在「思考中」下显示网络提示（仍会继续重试直至上限）。 */
-const CLIENT_CHAT_HINT_AFTER_FAILURES = 3;
+const CLIENT_CHAT_MAX_ATTEMPTS = 5;
+/** 每次失败后、发起下一次请求前的固定等待时间。 */
+const CLIENT_CHAT_RETRY_DELAY_MS = 20_000;
+/** 连续失败达到此次数后，在「思考中」下显示网络提示（1 = 第一次失败即显示；仍会继续重试直至上限）。 */
+const CLIENT_CHAT_HINT_AFTER_FAILURES = 1;
 
 type ChatApiSuccess = {
   agentAMessage: string;
@@ -175,6 +176,7 @@ export default function InterviewPage() {
           }
 
           failureCount += 1;
+          // 第一次请求失败起即在「思考中」下提示（仍会按间隔重试到上限）。
           if (failureCount >= CLIENT_CHAT_HINT_AFTER_FAILURES) {
             setTypingNotice("网络较差，暂时无法获得模型回复");
           }
@@ -184,8 +186,8 @@ export default function InterviewPage() {
             throw new Error(lastMessage);
           }
 
-          const delayMs = Math.min(CLIENT_CHAT_RETRY_BASE_MS * 2 ** (attempt - 1), 8000);
-          await sleep(delayMs, signal);
+          // 每次可重试失败后固定等待再发下一轮请求（与 CLIENT_CHAT_RETRY_DELAY_MS 一致）。
+          await sleep(CLIENT_CHAT_RETRY_DELAY_MS, signal);
         }
 
         throw new Error(lastMessage);
