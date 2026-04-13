@@ -74,11 +74,26 @@ export default function ReportPage() {
   }
 
   // Map scores for radar chart
+  const DIMENSION_LETTERS: Record<
+    "Relation" | "Workflow" | "Epistemic" | "RepairScope",
+    { low: string; high: string }
+  > = {
+    Relation: { low: "I", high: "C" },
+    Workflow: { low: "F", high: "E" },
+    Epistemic: { low: "A", high: "T" },
+    RepairScope: { low: "G", high: "L" },
+  };
+
   const radarData = report.dimensions.map((d) => ({
-    subject: d.label,
+    subject: d.score >= 50 ? DIMENSION_LETTERS[d.dimension].high : DIMENSION_LETTERS[d.dimension].low,
     score: d.score,
     fullMark: 100,
   }));
+  const strongest = report.dimensions.reduce((prev, cur) => (cur.score > prev.score ? cur : prev));
+  const strongestLetter =
+    strongest.score >= 50
+      ? DIMENSION_LETTERS[strongest.dimension].high
+      : DIMENSION_LETTERS[strongest.dimension].low;
 
   return (
     <div className="min-h-screen bg-void py-12 px-4 sm:px-6">
@@ -136,6 +151,11 @@ export default function ReportPage() {
             <h2 className="text-[24px] font-medium text-near-white tracking-[0.2px] leading-[1.4]">
               {report.summary}
             </h2>
+            <div className="text-[13px] text-light-gray">
+              主导字母：<span className="text-near-white font-semibold">{strongestLetter}</span>
+              {" · "}
+              约{Math.round(strongest.score)}分（{strongest.label}）
+            </div>
             <div className="flex flex-wrap gap-2">
               {report.tags.map((tag, i) => (
                 <span

@@ -12,6 +12,18 @@ interface DimensionCardProps {
 
 export function DimensionCard({ report, index }: DimensionCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const DIMENSION_META: Record<
+    DimensionReport["dimension"],
+    { lowLabel: string; highLabel: string; lowLetter: string; highLetter: string }
+  > = {
+    Relation: { lowLabel: "工具型", highLabel: "伙伴型", lowLetter: "I", highLetter: "C" },
+    Workflow: { lowLabel: "框架型", highLabel: "探索型", lowLetter: "F", highLetter: "E" },
+    Epistemic: { lowLabel: "审计型", highLabel: "信任型", lowLetter: "A", highLetter: "T" },
+    RepairScope: { lowLabel: "全局型", highLabel: "局部型", lowLetter: "G", highLetter: "L" },
+  };
+  const meta = DIMENSION_META[report.dimension];
+  const lowScore = Math.max(0, Math.min(100, Math.round(100 - report.score)));
+  const highScore = Math.max(0, Math.min(100, Math.round(report.score)));
 
   const scoreColor =
     report.score < 30
@@ -46,14 +58,18 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
         <div className="flex items-center gap-4">
           {/* Score bar */}
           <div className="flex items-center gap-3">
-            <span className="text-[12px] text-dim-gray">工具型</span>
+            <span className="text-[12px] text-dim-gray whitespace-nowrap">
+              {meta.lowLetter} · {meta.lowLabel} {lowScore}
+            </span>
             <div className="w-24 h-1.5 bg-dark-border rounded-full overflow-hidden">
               <div
                 className="h-full bg-raycast-blue rounded-full transition-all duration-700"
                 style={{ width: `${report.score}%` }}
               />
             </div>
-            <span className="text-[12px] text-dim-gray">伙伴型</span>
+            <span className="text-[12px] text-dim-gray whitespace-nowrap">
+              {meta.highLetter} · {meta.highLabel} {highScore}
+            </span>
           </div>
 
           <ChevronDown
