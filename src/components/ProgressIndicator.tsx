@@ -35,22 +35,19 @@ export function ProgressIndicator({ coverage }: ProgressIndicatorProps) {
         }
 
         return (
-          <motion.div
-            key={dim.key}
-            className="group relative"
-            initial={false}
-            animate={{
-              backgroundColor: status === "uncovered" ? "#2f3031" :
-                              status === "weak" ? "#ffbc33" : "#5fc992"
-            }}
-          >
-            <div className={`w-2 h-2 rounded-full ${shadow} transition-shadow duration-500`} />
+          <div key={dim.key} className="group relative">
+            <motion.div
+              className={`w-2 h-2 rounded-full ${bgColor} ${shadow} transition-shadow duration-500`}
+              initial={false}
+              animate={{ scale: status === "uncovered" ? 1 : 1.08 }}
+              transition={{ duration: 0.2 }}
+            />
 
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#1b1c1e] border border-[#252829] rounded text-[10px] text-light-gray whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               {dim.label}: {status === "uncovered" ? "待探索" : status === "weak" ? "需追问" : "已完成"}
             </div>
-          </motion.div>
+          </div>
         );
       })}
     </div>

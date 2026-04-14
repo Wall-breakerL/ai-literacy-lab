@@ -1,7 +1,7 @@
 export type Dimension = "Relation" | "Workflow" | "Epistemic" | "RepairScope";
 export type SignalStrength = "strong" | "weak" | "none";
 export type CoverageStatus = "uncovered" | "weak" | "covered";
-export type DirectiveAction = "probe_new" | "follow_up" | "conclude";
+export type DirectiveAction = "probe_new" | "probe_deep" | "clarify" | "conclude";
 
 export interface Message {
   role: "user" | "assistant";
@@ -25,6 +25,7 @@ export interface AgentBDirective {
 
 export interface AgentBOutput {
   analysis: {
+    reasoning: string;
     signals_detected: SignalDetected[];
     current_status: string;
     coverage: Record<Dimension, CoverageStatus>;

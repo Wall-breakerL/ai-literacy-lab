@@ -21,6 +21,14 @@ type ChatApiSuccess = {
   isComplete: boolean;
 };
 
+type InterviewDebugRunPayload = {
+  sessionId: string;
+  identity: string;
+  startedAt?: string;
+  finishedAt: string;
+  transcript: Message[];
+};
+
 function isChatApiSuccess(data: unknown): data is ChatApiSuccess {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
@@ -52,7 +60,13 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** 单次请求；configuration 503 等不可通过重试修复的情况标记为不可重试。 */
 async function fetchChatOnce(
-  body: { messages: Message[]; identity: string; roundCount: number },
+  body: {
+    messages: Message[];
+    identity: string;
+    roundCount: number;
+    debugSessionId?: string;
+    debugStartedAt?: string;
+  },
   signal?: AbortSignal
 ): Promise<
   | { ok: true; data: ChatApiSuccess }
@@ -132,6 +146,21 @@ export default function InterviewPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(0);
+  const startedAtRef = useRef<string>(new Date().toISOString());
+  const debugSessionIdRef = useRef<string>("");
+  const savedLocalLogRef = useRef(false);
+
+  const persistLocalDebugRun = useCallback(async (payload: InterviewDebugRunPayload) => {
+    try {
+      await fetch("/api/local-debug/interview-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.warn("local debug save failed:", error);
+    }
+  }, []);
 
   const triggerTurn = useCallback(
     async (
@@ -150,6 +179,8 @@ export default function InterviewPage() {
           messages: currentMessages,
           identity: id,
           roundCount: currentRound,
+          debugSessionId: debugSessionIdRef.current,
+          debugStartedAt: startedAtRef.current,
         };
 
         let lastMessage = "未知错误";
@@ -163,14 +194,28 @@ export default function InterviewPage() {
           if (result.ok) {
             const { data } = result;
             const thinkDurationSec = (performance.now() - turnStartMs) / 1000;
+            const assistantMessage: Message = {
+              role: "assistant",
+              content: data.agentAMessage,
+              model: data.agentAModel ?? "qwen-plus",
+              thinkDurationSec,
+            };
+            const nextTranscript = [...currentMessages, assistantMessage];
+
+            if (data.isComplete && !savedLocalLogRef.current) {
+              savedLocalLogRef.current = true;
+              void persistLocalDebugRun({
+                sessionId: debugSessionIdRef.current,
+                identity: id,
+                startedAt: startedAtRef.current,
+                finishedAt: new Date().toISOString(),
+                transcript: nextTranscript,
+              });
+            }
+
             setMessages((prev) => [
               ...prev,
-              {
-                role: "assistant",
-                content: data.agentAMessage,
-                model: data.agentAModel ?? "qwen-plus",
-                thinkDurationSec,
-              },
+              assistantMessage,
             ]);
             setCoverage(data.agentBOutput.analysis.coverage);
             setIsComplete(data.isComplete);
@@ -222,6 +267,9 @@ export default function InterviewPage() {
       router.push("/");
       return;
     }
+    startedAtRef.current = new Date().toISOString();
+    debugSessionIdRef.current = crypto.randomUUID();
+    savedLocalLogRef.current = false;
     setIdentity(storedIdentity);
 
     const ac = new AbortController();
@@ -242,13 +290,6 @@ export default function InterviewPage() {
     setInputValue("");
 
     triggerTurn(newMessages, identity, roundCount);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
   };
 
   const goToReport = () => {
@@ -296,7 +337,6 @@ export default function InterviewPage() {
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder="输入你的回答... (Shift + Enter 换行)"
               className="w-full bg-surface-100 border border-[rgba(255,255,255,0.08)] rounded-[12px] px-4 py-4 pr-14 text-[16px] text-near-white placeholder:text-dim-gray focus:outline-none focus:border-raycast-blue focus:ring-1 focus:ring-[rgba(85,179,255,0.15)] resize-none shadow-card-ring min-h-[60px] max-h-[200px] transition-all"
               rows={1}

@@ -33,3 +33,4 @@ next-env.d.ts
 
 # local reference with secrets — do not commit
 Minimax_Info
+.local-debug/
