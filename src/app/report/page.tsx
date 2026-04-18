@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FinalReport, Message } from "@/lib/types";
+import { FinalReport, Message, QuestionnaireAnswer } from "@/lib/types";
 import { DimensionCard } from "@/components/DimensionCard";
 import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
@@ -37,9 +37,10 @@ export default function ReportPage() {
 
     const generateReport = async () => {
       const historyStr = sessionStorage.getItem("ai_mbti_history");
-      const identityStr = sessionStorage.getItem("ai_mbti_identity");
+      const identityStr = sessionStorage.getItem("ai_mbti_identity") || "用户";
+      const answersStr = sessionStorage.getItem("ai_mbti_answers");
 
-      if (!historyStr || !identityStr) {
+      if (!historyStr) {
         router.push("/");
         return;
       }
@@ -49,6 +50,7 @@ export default function ReportPage() {
       setWaitHint(null);
 
       let messages: Message[];
+      let questionnaireAnswers: QuestionnaireAnswer[] = [];
       try {
         messages = JSON.parse(historyStr) as Message[];
       } catch {
@@ -57,6 +59,14 @@ export default function ReportPage() {
           setLoading(false);
         }
         return;
+      }
+
+      if (answersStr) {
+        try {
+          questionnaireAnswers = JSON.parse(answersStr) as QuestionnaireAnswer[];
+        } catch {
+          // Ignore invalid answers
+        }
       }
 
       let failureCount = 0;
@@ -68,7 +78,7 @@ export default function ReportPage() {
           const res = await fetch("/api/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages, identity: identityStr }),
+            body: JSON.stringify({ messages, identity: identityStr, questionnaireAnswers }),
           });
 
           let data: unknown = {};

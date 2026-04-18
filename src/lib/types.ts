@@ -1,7 +1,7 @@
 export type Dimension = "Relation" | "Workflow" | "Epistemic" | "RepairScope";
 export type SignalStrength = "strong" | "weak" | "none";
 export type CoverageStatus = "uncovered" | "weak" | "covered";
-export type DirectiveAction = "probe_new" | "probe_deep" | "clarify" | "conclude";
+export type DirectiveAction = "probe_new" | "probe_deep" | "clarify" | "conclude" | "start_questionnaire";
 
 export interface Message {
   role: "user" | "assistant";
@@ -26,11 +26,11 @@ export interface AgentBDirective {
 export interface AgentBOutput {
   analysis: {
     reasoning: string;
-    signals_detected: SignalDetected[];
-    current_status: string;
-    coverage: Record<Dimension, CoverageStatus>;
+    background_summary?: string;
+    coverage?: Record<Dimension, CoverageStatus>;
   };
   directive: AgentBDirective;
+  nextQuestions?: QuestionnaireQuestion[];
 }
 
 export interface DimensionReport {
@@ -48,4 +48,20 @@ export interface FinalReport {
   summary: string;
   tags: string[];
   dimensions: DimensionReport[];
+}
+
+export interface QuestionnaireQuestion {
+  dimension: Dimension;
+  question: string;
+  /** 场景题：具体情境描述；习惯题：模型约定填字面量「习惯」，UI 会按习惯题展示 */
+  scenario: string;
+  reverse?: boolean;
+}
+
+export interface QuestionnaireAnswer {
+  dimension: Dimension;
+  score: number;
+  question: string;
+  scenario: string;
+  reverse?: boolean;
 }

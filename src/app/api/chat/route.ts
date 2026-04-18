@@ -6,6 +6,7 @@ import {
   AGENT_B_SYSTEM,
   buildAgentAPrompt,
   buildAgentBPrompt,
+  QUESTIONNAIRE_ENTRY_ROUND,
 } from "@/lib/agents";
 import client, {
   AGENT_A_MODEL,
@@ -14,6 +15,7 @@ import client, {
   getUpstreamErrorMessage,
 } from "@/lib/minimax";
 import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
+import { FALLBACK_QUESTIONNAIRE } from "@/lib/fallbackQuestionnaire";
 import { AgentBOutput, Message } from "@/lib/types";
 
 /** Vercel：连续两次模型调用易超过默认 10s；Pro 可生效至 60s。Hobby 仅 10s 时可能超时，需升级或换更快模型。 */
@@ -69,6 +71,7 @@ type LocalDebugSessionLog = {
     qwenBaseUrl: string;
     maxChatRetries: number;
     retryDelayMs: number;
+    agentBQuestionnaireRetryDelayMs: number;
     agentA: { model: string; temperature: number; systemPrompt: string };
     agentB: { model: string; temperature: number; systemPrompt: string };
   };
@@ -81,12 +84,17 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+const DEFAULT_CHAT_RETRY_DELAY_MS = 20_000;
+/** 问卷生成轮次（Agent B 输出整卷 JSON）较重，重试间隔放宽 */
+const QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS = 60_000;
+
 /** 单次上游调用失败则重试，直至成功或用尽次数（避免无限循环与账单失控）。 */
 async function withChatRetries<T>(
   label: "agent-a" | "agent-b",
   fn: () => Promise<T>,
-  options?: { onRetry?: (event: ChatRetryEvent) => void }
+  options?: { onRetry?: (event: ChatRetryEvent) => void; retryDelayMs?: number }
 ): Promise<T> {
+  const retryDelayMs = options?.retryDelayMs ?? DEFAULT_CHAT_RETRY_DELAY_MS;
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_CHAT_RETRIES; attempt++) {
     try {
@@ -94,7 +102,7 @@ async function withChatRetries<T>(
     } catch (e) {
       lastError = e;
       if (attempt >= MAX_CHAT_RETRIES) break;
-      const delayMs = 20_000;
+      const delayMs = retryDelayMs;
       options?.onRetry?.({
         label,
         attempt,
@@ -138,7 +146,8 @@ async function upsertLocalDebugSession(
         qwenBaseUrl:
           process.env.QWEN_BASE_URL?.trim() || "https://dashscope.aliyuncs.com/compatible-mode/v1",
         maxChatRetries: MAX_CHAT_RETRIES,
-        retryDelayMs: 20_000,
+        retryDelayMs: DEFAULT_CHAT_RETRY_DELAY_MS,
+        agentBQuestionnaireRetryDelayMs: QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS,
         agentA: { model: AGENT_A_MODEL, temperature: 0.7, systemPrompt: AGENT_A_SYSTEM },
         agentB: { model: AGENT_B_MODEL, temperature: 0.3, systemPrompt: AGENT_B_SYSTEM },
       },
@@ -166,20 +175,20 @@ export async function POST(req: NextRequest) {
       }
     | null;
 
-  if (!body || !Array.isArray(body.messages) || typeof body.identity !== "string" || typeof body.roundCount !== "number") {
+  if (!body || !Array.isArray(body.messages) || typeof body.roundCount !== "number") {
     return NextResponse.json({ error: "bad_request", detail: "请求体格式错误" }, { status: 400 });
   }
 
   let roundLog: LocalDebugRoundEntry | null = null;
   try {
-    const { messages, identity, roundCount, debugSessionId, debugStartedAt } = body;
+    const { messages, roundCount, debugSessionId, debugStartedAt } = body;
 
     const requestedAt = new Date().toISOString();
     const retryEvents: ChatRetryEvent[] = [];
     roundLog = {
       round: roundCount,
       requestedAt,
-      input: { identity, messages },
+      input: { identity: "用户", messages },
       agentB: {
         model: AGENT_B_MODEL,
         temperature: 0.3,
@@ -197,10 +206,17 @@ export async function POST(req: NextRequest) {
       retryEvents,
     };
 
+    const agentBRetryDelayMs =
+      roundCount >= QUESTIONNAIRE_ENTRY_ROUND
+        ? QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS
+        : DEFAULT_CHAT_RETRY_DELAY_MS;
+
     // Step 1: Agent B analyzes conversation and issues directive
     let agentBOutput: AgentBOutput;
     try {
-      agentBOutput = await withChatRetries("agent-b", async () => {
+      agentBOutput = await withChatRetries(
+        "agent-b",
+        async () => {
         const bResponse = await client.chat.completions.create({
           model: AGENT_B_MODEL,
           messages: [
@@ -213,35 +229,66 @@ export async function POST(req: NextRequest) {
         roundLog!.agentB.rawResponseText = raw;
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         return JSON.parse(jsonMatch ? jsonMatch[0] : raw) as AgentBOutput;
-      }, { onRetry: (event) => retryEvents.push(event) });
+      },
+        {
+          onRetry: (event) => retryEvents.push(event),
+          retryDelayMs: agentBRetryDelayMs,
+        }
+      );
       roundLog!.agentB.parsedOutput = agentBOutput;
     } catch {
       // Fallback directive if B fails after all retries
       roundLog!.agentB.fallbackUsed = true;
       agentBOutput = {
         analysis: {
-          reasoning: "Agent B 在重试上限内未返回可解析结果，使用兜底策略继续访谈流程。",
-          signals_detected: [],
-          current_status: "分析失败，继续访谈",
-          coverage: {
-            Relation: "uncovered",
-            Workflow: "uncovered",
-            Epistemic: "uncovered",
-            RepairScope: "uncovered",
-          },
+          reasoning: "Agent B 在重试上限内未返回可解析结果，使用兜底问卷继续流程。",
+          background_summary: "用户背景收集中",
         },
         directive: {
-          action: roundCount >= 8 ? "conclude" : "probe_new",
-          target_dimension: "Relation",
-          hint: "继续了解用户的AI使用习惯",
+          action: "start_questionnaire",
         },
       };
+    }
+    if (roundLog) {
+      roundLog.agentB.parsedOutput = agentBOutput;
+    }
+
+    // Check if we should transition to questionnaire phase
+    // Transition to questionnaire after 2 rounds of background collection
+    const shouldTransition = roundCount >= QUESTIONNAIRE_ENTRY_ROUND;
+
+    if (shouldTransition) {
+      // 设计文档：每维 4–5 题、总 16–20 题；B 若未给够题量则用本地 16 题兜底（避免仅 4 题且分母被误认为「第 4 题」）
+      const bqs = agentBOutput.nextQuestions;
+      const questions =
+        bqs && bqs.length >= 16
+          ? bqs
+          : FALLBACK_QUESTIONNAIRE;
+
+      if (debugSessionId && roundLog) {
+        await upsertLocalDebugSession(debugSessionId, {
+          identity: "用户",
+          startedAt: debugStartedAt,
+          rounds: [roundLog],
+        });
+      }
+
+      return NextResponse.json({
+        agentAMessage: "好的，让我根据你的背景为你生成一套专属问卷。",
+        agentAModel: AGENT_A_MODEL,
+        agentBOutput,
+        isComplete: false,
+        nextPhase: "questionnaire" as const,
+        questions,
+      });
     }
 
     const isComplete =
       agentBOutput.directive.action === "conclude" || roundCount >= 8;
 
     // Step 2: Agent A generates natural response based on directive
+    const isFirstTurn = roundCount === 0 && messages.length === 0;
+    const isSecondTurn = roundCount === 1;
     const aMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: AGENT_A_SYSTEM },
       ...messages.map((m) => ({
@@ -250,10 +297,10 @@ export async function POST(req: NextRequest) {
       })),
       {
         role: "user",
-        content: buildAgentAPrompt(agentBOutput.directive, identity),
+        content: buildAgentAPrompt(agentBOutput.directive, isFirstTurn, isSecondTurn),
       },
     ];
-    roundLog!.agentA.userPrompt = buildAgentAPrompt(agentBOutput.directive, identity);
+    roundLog!.agentA.userPrompt = buildAgentAPrompt(agentBOutput.directive, isFirstTurn, isSecondTurn);
 
     const aResponse = await withChatRetries(
       "agent-a",
@@ -273,7 +320,7 @@ export async function POST(req: NextRequest) {
 
     if (debugSessionId && roundLog) {
       await upsertLocalDebugSession(debugSessionId, {
-        identity,
+        identity: "用户",
         startedAt: debugStartedAt,
         rounds: [roundLog],
       });
@@ -287,18 +334,18 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Chat API error:", error);
-    if (body.debugSessionId && body.identity) {
+    if (body.debugSessionId) {
       if (roundLog) {
         roundLog.requestError = getUpstreamErrorMessage(error) ?? String(error);
       }
       await upsertLocalDebugSession(body.debugSessionId, {
-        identity: body.identity,
+        identity: "用户",
         startedAt: body.debugStartedAt,
         rounds: [
           roundLog ?? {
             round: body.roundCount ?? -1,
             requestedAt: new Date().toISOString(),
-            input: { identity: body.identity, messages: body.messages ?? [] },
+            input: { identity: "用户", messages: body.messages ?? [] },
             agentB: {
               model: AGENT_B_MODEL,
               temperature: 0.3,
