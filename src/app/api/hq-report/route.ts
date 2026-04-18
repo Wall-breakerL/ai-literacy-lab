@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AGENT_B_REPORT_SYSTEM } from "@/lib/agents";
+import { buildHQAgentBPromptFromMessages, HQ_AGENT_B_SYSTEM } from "@/lib/hqAgents";
 import { withLlmRetry } from "@/lib/llmRetry";
 import client, {
   AGENT_B_MODEL,
@@ -7,7 +7,7 @@ import client, {
   getUpstreamErrorMessage,
 } from "@/lib/minimax";
 import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
-import { FinalReport, QuestionnaireAnswer } from "@/lib/types";
+import { HQReport, Message } from "@/lib/types";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -19,35 +19,25 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { identity, questionnaireAnswers } = await req.json() as {
-      identity: string;
-      questionnaireAnswers?: QuestionnaireAnswer[];
-    };
+    const { messages } = await req.json() as { messages: Message[] };
 
-    const answersText = questionnaireAnswers && questionnaireAnswers.length > 0
-      ? questionnaireAnswers
-          .map(
-            (a, i) =>
-              `【题目${i + 1}】\n维度：${a.dimension}\n场景：${a.scenario}\n题目：${a.question}\n回答：${a.score}分${a.reverse ? "（反向题）" : ""}`
-          )
-          .join("\n\n")
-      : "无问卷回答";
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json({ error: "bad_request", detail: "messages 必须为非空数组" }, { status: 400 });
+    }
+    if (!messages.some((m) => m.role === "user")) {
+      return NextResponse.json({ error: "bad_request", detail: "对话中需至少包含一条用户发言" }, { status: 400 });
+    }
 
-    const prompt = `用户身份：${identity}
-
-问卷回答：
-${answersText}
-
-请根据以上问卷回答生成AI-MBTI分析报告。`;
+    const prompt = buildHQAgentBPromptFromMessages(messages);
 
     const response = await withLlmRetry(() =>
       client.chat.completions.create({
         model: AGENT_B_MODEL,
         messages: [
-          { role: "system", content: AGENT_B_REPORT_SYSTEM },
+          { role: "system", content: HQ_AGENT_B_SYSTEM },
           { role: "user", content: prompt },
         ],
-        temperature: 0.4,
+        temperature: 0.3,
       })
     );
 
@@ -56,20 +46,16 @@ ${answersText}
     const reportStr = jsonMatch ? jsonMatch[0] : raw;
 
     try {
-      const report: FinalReport = JSON.parse(reportStr);
+      const report: HQReport = JSON.parse(reportStr);
       return NextResponse.json(report);
     } catch {
-      // Fallback if parsing fails
       return NextResponse.json({ error: "Failed to parse report JSON", raw: reportStr }, { status: 500 });
     }
   } catch (error) {
-    console.error("Report API error:", error);
+    console.error("HQ Report API error:", error);
     const detail = getUpstreamErrorMessage(error);
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        detail: detail ?? "请查看 Vercel Function Logs。",
-      },
+      { error: "Internal server error", detail: detail ?? "请查看 Vercel Function Logs。" },
       { status: 502 }
     );
   }

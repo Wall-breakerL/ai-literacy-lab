@@ -208,7 +208,9 @@ export default function InterviewPage() {
       setIsTyping(true);
       setTypingNotice(null);
       const isQuestionnaireGenRound = currentRound >= QUESTIONNAIRE_ENTRY_ROUND;
-      setTypingPrimaryLabel(isQuestionnaireGenRound ? "生成问卷中…" : "思考中…");
+      setTypingPrimaryLabel(
+        isQuestionnaireGenRound ? "生成问卷中…（预计 15–30s）" : "思考中…"
+      );
 
       try {
         const body = {
@@ -470,9 +472,10 @@ export default function InterviewPage() {
 
       {/* Generating Phase */}
       {phase === "generating" && (
-        <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
           <Loader2 className="w-8 h-8 text-raycast-blue animate-spin mb-4" />
           <p className="text-light-gray text-[16px]">正在根据你的背景生成专属问卷...</p>
+          <p className="text-dim-gray text-[13px] mt-3 leading-relaxed">预计 15–30s，请稍候</p>
         </div>
       )}
 

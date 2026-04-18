@@ -9,7 +9,6 @@ const client = new OpenAI({
 
 export const AGENT_A_MODEL = process.env.QWEN_AGENT_A_MODEL?.trim() || "qwen-plus";
 export const AGENT_B_MODEL = process.env.QWEN_AGENT_B_MODEL?.trim() || "qwen-plus";
-export const REPORT_MODEL = process.env.QWEN_REPORT_MODEL?.trim() || "qwen-plus";
 
 /** 部署前必须在环境变量中配置（如 Vercel → Environment Variables → Production） */
 export function assertQwenApiKey(): string | null {

@@ -194,10 +194,11 @@ export default function ReportPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-void">
         <p className="text-raycast-red text-[16px] mb-6">{error}</p>
         <button
+          type="button"
           onClick={() => router.push("/")}
           className="px-6 py-2 bg-surface-100 border border-[rgba(255,255,255,0.06)] rounded-lg text-near-white"
         >
-          返回首页
+          返回测试首页
         </button>
       </div>
     );
@@ -235,11 +236,12 @@ export default function ReportPage() {
           className="flex items-center justify-between"
         >
           <button
+            type="button"
             onClick={() => router.push("/")}
             className="flex items-center gap-2 text-dim-gray hover:text-light-gray transition-colors text-[14px]"
           >
             <ArrowLeft className="w-4 h-4" />
-            重新测试
+            返回测试首页
           </button>
           <div className="text-[14px] font-semibold tracking-[0.4px] text-dim-gray uppercase">
             你的 AI 协作画像
