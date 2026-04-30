@@ -36,7 +36,7 @@
 - 计分由 TypeScript 服务端完成；LLM 不计算分数。
 - AI-HQ v0.1 已归档，相关页面和代码保留但不继续扩展。
 
-旧版 16/20 单问卷、`CLAUDE_AGENT_A_MODEL` / `CLAUDE_AGENT_B_MODEL`、Agent A/B 文档属于 legacy compatibility。当前 v5.2 主链路以 researcher、批次问卷和 `CLAUDE_RESEARCHER_*` 环境变量为准。
+旧版 16/20 单问卷、`CLAUDE_AGENT_A_MODEL` / `CLAUDE_AGENT_B_MODEL`、Agent A/B 文档属于 legacy compatibility。当前 v6.0 主链路以 researcher、批次问卷和 `CLAUDE_RESEARCHER_*` 环境变量为准。
 
 ## 技术栈
 
@@ -70,7 +70,7 @@ npm run dev
 npm run test:browser
 ```
 
-这个命令会打开 `/test-lab`，在浏览器中展示核心逻辑测试结果，并检查页面是否显示 `ALL PASS` 与 0 个失败项。当前 `/test-lab` 主页面只运行 AI-MBTI self-tests。覆盖包括：1-6 计分、跳过题不计分、Phase 6 24 题计分与 confidence、三批 fallback 合法性、场景批次泛场景拒绝、题干去重检测、`batchAnswers` 报告兜底、中途对话可见文案过滤、四维补齐、16 型配置、Phase 5 可携带产物、题面合成、目标上下文兜底。
+这个命令会打开 `/test-lab`，在浏览器中展示核心逻辑测试结果，并读取页面内的结构化测试摘要确认全部通过。当前 `/test-lab` 主页面只运行 AI-MBTI self-tests。覆盖包括：1-6 计分、跳过题不计分、Phase 6 24 题计分与 confidence、三批 fallback 合法性、场景批次泛场景拒绝、题干去重检测、`batchAnswers` 报告兜底、中途对话可见文案过滤、四维补齐、16 型配置、Phase 5 可携带产物、题面合成、目标上下文兜底。
 
 AI-HQ v0.1 已归档，页面上标记为 skipped。这里没有声明 API 级端到端测试；当前验证是本地 self-tests 与浏览器 smoke。
 
@@ -126,7 +126,7 @@ NOTION_VERSION=2026-03-11
 npm run check:llm
 ```
 
-这个命令会读取 `.env.local`，检查当前 provider 的模型列表和最小聊天请求是否可访问，并只输出脱敏后的配置与上游错误。OpenAI-compatible provider 会调用 `/chat/completions`；原生 Anthropic provider 会调用 `/messages`。
+这个命令会读取 `.env.local`，检查当前 provider 的模型列表和最小聊天请求是否可访问，并只输出脱敏后的配置与上游错误。脚本默认不会覆盖 shell 中已经设置的环境变量；如需用 `.env.local` 强制覆盖，设置 `OVERRIDE_ENV_FILE=1`。OpenAI-compatible provider 会调用 `/chat/completions`；原生 Anthropic provider 会调用 `/messages`。部分镜像站不支持 `/models`，这类检查默认只告警；设置 `STRICT_MODELS_CHECK=1` 可将其改为失败。
 
 如果要验证当前网关是否支持下一阶段的 tool use，可以运行：
 

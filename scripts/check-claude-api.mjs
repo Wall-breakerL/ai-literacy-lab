@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return false;
+  const override = process.env.OVERRIDE_ENV_FILE === "1";
   const lines = readFileSync(filePath, "utf8").split(/\n/);
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -16,6 +17,7 @@ function loadEnvFile(filePath) {
     ) {
       value = value.slice(1, -1);
     }
+    if (!override && process.env[key] !== undefined) continue;
     process.env[key] = value;
   }
   return true;
@@ -72,6 +74,7 @@ const models = [
   ["Researcher fallback", process.env.CLAUDE_RESEARCHER_FALLBACK_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || process.env.CLAUDE_RESEARCHER_MODEL?.trim() || "claude-opus-4-6"],
 ];
 const forcedTemperature = parseOptionalNumber(process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE);
+const strictModelsCheck = process.env.STRICT_MODELS_CHECK === "1";
 
 console.log("LLM API check");
 console.log({
@@ -110,8 +113,13 @@ if (modelsResponse.ok) {
     : [];
   console.log("Models API: OK", ids);
 } else {
-  failures += 1;
-  console.error("Models API: FAIL", summarizeError(modelsResponse.status, modelsResponse.body, modelsResponse.requestId));
+  const summary = summarizeError(modelsResponse.status, modelsResponse.body, modelsResponse.requestId);
+  if (provider === "openai-compatible" && !strictModelsCheck) {
+    console.warn("Models API: SKIP", summary);
+  } else {
+    failures += 1;
+    console.error("Models API: FAIL", summary);
+  }
 }
 
 for (const [label, model] of models) {

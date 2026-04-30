@@ -1,4 +1,4 @@
-// [archived] AI-HQ v0.1 — pending rework as MBTI capability sub-module. See docs/codex-next-iteration.md §Phase 3.
+// [archived] AI-HQ v0.1 — pending rework as an AI-MBTI report sub-module.
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildHQInterviewAgentAPrompt,

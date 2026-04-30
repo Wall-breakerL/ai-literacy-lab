@@ -54,9 +54,26 @@ export default function TestLabPage() {
   const results = mbtiResults;
   const summary = summarizeSelfTests(results);
   const profiles = Object.values(PERSONALITY_PROFILES);
+  const structuredSummary = {
+    allPass: summary.failed === 0,
+    total: summary.total,
+    passed: summary.passed,
+    failed: summary.failed,
+    groups: {
+      aiMbti: summarizeSelfTests(mbtiResults),
+      aiHq: { skipped: true, reason: "AI-HQ v0.1 已归档，后续会作为 AI-MBTI 报告补充模块重构。" },
+    },
+  };
 
   return (
     <main className="min-h-screen bg-void px-6 py-10">
+      <script
+        id="self-test-summary"
+        type="application/json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredSummary).replace(/</g, "\\u003c"),
+        }}
+      />
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="space-y-3">
           <p className="text-[12px] font-semibold uppercase tracking-[0.4px] text-raycast-blue">

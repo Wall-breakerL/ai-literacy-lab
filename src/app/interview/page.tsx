@@ -31,7 +31,7 @@ import { readSseResponse } from "@/lib/clientSse";
 const CLIENT_CHAT_MAX_ATTEMPTS = 5;
 /** 每次失败后、发起下一次请求前的固定等待时间（普通聊天轮）。 */
 const CLIENT_CHAT_RETRY_DELAY_MS = 20_000;
-/** 问卷生成轮（roundCount >= 与服务端一致）客户端重试间隔，与 Agent B 问卷重试对齐 */
+/** 问卷生成客户端重试间隔，与服务端批次生成重试对齐。 */
 const CLIENT_QUESTIONNAIRE_GEN_RETRY_DELAY_MS = 60_000;
 /** 连续失败达到此次数后，在「思考中」下显示网络提示（1 = 第一次失败即显示；仍会继续重试直至上限）。 */
 const CLIENT_CHAT_HINT_AFTER_FAILURES = 1;

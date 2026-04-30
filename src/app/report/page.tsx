@@ -8,7 +8,7 @@ import { FeedbackDialogue } from "@/components/FeedbackDialogue";
 import { MarkdownText } from "@/components/MarkdownText";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
 import { normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
-import { isSessionState } from "@/lib/sessionState";
+import { flattenBatchAnswers, isSessionState } from "@/lib/sessionState";
 import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { ArrowLeft, ClipboardList, Fingerprint, Loader2 } from "lucide-react";
@@ -160,8 +160,12 @@ function buildFeedbackContext(args: {
 }): FeedbackContext {
   const { report, messages, identity, questionnaireAnswers, sessionState, targetContext } = args;
   void messages;
-  const totalQuestions = questionnaireAnswers.length || sessionState?.answers?.length || 24;
-  const answerSource = questionnaireAnswers.length ? questionnaireAnswers : sessionState?.answers ?? [];
+  const answerSource = questionnaireAnswers.length
+    ? questionnaireAnswers
+    : sessionState?.answers?.length
+      ? sessionState.answers
+      : flattenBatchAnswers(sessionState?.batchAnswers);
+  const totalQuestions = answerSource.length || sessionState?.questionnaire?.length || 24;
   const skippedQuestions = answerSource.filter((answer) => answer.skipped || answer.score === null).length;
   const answeredQuestions = Math.max(0, totalQuestions - skippedQuestions);
   const effectiveTargetContext = report.targetContext ?? targetContext;
@@ -428,7 +432,9 @@ export default function ReportPage() {
     tendencyLabel: d.tendencyLabel,
     score: Math.round(d.score),
   }));
-  const strongest = report.dimensions.reduce((prev, cur) => (cur.score > prev.score ? cur : prev));
+  const strongest = report.dimensions.reduce((prev, cur) =>
+    Math.abs(cur.score - 50) > Math.abs(prev.score - 50) ? cur : prev
+  );
   const strongestLetter =
     strongest.score >= 50
       ? DIMENSION_LETTERS[strongest.dimension].high

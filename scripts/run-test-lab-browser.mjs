@@ -36,16 +36,17 @@ const checkScript = `
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(${JSON.stringify(testUrl)}, { waitUntil: "networkidle" });
     const text = await page.locator("body").innerText();
+    const summaryRaw = await page.locator("#self-test-summary").textContent();
+    const summary = JSON.parse(summaryRaw);
     await browser.close();
 
-    const allPass = text.includes("ALL PASS");
-    const failedZero = /failed\\s+0/i.test(text);
     console.log(text);
-    if (!allPass || !failedZero) {
-      console.error("Browser test lab did not report ALL PASS with 0 failures.");
+    if (!summary.allPass || summary.failed !== 0 || summary.passed !== summary.total) {
+      console.error("Browser test lab did not report a structured all-pass summary.");
+      console.error(JSON.stringify(summary, null, 2));
       process.exit(1);
     }
-    console.log("Browser test lab reports ALL PASS.");
+    console.log("Browser test lab reports ALL PASS.", summary);
   })().catch((error) => {
     console.error(error);
     process.exit(1);

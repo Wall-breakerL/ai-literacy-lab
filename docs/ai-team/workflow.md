@@ -58,7 +58,7 @@ GPT-5.5 / xhigh
 示例：
 
 - “提升 AI-MBTI 报告的行动价值。”
-- “检查 AI-HQ 现在的固定 5 段访谈是不是够用。”
+- “检查 archived AI-HQ 是否还影响当前主线。”
 - “把不了解 / 没想好选项做完整。”
 - “把 README 和当前实现对齐。”
 
@@ -103,7 +103,7 @@ Codex 主线程先把任务归类。
 | Explorer | 问题 |
 |---|---|
 | Flow Explorer | 当前页面/API/状态流怎么走 |
-| Prompt Explorer | Agent A/B prompt 在哪里，职责是否漂移 |
+| Prompt Explorer | researcher / report / feedback prompt 在哪里，职责是否漂移 |
 | Scoring Explorer | 计分、跳过题、置信度是否一致 |
 | Docs Explorer | README 和设计文档是否与代码一致 |
 
@@ -151,10 +151,10 @@ Worker 使用规则：
 
 | 任务 | 文件边界 |
 |---|---|
-| AI-MBTI prompt 改进 | `src/lib/agents.ts` |
+| AI-MBTI prompt 改进 | `src/lib/researcher.ts`, `src/lib/reportAgent.ts`, `src/lib/feedbackAgent.ts` |
 | 问卷兜底与校验 | `src/lib/fallbackQuestionnaire.ts`, `src/lib/questionnaireValidation.ts` |
 | 报告计分 | `src/lib/reportScoring.ts` |
-| AI-HQ 评分 | `src/lib/hqScoring.ts`, `src/lib/hqAgents.ts` |
+| archived AI-HQ 评分 | `src/lib/hqScoring.ts`, `src/lib/hqAgents.ts` |
 | 报告页 UI | `src/app/report/page.tsx`, `src/components/*` |
 | 文档更新 | `README.md`, `docs/**` |
 
@@ -172,8 +172,7 @@ Worker 使用规则：
 - 报告是否包含整体建议、行动建议和可直接使用的 prompt 模板。
 - “不了解 / 没想好”是否跳过计分。
 - 低有效题数是否降低置信表达，而不是强行下结论。
-- AI-HQ 报告是否引用 5 段访谈证据。
-- AI-HQ 建议是否对应 Route / Frame / Workflow / Repair 的具体短板。
+- archived AI-HQ 是否仍被清楚标记为非主线，不误导成当前能力。
 
 如果验证不能运行，必须说明原因和剩余风险。
 
@@ -217,7 +216,7 @@ Worker 使用规则：
 ### 报告质量轮
 
 ```text
-目标：提升 AI-MBTI / AI-HQ 报告可用性。
+目标：提升 AI-MBTI 报告可用性；AI-HQ 仅在归档兼容问题出现时处理。
 产物：样例报告评审、prompt 或 scoring 改动、质量标准更新。
 ```
 

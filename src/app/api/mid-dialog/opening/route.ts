@@ -9,6 +9,7 @@ import {
 import {
   buildMidDialogueOpeningPrompt,
   buildResearcherSystemPrompt,
+  normalizeMidDialogueVisibleText,
   type MidDialogueOpeningSkippedQuestion,
 } from "@/lib/researcher";
 import { getBatchSkipRate, isSessionState } from "@/lib/sessionState";
@@ -104,11 +105,11 @@ async function generateOpening(
 }
 
 function cleanOpeningText(value: string): string {
-  return value
+  const clean = value
     .replace(/```[\s\S]*?```/g, "")
     .replace(/^["“]|["”]$/g, "")
-    .trim()
-    .slice(0, 180);
+    .trim();
+  return normalizeMidDialogueVisibleText(clean);
 }
 
 function buildFallbackOpening(

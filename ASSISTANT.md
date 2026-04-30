@@ -4,7 +4,7 @@ This file provides guidance to the assistant (claude.ai/code) when working with 
 
 ## Project Overview
 
-**Human-AI Performance Lab** (`human-ai-performance-lab`, v5.2.0) — an AI-MBTI assessment system. Users chat with a single "researcher" agent for a lightweight background interview, then complete Phase 6's three 8-question batches: habit, scenario, and mixed. Two mid-dialogues between batches collect user feedback about fit and scenario granularity. The server deterministically scores four dimensions and the LLM writes a personalized report.
+**Human-AI Performance Lab** (`human-ai-performance-lab`, v6.0.0) — an AI-MBTI assessment system. Users chat with a single "researcher" agent for a lightweight background interview, then complete Phase 6's three 8-question batches: habit, scenario, and mixed. Two mid-dialogues between batches collect user feedback about fit and scenario granularity. The server deterministically scores four dimensions and the LLM writes a personalized report.
 
 The four AI-MBTI dimensions (each scored 0–100):
 - **Relation**: Instrumental ↔ Collaborative
@@ -25,7 +25,7 @@ npm run typecheck    # tsc --noEmit (strict TS)
 
 npm run check:llm        # Verify LLM provider config + minimal chat call (reads .env.local)
 npm run check:llm-tools  # Verify provider supports tool use (force a test tool call)
-npm run test:browser     # Open /test-lab via Playwright; expects "ALL PASS" + 0 failures
+npm run test:browser     # Open /test-lab via Playwright; validates the structured self-test summary
 npm run smoke:phase6-phase7  # API smoke against a running dev server; RUN_LLM_SMOKE=1 also tests feedback chat
 ```
 

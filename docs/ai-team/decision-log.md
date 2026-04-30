@@ -205,14 +205,14 @@
 - 当前报告页仍可能受长文本生成耗时影响，但不属于本轮流式访谈范围。
 
 后续：
-- 若需要进一步优化 AI-MBTI 首屏等待，需要压缩 Agent B 预分析或在 UI 上更明确展示“分析对话中”状态。
+- 历史记录：当时仍有 Agent B 预分析。当前主线已收敛为 researcher 与批次问卷生成，等待文案使用“个性化生成问卷中”。
 
-## 2026-04-29：执行 codex-next-iteration Phase 3，AI-HQ 暂存
+## 2026-04-29：执行历史 Phase 3，AI-HQ 暂存
 
 状态：Accepted
 
 背景：
-- `docs/codex-next-iteration.md` 建议把产品收敛到 AI-MBTI 单一主线。
+- 历史 Phase 3 计划建议把产品收敛到 AI-MBTI 单一主线。
 - 用户也明确 AI-HQ 先暂时搁置，接下来主要做好 AI-MBTI。
 - Phase 1/2 的单 Agent tool use 与 SessionState memory 需要先验证网关 tool-call 兼容性，不适合在未探针前整块重写。
 
@@ -236,7 +236,7 @@
 状态：Accepted
 
 背景：
-- `docs/codex-next-iteration.md` 的 Phase 1 需要单 Agent + tool use。
+- 历史 Phase 1 计划需要单 Agent + tool use。
 - 当前镜像站是否支持 OpenAI-compatible tool calls 是核心风险。
 
 决定：

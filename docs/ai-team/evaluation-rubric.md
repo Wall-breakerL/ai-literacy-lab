@@ -25,12 +25,14 @@
 
 | 项目 | Pass 标准 |
 |---|---|
-| 数量 | 16-20 题 |
-| 覆盖 | Relation / Workflow / Epistemic / RepairScope 都有 4-5 题 |
+| 数量 | Phase 6 主链路固定 24 题，三批 8+8+8 |
+| 覆盖 | Relation / Workflow / Epistemic / RepairScope 每批各 2 题，全流程各 6 题 |
 | 场景绑定 | 题干绑定用户职业、AI 工具、最近任务或目标 |
-| 正反向题 | 每个维度有合理正反向混合 |
+| 批次结构 | `habit_batch` 全习惯题，`scenario_batch` 绑定具体场景，`mixed_batch` 每维 1 习惯 + 1 场景 |
+| 正反向题 | 每批每个维度 1 正向 + 1 反向 |
 | 跳过选项 | “不了解 / 没想好”独立存在，不进入分数 |
 | 可回答性 | 题目不要求用户拥有不存在的经验 |
+| 中途校准 | 两段 mid-dialogue 能把用户修正写入 `scenarioGuidance` / `refinedTargetContext` |
 
 ## AI-MBTI 报告质量
 
@@ -45,7 +47,7 @@
 | 置信表达 | 有效答案少时标记为初步观察 |
 | 语气 | 像专业测评报告，不像营销文案 |
 
-## AI-HQ 访谈质量
+## AI-HQ 访谈质量（Archived）
 
 | 项目 | Pass 标准 |
 |---|---|
@@ -54,7 +56,7 @@
 | 证据 | 保留用户原始回答供报告阶段判断 |
 | 时长 | 总体保持 5 分钟左右的轻量体验 |
 
-## AI-HQ 报告质量
+## AI-HQ 报告质量（Archived）
 
 | 项目 | Pass 标准 |
 |---|---|
@@ -83,4 +85,4 @@
 - 把“不了解 / 没想好”当作中间分计入。
 - 文档声称某能力已实现，但代码没有对应实现。
 - 评分完全交给 LLM，缺少确定性校验。
-- AI-HQ 在 MVP 阶段引入复杂 per-turn orchestration，但没有明确问题证据。
+- 把 AI-HQ archived 路径写成当前主线能力，或在没有明确问题证据时重新引入复杂 per-turn orchestration。

@@ -2,7 +2,7 @@
 
 ## 概述
 
-当前 AI-MBTI v5.2 流程分为：背景访谈 -> 三批问卷 -> 两段中途校准 -> 报告生成 -> 报告反馈。运行时主链路是单一 researcher agent，不再使用旧版 Agent A / Agent B 双代理编排。
+当前 AI-MBTI v6.0 流程分为：背景访谈 -> 三批问卷 -> 两段中途校准 -> 报告生成 -> 报告反馈。运行时主链路是单一 researcher agent，不再使用旧版 Agent A / Agent B 双代理编排。
 
 旧文档中的“16-20 道单次问卷”“Agent A 必须同时问职业和 AI 使用方式”“Agent B 每轮给 A directive”属于 legacy 设计。代码里仍有兼容入口，但新产品口径以 Phase 6 三批 24 题为准。
 

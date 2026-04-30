@@ -28,7 +28,7 @@
 
 典型决策：
 - AI-MBTI 报告是否足够具体。
-- AI-HQ 是否继续保持固定 5 段访谈。
+- AI-HQ 归档路径是否需要恢复为报告补充模块。
 - 某个能力是现在实现，还是先进入路线图。
 
 ### 2. 总工程 / 产品架构
@@ -62,7 +62,7 @@
 适合任务：
 - 找出 AI-MBTI 报告生成链路。
 - 比较 README 与真实实现是否一致。
-- 梳理 AI-HQ 固定 5 段流程的代码入口。
+- 梳理 archived AI-HQ 代码入口与主线边界。
 
 不适合任务：
 - 大范围产品判断。
@@ -103,7 +103,7 @@
 
 | 专家 | 触发场景 |
 |---|---|
-| Prompt Editor | 修改 Agent A / Agent B 提示词、问卷生成、报告生成 |
+| Prompt Editor | 修改 researcher、问卷生成、中途对话、报告和反馈提示词 |
 | Scoring Auditor | 修改计分、跳过题、维度置信度、AI-HQ probe |
 | UI Builder | 修改页面、交互、报告视觉、测试页 |
 | Test Runner | 跑 typecheck、lint、浏览器测试或样例生成 |
@@ -120,7 +120,7 @@
 | 代码探索 | `explorer` | 中高推理，优先快而准 | 查链路、读 prompt、找文件、定位风险 | 写文件 |
 | 文档探索 | `explorer` | 中等推理 | 对齐 README、设计文档和真实实现 | 做产品拍板 |
 | 工程实现 | `worker` | coding 优化模型，高推理 | 明确文件范围内实现、修 bug、补测试 | 改无关文件、重构边界外模块 |
-| Prompt Editor | `worker` 或主线程 | 高推理 | 修改 Agent A/B prompt、报告结构、问卷语义 | 单独改 prompt 而不同步 schema/scoring |
+| Prompt Editor | `worker` 或主线程 | 高推理 | 修改 researcher/report/feedback prompt、报告结构、问卷语义 | 单独改 prompt 而不同步 schema/scoring |
 | Scoring Auditor | `explorer` + `worker` | 高推理 | 审核计分、跳过题、AI-HQ probe | 把确定性计分交给 LLM |
 | UI Builder | `worker` | coding 优化模型，中高推理 | 页面和组件实现 | 改业务评分逻辑 |
 | Test Runner | 主线程或普通子代理 | 低-中推理 | 运行 typecheck、lint、browser test，总结失败 | 随意修复未分析的失败 |
@@ -140,22 +140,23 @@
 当前产品流是：
 
 1. 背景访谈。
-2. Agent B 生成定制问卷。
-3. 用户作答。
+2. Researcher 生成三批 8 题问卷。
+3. 用户作答，并在两段中途对话里校准题目场景。
 4. 服务端确定性计分。
-5. Agent B 生成个性化报告。
+5. Report agent 生成个性化报告。
+6. Feedback agent 与用户对话 1-2 轮并沉淀结构化反馈。
 
 重点不是“动态猜人格”，而是让题目和报告绑定用户真实目标、职业和 AI 使用场景。
 
 ### AI-HQ
 
-当前 MVP 流是：
+当前状态是 archived compatibility：
 
-1. Agent A 按固定 5 段访谈收集回答。
-2. Agent B 在报告阶段通读完整 transcript。
-3. 服务端结合探针与规则生成能力成熟度报告。
+1. `/hq-interview`、`/hq-report` 和 `src/lib/hq*.ts` 保留为历史路径。
+2. 首页和当前主测试链路不再扩展 AI-HQ。
+3. 后续如恢复，应作为 AI-MBTI 报告补充模块，而不是并列主入口。
 
-现阶段不默认引入 per-turn B orchestrator。只有当固定流程暴露明显可靠性问题时，再考虑增加轻量 completeness check。
+现阶段不默认引入 per-turn orchestrator。只有当 AI-MBTI 主线需要能力成熟度补充，才重新设计。
 
 ## 团队启动口令
 

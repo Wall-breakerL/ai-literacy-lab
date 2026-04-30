@@ -1,14 +1,14 @@
-# V5.2 核心设计：AI-MBTI 访谈评估系统
+# V6.0 核心设计：AI-MBTI 访谈评估系统
 
 ## 1. 核心定位
 
 AI-MBTI 是一个纯粹的“AI 使用风格 / 协作习惯”分析工具。它不评估真实工作能力，不把用户包装成高低等级，而是通过访谈、定制题目和报告，帮助用户看清自己如何与 AI 建立关系、推进任务、验证输出和修复偏差。
 
-FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代码保留为 archived compatibility，不在 v5.2 主流程扩展。
+FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代码保留为 archived compatibility，不在 v6.0 主流程扩展。
 
 ## 2. 当前交互场景
 
-当前 v5.2 主流程是单 researcher flow，不再是运行时 Agent A / Agent B 双代理协作。
+当前 v6.0 主流程是单 researcher flow，不再是运行时 Agent A / Agent B 双代理协作。
 
 1. **背景访谈**：researcher 先问职业或身份，再追问主要 AI 使用场景。前两轮只收集背景、recentUse 和当前目标，不直接判断四维倾向。
 2. **Phase 6 第一批问卷**：生成 `habit_batch`，8 道习惯题。
@@ -136,4 +136,4 @@ interface ScenarioGuidance {
 
 ## 9. 验证边界
 
-当前仓库没有声明 API 级端到端测试。`npm run test:browser` 打开 `/test-lab` 并检查 AI-MBTI self-tests 是否 `ALL PASS`。覆盖范围包括 Phase 6 批次结构、24 题计分、跳过题、confidence、batchAnswers 报告兜底、中途对话文本安全、人格 code、报告可携带产物和目标上下文兜底。
+当前仓库没有声明 API 级端到端测试。`npm run test:browser` 打开 `/test-lab` 并读取结构化 self-test 摘要确认 AI-MBTI self-tests 是否全部通过。覆盖范围包括 Phase 6 批次结构、24 题计分、跳过题、confidence、batchAnswers 报告兜底、中途对话文本安全、人格 code、报告可携带产物和目标上下文兜底。

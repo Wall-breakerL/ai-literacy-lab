@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AgentBOutput, Message, QuestionnaireAnswer } from "@/lib/types";
+import { QuestionnaireAnswer } from "@/lib/types";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";

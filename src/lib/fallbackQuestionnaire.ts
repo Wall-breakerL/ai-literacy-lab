@@ -6,7 +6,8 @@ import type {
 } from "@/lib/types";
 
 /**
- * 当 Agent B 未返回 nextQuestions 时使用：每维 4 题（含正反向），共 16 题，对齐 interview-flow-design 规格下限。
+ * Legacy single-questionnaire fallback：每维 4 题（含正反向），共 16 题。
+ * 当前 AI-MBTI 主链路使用下方三批 8 题 fallback。
  */
 export const FALLBACK_QUESTIONNAIRE: QuestionnaireQuestion[] = [
   // Relation ×4

@@ -107,6 +107,13 @@ function assertOneOf(value, allowed, label) {
   assert.ok(allowed.includes(value), `${label} must be one of ${allowed.join(", ")}`);
 }
 
+function assertModelSource(value, label) {
+  assertOneOf(value, ["model", "fallback"], label);
+  if (runLlmSmoke) {
+    assert.equal(value, "model", `${label} must be model when RUN_LLM_SMOKE=1`);
+  }
+}
+
 function assertQuestion(question, label) {
   assertRecord(question, label);
   assertOneOf(question.dimension, dimensions, `${label}.dimension`);
@@ -213,7 +220,7 @@ async function smokeOpening() {
     answers: baseSession.batchAnswers.batch1,
   });
   assertText(low.json.message, "low-skip opening.message");
-  assertOneOf(low.json.source, ["model", "fallback"], "low-skip opening.source");
+  assertModelSource(low.json.source, "low-skip opening.source");
   assert.equal(low.json.dialogKey, "dialog1", "low-skip opening.dialogKey");
   assert.ok(Array.isArray(low.json.warnings), "low-skip opening.warnings must be an array");
 
@@ -223,7 +230,7 @@ async function smokeOpening() {
     answers: baseSession.batchAnswers.batch2,
   });
   assertText(high.json.message, "high-skip opening.message");
-  assertOneOf(high.json.source, ["model", "fallback"], "high-skip opening.source");
+  assertModelSource(high.json.source, "high-skip opening.source");
   assert.equal(high.json.dialogKey, "dialog2", "high-skip opening.dialogKey");
   assert.ok(Array.isArray(high.json.warnings), "high-skip opening.warnings must be an array");
 
@@ -244,7 +251,7 @@ async function smokeQuestionnaireGeneration() {
     });
 
     assert.equal(result.json.batchMode, batchMode, `${batchMode}.batchMode`);
-    assertOneOf(result.json.source, ["model", "fallback"], `${batchMode}.source`);
+    assertModelSource(result.json.source, `${batchMode}.source`);
     assertQuestionBatch(result.json.questions, `${batchMode}.questions`);
     assertSessionState(result.json.sessionState, `${batchMode}.sessionState`);
     assert.equal(result.json.sessionState.phase, expectedPhase, `${batchMode}.sessionState.phase`);
@@ -289,6 +296,7 @@ async function smokeReport(generated) {
   );
 
   if (result.response.status === 503 && result.json?.error === "configuration") {
+    assert.equal(runLlmSmoke, false, "report must not skip missing LLM configuration when RUN_LLM_SMOKE=1");
     console.log("skip report shape: missing LLM configuration");
     return;
   }

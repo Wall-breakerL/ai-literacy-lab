@@ -118,7 +118,7 @@ function sleep(ms: number) {
 }
 
 const DEFAULT_CHAT_RETRY_DELAY_MS = 20_000;
-/** 问卷生成轮次（Agent B 输出整卷 JSON）较重，重试间隔放宽 */
+/** 问卷生成和转问卷轮次较重，重试间隔放宽。 */
 const QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS = 60_000;
 
 /** 单次上游调用失败则重试，直至成功或用尽次数（避免无限循环与账单失控）。 */

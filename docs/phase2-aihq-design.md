@@ -1,5 +1,7 @@
 # AI-HQ Phase 2 测量设计
 
+> Archived reference：AI-HQ v0.1 当前不属于 AI-MBTI 主线入口。本文件只保留历史测量设计和兼容路径背景；不要把其中的 Agent A/B 配置理解为当前 AI-MBTI 主流程。
+
 ## 维度总览
 
 | 顺序 | 维度 | 对应 Harness 层 | 测量轮次 | 总分 |

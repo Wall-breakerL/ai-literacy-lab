@@ -13,7 +13,7 @@
 | AI-MBTI Researcher Interview | `src/lib/researcher.ts`, `src/app/api/chat/route.ts`, `src/app/api/chat/stream/route.ts` | Phase 6 初始访谈，先问职业/身份，再问平时 AI 使用场景，并写入 SessionState | 第 0 轮只问职业/身份；第 1 轮提取 role 并追问 AI 使用；第 2 轮提取 recentUse 后进入问卷 |
 | AI-MBTI Mid-dialogue Opening | `src/lib/researcher.ts`, `src/app/api/mid-dialog/opening/route.ts`, `src/app/interview/page.tsx` | Phase 6 两次中途场景校准开场，由模型生成开放式问题，必要时引用跳过题 | 必须开放式，包含“你觉得”以及“你平时/你更希望”，避免“适合吗/对吗/是不是/贴合吗” |
 | AI-MBTI Researcher Tools | `src/lib/researcher.ts` | 通过 tool call 更新访谈状态并生成 Phase 6 分批问卷 | 四维覆盖、正反向题、场景绑定、可回答性；每批生成完成后给用户一句自然过渡 |
-| AI-MBTI Agent B Report | `src/lib/reportAgent.ts` | 基于确定性计分和回答生成报告，并生成 Phase 5 可携带产物 | 证据、建议、prompt 模板、置信表达、manifesto 可用性 |
+| AI-MBTI Report Agent | `src/lib/reportAgent.ts` | 基于确定性计分和回答生成报告，并生成 Phase 5 可携带产物 | 证据、建议、prompt 模板、置信表达、manifesto 可用性 |
 | AI-MBTI Feedback Agent | `src/lib/feedbackAgent.ts`, `src/app/api/feedback/chat/route.ts` | Phase 7 报告页 1-2 轮反馈对话，并整理成结构化 Notion 反馈 | 最多追问一次；不为报告辩解；优先沉淀可改进的题目、报告、prompt 和流程问题 |
 | AI-HQ Agent A | `src/lib/hqAgents.ts` | archived：固定 5 段访谈 | 保留 v0.1 代码，暂不作为主线入口 |
 | AI-HQ Agent B | `src/lib/hqAgents.ts` | archived：通读 transcript，结合探针生成报告 | 未来作为 AI-MBTI 报告补充模块重构 |
@@ -39,7 +39,7 @@
 状态：已创建。
 
 原因：
-- 项目已有多个 Agent A/B prompt。
+- 项目历史上有多个 Agent A/B prompt，当前主线已收敛到 researcher / report / feedback agent。
 - AI-MBTI 与 AI-HQ 的职责边界不同。
 - 后续需要避免 prompt 改了，但 scoring、UI、README 没同步。
 
@@ -228,7 +228,5 @@
 ### AI-HQ
 
 - v0.1 已暂时归档，不再作为首页主入口。
-- 固定 5 段访谈优先保持简单。
-- Agent B 在报告阶段通读完整 transcript。
-- 报告必须映射到 Route / Frame / Workflow / Repair。
-- 暂不默认加入 per-turn B orchestrator。
+- 旧的固定 5 段访谈和报告 prompt 只作为兼容路径保留。
+- 不再扩展独立 AI-HQ 主入口；未来若恢复，应作为 AI-MBTI 报告补充模块重新设计。

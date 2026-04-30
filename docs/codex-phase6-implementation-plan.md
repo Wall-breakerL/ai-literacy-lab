@@ -1,6 +1,6 @@
 # Codex Phase 6 实现状态：三批问卷与中途校准
 
-> 本文记录 v5.2 当前实现状态。Phase 6 的产品方向已经落到主链路：固定 24 题、三批 8+8+8、两段中途对话。旧版 16/20 单问卷仍作为 legacy compatibility 保留，但不是当前主流程口径。
+> 本文记录 v6.0 当前实现状态。Phase 6 的产品方向已经落到主链路：固定 24 题、三批 8+8+8、两段中途对话。旧版 16/20 单问卷仍作为 legacy compatibility 保留，但不是当前主流程口径。
 
 ## 1. 已落地的产品决策
 
@@ -170,7 +170,7 @@ UI 要点：
 - 题面合成。
 - targetContext 兜底。
 
-`/test-lab` 当前只运行 AI-MBTI self-tests 并检查页面 `ALL PASS`。不要把这描述成 API E2E。
+`/test-lab` 当前只运行 AI-MBTI self-tests，并通过页面内的结构化 summary 给 `npm run test:browser` 校验。不要把这描述成 API E2E。
 
 ## 9. 剩余风险
 

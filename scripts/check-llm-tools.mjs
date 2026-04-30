@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return false;
+  const override = process.env.OVERRIDE_ENV_FILE === "1";
   const lines = readFileSync(filePath, "utf8").split(/\n/);
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -16,6 +17,7 @@ function loadEnvFile(filePath) {
     ) {
       value = value.slice(1, -1);
     }
+    if (!override && process.env[key] !== undefined) continue;
     process.env[key] = value;
   }
   return true;
@@ -85,6 +87,17 @@ function parseAnthropicToolUses(body) {
         .filter((block) => block?.type === "tool_use" && typeof block.name === "string")
         .map((block) => ({ name: block.name, input: block.input }))
     : [];
+}
+
+function validateToolInput(input) {
+  const categories = new Set(["speed", "quality", "ui"]);
+  return (
+    input &&
+    typeof input === "object" &&
+    categories.has(input.category) &&
+    typeof input.summary === "string" &&
+    input.summary.trim().length > 0
+  );
 }
 
 loadEnvFile(".env.local");
@@ -212,8 +225,14 @@ console.log("Tool-call response: OK", {
   })),
 });
 
-if (!toolUses.some((toolUse) => toolUse.name === toolName)) {
+const matchingToolUse = toolUses.find((toolUse) => toolUse.name === toolName);
+if (!matchingToolUse) {
   console.error(`Tool-call check failed: expected ${toolName} tool use.`);
+  process.exit(1);
+}
+
+if (!validateToolInput(matchingToolUse.input)) {
+  console.error(`Tool-call check failed: ${toolName} input did not match the expected schema.`, matchingToolUse.input);
   process.exit(1);
 }
 

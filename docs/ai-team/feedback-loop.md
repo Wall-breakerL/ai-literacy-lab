@@ -92,7 +92,7 @@ Reviewer 可以由主线程亲自执行，也可以由只读子代理辅助。
 |---|---|
 | 报告太空 | 一个读 report prompt，一个读 report schema/scoring，一个读 report page |
 | 问卷不贴合 | 一个读 questionnaire prompt，一个读 validation/fallback，一个读目标上下文 |
-| AI-HQ 像考试 | 一个读 hqAgents，一个读 hqScoring，一个读设计文档 |
+| archived AI-HQ 误导用户 | 一个读 hqAgents，一个读 hqScoring，一个读入口和文档 |
 | 页面看不懂 | 一个读页面组件，一个读数据结构，一个读 README/示例 |
 
 ### 3. 方案生成
@@ -129,7 +129,7 @@ Reviewer 可以由主线程亲自执行，也可以由只读子代理辅助。
 
 - Prompt、schema、scoring、UI 必须同步考虑。
 - AI-MBTI 的报告价值优先关注目标相关建议和可直接使用的 prompt。
-- AI-HQ 的 MVP 仍优先保持固定 5 段访谈，不默认加入复杂 per-turn orchestration。
+- AI-HQ 当前只保留 archived compatibility，不作为主线扩展；如恢复，需要重新设计为 AI-MBTI 报告补充模块。
 - 每个 Worker 的写入范围必须不重叠。
 
 ### 5. 自检
