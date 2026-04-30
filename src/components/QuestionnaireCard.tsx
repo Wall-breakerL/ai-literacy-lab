@@ -3,21 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { QuestionnaireQuestion } from "@/lib/types";
+import { buildQuestionStem } from "@/lib/questionText";
 
 interface QuestionnaireCardProps {
   question: QuestionnaireQuestion;
   index: number;
   total: number;
-  onAnswer: (score: number) => void;
+  onAnswer: (score: number | null) => void;
 }
 
 const SCALE_LABELS = ["肯定不会", "一般不会", "偶尔会", "经常会", "通常会", "肯定会"];
-
-/** Agent B 约定：习惯题的 scenario 为「习惯」类占位，与场景题的具体情境区分 */
-function isHabitScenario(scenario: string): boolean {
-  const s = scenario.trim().replace(/[。．]+$/, "");
-  return s === "习惯" || s === "习惯题";
-}
 
 export function QuestionnaireCard({
   question,
@@ -25,7 +20,7 @@ export function QuestionnaireCard({
   total,
   onAnswer,
 }: QuestionnaireCardProps) {
-  const [selectedScore, setSelectedScore] = useState<number | null>(null);
+  const [selectedScore, setSelectedScore] = useState<number | "skip" | null>(null);
   /** 同步锁住整题，避免同一次渲染周期内双触达（连点） */
   const lockedRef = useRef(false);
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,11 +36,7 @@ export function QuestionnaireCard({
     };
   }, []);
 
-  const habit = isHabitScenario(question.scenario);
-  const contextLabel = habit ? "习惯" : "场景";
-  const contextBody = habit
-    ? "请依据你平时的真实习惯或倾向作答。"
-    : question.scenario;
+  const questionStem = buildQuestionStem(question);
 
   const handleSelect = (score: number) => {
     if (lockedRef.current) return;
@@ -55,6 +46,17 @@ export function QuestionnaireCard({
     commitTimerRef.current = setTimeout(() => {
       commitTimerRef.current = null;
       onAnswer(score);
+    }, 200);
+  };
+
+  const handleSkip = () => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    setSelectedScore("skip");
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null;
+      onAnswer(null);
     }, 200);
   };
 
@@ -83,20 +85,16 @@ export function QuestionnaireCard({
 
       {/* Card */}
       <div className="bg-surface-100 p-8 rounded-[20px] shadow-card-ring border border-[rgba(255,255,255,0.06)]">
-        {/* Scenario */}
-        <div className="mb-6">
-          <div className="text-[13px] text-raycast-blue font-medium tracking-[0.2px] mb-2">
-            {contextLabel}
-          </div>
-          <p className="text-[15px] text-light-gray leading-relaxed">
-            {contextBody}
-          </p>
-        </div>
-
         {/* Question */}
         <div className="mb-8">
-          <p className="text-[18px] text-near-white font-medium leading-relaxed">
-            {question.question}
+          <div className="inline-flex items-center rounded-pill border border-[rgba(85,179,255,0.18)] bg-[rgba(85,179,255,0.06)] px-3 py-1 text-[12px] font-semibold tracking-[0.2px] text-raycast-blue mb-4">
+            {questionStem.label}
+          </div>
+          <p className="text-[19px] text-near-white font-medium leading-[1.7]">
+            {questionStem.stem}
+          </p>
+          <p className="mt-3 text-[13px] text-dim-gray leading-relaxed">
+            按你真实经历作答；没有类似经验可以选「不了解 / 没想好」。
           </p>
         </div>
 
@@ -144,6 +142,25 @@ export function QuestionnaireCard({
               </span>
             ))}
           </div>
+          <button
+            type="button"
+            disabled={selectedScore !== null}
+            onClick={handleSkip}
+            className={`
+              mt-5 w-full h-11 rounded-[10px] border text-[13px] font-semibold transition-all duration-200
+              disabled:opacity-40 disabled:pointer-events-none
+              ${
+                selectedScore === "skip"
+                  ? "bg-card-surface text-near-white border-raycast-yellow"
+                  : "bg-transparent border-[rgba(255,255,255,0.08)] text-dim-gray hover:text-light-gray hover:border-[rgba(255,255,255,0.16)]"
+              }
+            `}
+          >
+            不了解 / 没想好
+          </button>
+          <p className="text-[11px] text-dim-gray/80 leading-relaxed">
+            选择这一项时，本题不会计入分数。
+          </p>
         </div>
       </div>
     </motion.div>

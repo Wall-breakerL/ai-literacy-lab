@@ -1,7 +1,34 @@
 export type Dimension = "Relation" | "Workflow" | "Epistemic" | "RepairScope";
 export type SignalStrength = "strong" | "weak" | "none";
 export type CoverageStatus = "uncovered" | "weak" | "covered";
-export type DirectiveAction = "probe_new" | "probe_deep" | "clarify" | "conclude" | "start_questionnaire";
+export type DirectiveAction =
+  | "probe_new"
+  | "probe_deep"
+  | "clarify"
+  | "conclude"
+  | "start_questionnaire"
+  | "finish_mid_dialog"
+  | "exit_requested";
+export type GoalStatus = "specific" | "generic" | "missing";
+export type GoalType =
+  | "product_building"
+  | "research_writing"
+  | "learning"
+  | "coding_system"
+  | "business_decision"
+  | "daily_efficiency"
+  | "creative_work"
+  | "other";
+export type DimensionConfidence = "high" | "medium" | "low";
+export type QuestionnaireBatchKey = "batch1" | "batch2" | "batch3";
+export type QuestionnaireBatchMode = "habit_batch" | "scenario_batch" | "mixed_batch";
+export type MidDialogueKey = "dialog1" | "dialog2";
+export type MidDialogueStatus =
+  | "confirmed"
+  | "refined"
+  | "abstract_scenarios"
+  | "needs_more_context"
+  | "exit_requested";
 
 export interface Message {
   role: "user" | "assistant";
@@ -30,8 +57,71 @@ export interface AgentBOutput {
     coverage?: Record<Dimension, CoverageStatus>;
   };
   directive: AgentBDirective;
+  targetContext?: TargetContext;
   nextQuestions?: QuestionnaireQuestion[];
+  newEvidence?: SessionEvidence[];
+  scenarioGuidance?: ScenarioGuidance;
+  shouldGenerateNextBatch?: boolean;
+  userFacingMessage?: string;
 }
+
+export type SessionPhase =
+  | "interview"
+  | "questionnaire_batch1"
+  | "mid_dialog1"
+  | "questionnaire_batch2"
+  | "mid_dialog2"
+  | "questionnaire_batch3"
+  | "questionnaire"
+  | "recovery_interview"
+  | "recovery_questionnaire"
+  | "report";
+
+export interface SessionEvidence {
+  turn: number;
+  dimension?: Dimension;
+  quote: string;
+  signal: "strong" | "weak";
+  evidenceKind: "quote" | "summary";
+}
+
+export interface SessionState {
+  sessionId: string;
+  turn: number;
+  phase: SessionPhase;
+  background: {
+    role: string;
+    tools: string[];
+    recentUse: string;
+    goal: string;
+    goalStatus: GoalStatus;
+    goalType: GoalType;
+    summary?: string;
+  };
+  evidence: SessionEvidence[];
+  openProbes: string[];
+  questionnaire?: QuestionnaireQuestion[];
+  answers?: QuestionnaireAnswer[];
+  questionnaireBatches?: Partial<Record<QuestionnaireBatchKey, QuestionnaireQuestion[]>>;
+  batchAnswers?: Partial<Record<QuestionnaireBatchKey, QuestionnaireAnswer[]>>;
+  midDialogues?: Partial<Record<MidDialogueKey, Message[]>>;
+  refinedTargetContext?: TargetContext;
+  scenarioGuidance?: ScenarioGuidance;
+}
+
+export type SessionStatePatch = {
+  background?: Partial<SessionState["background"]>;
+  newEvidence?: SessionEvidence[];
+  openProbes?: string[];
+  questionnaire?: QuestionnaireQuestion[];
+  answers?: QuestionnaireAnswer[];
+  questionnaireBatches?: Partial<Record<QuestionnaireBatchKey, QuestionnaireQuestion[]>>;
+  batchAnswers?: Partial<Record<QuestionnaireBatchKey, QuestionnaireAnswer[]>>;
+  midDialogues?: Partial<Record<MidDialogueKey, Message[]>>;
+  refinedTargetContext?: TargetContext;
+  scenarioGuidance?: ScenarioGuidance;
+  phase?: SessionPhase;
+};
 
 export interface DimensionReport {
   dimension: Dimension;
@@ -42,11 +132,135 @@ export interface DimensionReport {
   evidence: string[];
   analysis: string;
   advice: string;
+  answeredCount?: number;
+  skippedCount?: number;
+  confidence?: DimensionConfidence;
+}
+
+export interface TargetContext {
+  role: string;
+  recentUse: string;
+  goal: string;
+  goalStatus: GoalStatus;
+  goalType: GoalType;
+}
+
+export interface ScenarioGuidance {
+  status: MidDialogueStatus;
+  scenarioSummary: string;
+  granularity: "specific" | "balanced" | "abstract";
+  avoidTopics: string[];
+  includeTopics: string[];
+  userCorrectionQuote?: string;
+}
+
+export interface PersonalityProfile {
+  code: string;
+  name: string;
+  tagline: string;
+  signatureHeadline: string;
+  avatarPrompt: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+  };
+}
+
+export interface ReportRecommendation {
+  title: string;
+  detail: string;
+}
+
+export interface PromptTemplate {
+  title: string;
+  useCase: string;
+  prompt: string;
+}
+
+export interface ReportStyleOverview {
+  corePattern: string;
+  strengthArea: string;
+  growthDirection: string;
+}
+
+export interface CollaborationSignature {
+  headline: string;
+  detail: string;
+}
+
+export type FeedbackSentiment = "positive" | "mixed" | "negative";
+export type FeedbackPriority = "low" | "medium" | "high";
+export type FeedbackType =
+  | "question_issue"
+  | "report_issue"
+  | "prompt_template"
+  | "flow_issue"
+  | "positive_signal";
+export type FeedbackDialogueAction = "ask_followup" | "ready_to_save";
+
+export interface FeedbackDialogueMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface FeedbackContext {
+  sessionId: string;
+  identity?: string;
+  personalityCode?: string;
+  personalityName?: string;
+  role: string;
+  recentUse: string;
+  goal: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  skipRate: number;
+  reportSummary?: string;
+  reportTags?: string[];
+  collaborationManifesto?: string;
+  promptTemplateTitles?: string[];
+}
+
+export interface StructuredFeedback {
+  sessionId: string;
+  personalityCode: string;
+  role: string;
+  recentUse: string;
+  goal: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  skipRate: number;
+  summary: string;
+  usefulParts: string[];
+  inaccurateParts: string[];
+  questionIssues: string[];
+  reportIssues: string[];
+  improvementSuggestions: string[];
+  sentiment: FeedbackSentiment;
+  priority: FeedbackPriority;
+  feedbackTypes: FeedbackType[];
+  rawDialogue: FeedbackDialogueMessage[];
+  createdAt?: string;
+}
+
+export interface FeedbackChatResponse {
+  action: FeedbackDialogueAction;
+  assistantMessage: string;
+  draft?: StructuredFeedback;
+  model?: string;
 }
 
 export interface FinalReport {
   summary: string;
   tags: string[];
+  targetContext?: TargetContext;
+  personality?: PersonalityProfile;
+  styleOverview?: ReportStyleOverview;
+  collaborationManifesto?: string;
+  collaborationSignature?: CollaborationSignature;
+  overallAdvice?: string;
+  recommendations?: ReportRecommendation[];
+  promptTemplates?: PromptTemplate[];
   dimensions: DimensionReport[];
 }
 
@@ -60,10 +274,12 @@ export interface QuestionnaireQuestion {
 
 export interface QuestionnaireAnswer {
   dimension: Dimension;
-  score: number;
+  score: number | null;
   question: string;
   scenario: string;
   reverse?: boolean;
+  skipped?: boolean;
+  skipReason?: "unsure_or_not_applicable";
 }
 
 // Phase 2 AI-HQ types
@@ -93,25 +309,13 @@ export interface HQReport {
     label: string;
     score: number;
     max: number;
+    evidence: string[];
     analysis: string;
     advice?: string;
   }[];
-}
-
-/** AI-HQ 对话访谈编排（与 MBTI 的 AgentBOutput 分离） */
-export type HQInterviewDirectiveAction = "probe_deep" | "advance_topic";
-
-export interface HQInterviewDirective {
-  action: HQInterviewDirectiveAction;
-  /** 给 Agent A 的中文提示，≤60 字 */
-  hint?: string;
-}
-
-export interface HQOrchestratorOutput {
-  analysis: {
-    reasoning: string;
-    /** 当前主题下用户要点摘要，供下一轮参考 */
-    topic_summary?: string;
-  };
-  directive: HQInterviewDirective;
+  recommendations: string[];
+  promptTemplates: {
+    title: string;
+    prompt: string;
+  }[];
 }

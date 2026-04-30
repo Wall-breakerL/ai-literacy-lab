@@ -3,7 +3,8 @@
 import { DimensionReport } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
-import { ChevronDown, Quote } from "lucide-react";
+import { BarChart3, ChevronDown, Quote } from "lucide-react";
+import { MarkdownText } from "@/components/MarkdownText";
 
 interface DimensionCardProps {
   report: DimensionReport;
@@ -24,13 +25,18 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
   const meta = DIMENSION_META[report.dimension];
   const lowScore = Math.max(0, Math.min(100, Math.round(100 - report.score)));
   const highScore = Math.max(0, Math.min(100, Math.round(report.score)));
-
-  const scoreColor =
-    report.score < 30
-      ? "text-raycast-blue"
-      : report.score > 70
-      ? "text-raycast-red"
-      : "text-raycast-yellow";
+  const answeredCount = report.answeredCount ?? 0;
+  const skippedCount = report.skippedCount ?? 0;
+  const confidenceLabel =
+    report.confidence === "high" ? "证据充分" : report.confidence === "medium" ? "证据适中" : "初步观察";
+  const analysisContent = report.analysis?.trim() || buildLocalAnalysisFallback({
+    label: report.label,
+    tendencyLabel: report.tendencyLabel,
+    score: report.score,
+    answeredCount,
+    skippedCount,
+    evidence: report.evidence,
+  });
 
   return (
     <motion.div
@@ -51,6 +57,9 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
             </span>
             <span className="text-[18px] font-medium text-near-white tracking-[0.2px]">
               {report.tendencyLabel}
+            </span>
+            <span className="text-[12px] text-dim-gray mt-1">
+              基于 {answeredCount} 道有效回答 · {confidenceLabel}
             </span>
           </div>
         </div>
@@ -91,11 +100,32 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
             className="overflow-hidden"
           >
             <div className="px-6 pb-6 space-y-5 border-t border-[rgba(255,255,255,0.06)] pt-5">
+              {/* Basis */}
+              <div>
+                <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-3">
+                  判断依据
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-[10px] border border-[rgba(255,255,255,0.06)] bg-card-surface px-4 py-3">
+                    <p className="text-[11px] text-dim-gray mb-1">有效回答</p>
+                    <p className="text-[16px] font-semibold text-near-white">{answeredCount} 题</p>
+                  </div>
+                  <div className="rounded-[10px] border border-[rgba(255,255,255,0.06)] bg-card-surface px-4 py-3">
+                    <p className="text-[11px] text-dim-gray mb-1">跳过 / 不适用</p>
+                    <p className="text-[16px] font-semibold text-near-white">{skippedCount} 题</p>
+                  </div>
+                  <div className="rounded-[10px] border border-[rgba(255,255,255,0.06)] bg-card-surface px-4 py-3">
+                    <p className="text-[11px] text-dim-gray mb-1">当前判定</p>
+                    <p className="text-[16px] font-semibold text-near-white">{report.tendencyLabel}</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Evidence */}
               {report.evidence.length > 0 && (
                 <div>
                   <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-3">
-                    你说过
+                    用户原话 / 答题证据
                   </p>
                   <div className="space-y-2">
                     {report.evidence.map((quote, i) => (
@@ -104,7 +134,7 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
                         className="flex gap-3 bg-card-surface rounded-[8px] px-4 py-3 border border-[rgba(255,255,255,0.04)]"
                       >
                         <Quote className="w-4 h-4 text-raycast-blue flex-shrink-0 mt-0.5" />
-                        <p className="text-[14px] text-light-gray leading-[1.6] italic">
+                        <p className="min-w-0 break-words text-[14px] text-light-gray leading-[1.6] italic">
                           {quote}
                         </p>
                       </div>
@@ -115,22 +145,13 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
 
               {/* Analysis */}
               <div>
-                <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-2">
-                  分析
-                </p>
-                <p className="text-[15px] text-light-gray leading-[1.7] tracking-[0.2px]">
-                  {report.analysis}
-                </p>
-              </div>
-
-              {/* Advice */}
-              <div className="bg-[rgba(85,179,255,0.05)] border border-[rgba(85,179,255,0.12)] rounded-[10px] p-4">
-                <p className="text-[12px] font-semibold tracking-[0.4px] text-raycast-blue uppercase mb-2">
-                  进阶建议
-                </p>
-                <p className="text-[15px] text-light-gray leading-[1.7] tracking-[0.2px]">
-                  {report.advice}
-                </p>
+                <div className="mb-2 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-raycast-blue" />
+                  <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase">
+                    模型分析
+                  </p>
+                </div>
+                <MarkdownText content={analysisContent} variant="body" />
               </div>
             </div>
           </motion.div>
@@ -138,4 +159,26 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
       </AnimatePresence>
     </motion.div>
   );
+}
+
+function buildLocalAnalysisFallback({
+  label,
+  tendencyLabel,
+  score,
+  answeredCount,
+  skippedCount,
+  evidence,
+}: {
+  label: string;
+  tendencyLabel: string;
+  score: number;
+  answeredCount: number;
+  skippedCount: number;
+  evidence: string[];
+}) {
+  const evidenceText = evidence.length
+    ? evidence.slice(0, 2).map((item) => `「${item}」`).join("、")
+    : "当前有效回答";
+  const skippedText = skippedCount > 0 ? `，另有 ${skippedCount} 题跳过或不适用` : "";
+  return `从当前数据看，${label} 有 ${answeredCount} 题有效${skippedText}，分数为 ${score}，更接近「${tendencyLabel}」。主要依据是 ${evidenceText}。`;
 }

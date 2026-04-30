@@ -1,19 +1,28 @@
+// [archived] AI-HQ v0.1 — pending rework as MBTI capability sub-module. See docs/codex-next-iteration.md §Phase 3.
 import { NextRequest, NextResponse } from "next/server";
 import { buildHQAgentBPromptFromMessages, HQ_AGENT_B_SYSTEM } from "@/lib/hqAgents";
 import { withLlmRetry } from "@/lib/llmRetry";
-import client, {
+import {
+  AGENT_B_MAX_TOKENS,
   AGENT_B_MODEL,
-  assertQwenApiKey,
+  assertClaudeApiKey,
+  createClaudeMessage,
   getUpstreamErrorMessage,
-} from "@/lib/minimax";
+} from "@/lib/claude";
 import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
-import { HQReport, Message } from "@/lib/types";
+import {
+  buildHQReportFromDraft,
+  HQReportDraft,
+  validateHQReportDraft,
+} from "@/lib/hqScoring";
+import { parseJsonObjectFromModel } from "@/lib/jsonResponse";
+import type { Message } from "@/lib/types";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const missing = assertQwenApiKey();
+  const missing = assertClaudeApiKey();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -30,26 +39,29 @@ export async function POST(req: NextRequest) {
 
     const prompt = buildHQAgentBPromptFromMessages(messages);
 
-    const response = await withLlmRetry(() =>
-      client.chat.completions.create({
+    const responseText = await withLlmRetry(() =>
+      createClaudeMessage({
         model: AGENT_B_MODEL,
+        system: HQ_AGENT_B_SYSTEM,
         messages: [
-          { role: "system", content: HQ_AGENT_B_SYSTEM },
           { role: "user", content: prompt },
         ],
         temperature: 0.3,
+        maxTokens: AGENT_B_MAX_TOKENS,
       })
     );
 
-    const raw = stripHiddenReasoning(response.choices[0].message.content ?? "{}");
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    const reportStr = jsonMatch ? jsonMatch[0] : raw;
+    const raw = stripHiddenReasoning(responseText || "{}");
 
     try {
-      const report: HQReport = JSON.parse(reportStr);
+      const draft = parseJsonObjectFromModel<HQReportDraft>(raw, validateHQReportDraft);
+      if (!validateHQReportDraft(draft)) {
+        return NextResponse.json({ error: "Invalid HQ report draft", raw }, { status: 500 });
+      }
+      const report = buildHQReportFromDraft(draft);
       return NextResponse.json(report);
     } catch {
-      return NextResponse.json({ error: "Failed to parse report JSON", raw: reportStr }, { status: 500 });
+      return NextResponse.json({ error: "Failed to parse report JSON", raw }, { status: 500 });
     }
   } catch (error) {
     console.error("HQ Report API error:", error);

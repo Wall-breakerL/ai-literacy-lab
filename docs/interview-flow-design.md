@@ -2,159 +2,125 @@
 
 ## 概述
 
-AI-MBTI 是一个通过对话访谈分析用户与 AI 协作风格的系统。流程分为三个阶段：聊天阶段 → 问卷阶段 → 报告生成。
+当前 AI-MBTI v5.2 流程分为：背景访谈 -> 三批问卷 -> 两段中途校准 -> 报告生成 -> 报告反馈。运行时主链路是单一 researcher agent，不再使用旧版 Agent A / Agent B 双代理编排。
 
----
+旧文档中的“16-20 道单次问卷”“Agent A 必须同时问职业和 AI 使用方式”“Agent B 每轮给 A directive”属于 legacy 设计。代码里仍有兼容入口，但新产品口径以 Phase 6 三批 24 题为准。
 
-## 阶段流程
+## 阶段 1：背景访谈
 
-### 阶段 1：聊天访谈（2-3轮）
+目标：只收集职业/身份、AI 使用经历和当前目标，不分析四维倾向。
 
-**目标：** 仅收集用户的职业背景和 AI 使用经历，**不分析任何维度倾向**。
+当前节奏：
 
-#### 第 1 轮（开场）
+1. 第 0 轮 researcher 开场只问职业或身份，示例：`嗨，欢迎！先聊聊你是做什么的吧？`
+2. 用户回答职业/身份后，researcher 提取 `role`，再追问主要 AI 使用场景。
+3. 用户回答 AI 使用方式后，researcher 提取 `recentUse`；如果用户顺带说了目标，写入 `goal`，否则 `goalStatus="missing"`。
+4. 达到 `QUESTIONNAIRE_ENTRY_ROUND = 2` 后进入问卷生成，不再继续追问背景。
 
-**预期行为：**
-- Agent A 必须询问用户的职业/身份
-- Agent A 必须询问最近用 AI 做过什么
+禁止事项：
 
-**正确的开场白示例：**
-> "你好！方便先了解一下你的职业或身份吗？另外，最近有用AI（像ChatGPT、Claude、Cursor这类工具）帮做过什么事情吗？"
+- 不直接追问 Relation / Workflow / Epistemic / RepairScope 倾向。
+- 不把职业回答误写成 `recentUse`。
+- 不把“更有效地使用 AI”当作具体场景。
+- 不在背景访谈阶段生成问卷。
 
-**不应该出现的开场白：**
-> "最近有没有用AI帮你完成过特别有意思的任务？" ❌ （缺少职业询问）
-> "方便聊聊你的职业吗？" ❌ （缺少 AI 使用询问）
+## 阶段 2：Phase 6 三批问卷
 
-#### 第 2-3 轮（追问背景）
+总题数固定为 24 题，三批各 8 题。
 
-**目标：** 继续自然地聊职业背景和 AI 使用经历
+| 批次 | mode | 题型 | 触发方式 |
+|---|---|---|---|
+| 第一批 | `habit_batch` | 8 道习惯题 | 初始访谈完成后调用 `/api/questionnaire/generate` |
+| 第二批 | `scenario_batch` | 8 道场景题 | `mid_dialog1` 完成后调用 `/api/questionnaire/generate` |
+| 第三批 | `mixed_batch` | 4 道习惯题 + 4 道场景题 | `mid_dialog2` 完成后调用 `/api/questionnaire/generate` |
 
-**允许的话题：**
-- 用什么 AI 工具（Cursor、Copilot、ChatGPT 等）
-- 主要做什么类型的工作
-- 使用频率和典型场景
-- 有趣或印象深刻的经历
+每批硬性结构：
 
-**禁止的话题：**
-- 任何维度相关的直接问题（Relation、Workflow、Epistemic、RepairScope）
-- "你属于哪种类型"之类的问题
-- 过于具体的技术细节追问
+- 四个维度各 2 题。
+- 每个维度 1 道正向题、1 道反向题。
+- `habit_batch` 的 `scenario` 全部是 `习惯`。
+- `scenario_batch` 不能使用泛场景，例如“日常使用 AI”。
+- `mixed_batch` 每个维度必须有 1 道习惯题和 1 道场景题。
 
-#### 跳转时机
+校验失败时会触发一次重试；仍失败则使用本地 fallback batch。
 
-当 `roundCount >= 2` 且 Agent B 返回 `start_questionnaire` 时，跳转到问卷阶段。
+## 阶段 3：中途对话
 
----
+中途对话使用同一个聊天 UI，但由 `sessionState.phase` 驱动，不再用 `roundCount >= 2` 判定。
 
-### 阶段 2：问卷阶段
+### `mid_dialog1`
 
-**目标：** 基于聊天背景生成专属问卷，收集维度打分。
+第一批习惯题答完后触发。根据第一批跳过率和跳过题样本生成开放式问题，例如：
 
-#### 问卷规格
+- 跳过率低：询问习惯题答下来感觉如何，以及接下来希望围绕哪些真实场景。
+- 跳过率中：引用 1-2 道跳过题，询问哪些题不太贴。
+- 跳过率高：明确提示习惯题可能不贴近，请用户说平时主要用 AI 做什么。
 
-- **每维度题目数：** 4-5 道
-- **总题数：** 16-20 道
-- **题型：** 5 级量表（滑动刻度）
-- **正反向题搭配：** 防止用户"总是选中间"的敷衍
+### `mid_dialog2`
 
-#### 问卷内容要求
+第二批场景题答完后触发。重点询问场景题是否贴合，以及第三批应更具体、更抽象还是换场景。
 
-题目必须紧密贴合用户在聊天阶段提到的：
-- 具体职业
-- 使用的 AI 工具
-- 典型工作场景
+### 结构化结果
 
-**示例（前端开发 + Cursor 用户）：**
-> 场景：在项目初期设计 React 组件通信方案时
-> 问题：当你和 Cursor 讨论前端架构时，你是否倾向于把它当作能共同权衡利弊的协作者？
+中途对话必须写入：
 
-#### 跳转时机
+- `scenarioGuidance.status`
+- `scenarioGuidance.scenarioSummary`
+- `scenarioGuidance.granularity`
+- `scenarioGuidance.includeTopics`
+- `scenarioGuidance.avoidTopics`
+- `scenarioGuidance.userCorrectionQuote`
+- 必要时更新 `refinedTargetContext`
 
-聊天阶段 `roundCount >= 2` 时强制跳转，或 Agent B 自然返回 `start_questionnaire`。
+如果用户反馈不清，最多追问一次；如果仍然低信息，按当前场景继续生成下一批，避免无限循环。
 
----
+## 阶段 4：报告生成
 
-### 阶段 3：报告生成
+报告入口优先使用请求体里的 `questionnaireAnswers`；没有时使用 `sessionState.answers`；仍没有时展开 `sessionState.batchAnswers`。
 
-**目标：** 基于问卷答案生成分析报告。
+计分规则：
 
-#### 报告内容
+- 量表为 1-6 分。
+- `reverse=false`：`(score - 1) * 20`。
+- `reverse=true`：`(6 - score) * 20`。
+- 「不了解 / 没想好」不计分。
+- 每维有效答案 `>= 4` 为 high confidence，`2-3` 为 medium，`< 2` 为 low。
 
-1. **摘要：** 1-2 句话的总体评语
-2. **标签：** 3 个概括性标签
-3. **四维详解：** 每个维度的分数、倾向、证据、分析和建议
+LLM 只生成解释文本、建议和 prompt 模板，不输出或重算分数。服务端合并 personality、targetContext、score、tendency、evidence 和 confidence。
 
-#### 分数计算规则
+## 阶段 5：报告反馈
 
-每道题分值：1=肯定不会，2=一般不会，3=不一定，4=可能，5=肯定
+报告页底部挂载 Phase 7 反馈对话。用户可以自然说明哪些报告内容有用、哪些不准、题目哪里不贴。反馈 agent 最多追问一次，然后输出结构化 `StructuredFeedback`。
 
-**Relation（工具型 0% ↔ 伙伴型 100%）：**
-- 正向题（把 AI 当伙伴）：score = 分值 × 20
-- 反向题（把 AI 当工具）：score = (6 - 分值) × 20
+保存规则：
 
-**Workflow（框架型 0% ↔ 探索型 100%）：**
-- 正向题（先定框架）：score = 分值 × 20
-- 反向题（先探索）：score = (6 - 分值) × 20
-- 最终分数 = |100 - 平均分|（框架型=100，探索型=0）
-
-**Epistemic（审计型 0% ↔ 信任型 100%）：**
-- 正向题（会验证 AI 输出）：score = 分值 × 20
-- 反向题（直接用 AI 输出）：score = (6 - 分值) × 20
-
-**RepairScope（全局型 0% ↔ 局部型 100%）：**
-- 正向题（局部修改）：score = 分值 × 20
-- 反向题（全局重开）：score = (6 - 分值) × 20
-
----
-
-## 已发现的问题
-
-### 1. 模型不遵循开场白模板
-
-**问题：** Agent A 有时不按模板生成开场白，只问"用 AI 做什么"而忽略职业询问。
-
-**修复措施：** 在 `buildAgentAPrompt` 中增加 `isFirstTurn` 参数，第一轮强制使用固定开场白模板。
-
-**验证方法：** 第 1 轮开场白必须同时包含"职业询问"和"AI 使用询问"。
-
-### 2. 报告分数计算错误
-
-**问题：** 模型不知道如何从 1-5 分计算维度分数，导致分数异常（如 Epistemic 得 10 分但用户多选"肯定审计"）。
-
-**修复措施：** 在 `AGENT_B_REPORT_SYSTEM` 中添加详细的计分规则说明。
-
----
+- 配置 `NOTION_API_KEY` 且存在 feedback data source id 时，写入 Notion。
+- Notion 未配置或写入失败时，保存到 `.local-debug/feedback/`。
+- 本地 fallback 文件可能包含用户原文、报告摘要、人格 code、题目数量、跳过率和 rawDialogue，不要提交。
 
 ## 关键文件
 
 | 文件 | 作用 |
-|-----|------|
-| `src/lib/agents.ts` | Agent A/B system prompt、报告生成 prompt |
-| `src/app/api/chat/route.ts` | 核心对话 API，串联 A+B |
+|---|---|
+| `src/lib/researcher.ts` | researcher prompt、批次问卷 tool、中途对话 tool |
+| `src/lib/sessionState.ts` | phase、batch、mid-dialogue、答案展平 |
+| `src/app/api/chat/route.ts` | 背景访谈和中途对话 API |
+| `src/app/api/chat/stream/route.ts` | 流式聊天路径 |
+| `src/app/api/questionnaire/generate/route.ts` | 8 题批次生成 |
+| `src/app/api/mid-dialog/opening/route.ts` | 中途对话开场生成 |
 | `src/app/api/report/route.ts` | 报告生成 API |
-| `src/app/interview/page.tsx` | 访谈页面（客户端） |
-| `src/app/report/page.tsx` | 报告展示页面 |
-
----
+| `src/app/api/feedback/chat/route.ts` | Phase 7 反馈对话 |
+| `src/app/api/feedback/route.ts` | 结构化反馈保存 |
+| `src/app/interview/page.tsx` | 访谈与三批问卷客户端状态机 |
+| `src/app/report/page.tsx` | 报告展示与反馈入口 |
 
 ## 调试要点
 
-### 1. 开场白检查
-访问 `/interview`，验证第 1 轮开场白是否同时包含：
-- [ ] 职业/身份询问
-- [ ] AI 使用询问
-
-### 2. 聊天阶段检查
-- [ ] 不出现维度相关的直接追问
-- [ ] 对话自然流畅，像朋友聊天
-
-### 3. 问卷阶段检查
-- [ ] 总题数 16-20 道
-- [ ] 每维度 4-5 道
-- [ ] 题目紧密贴合聊天阶段收集的背景
-- [ ] 正反向题搭配
-
-### 4. 报告阶段检查
-- [ ] 分数与问卷答案一致
-- [ ] Epistemic 审计型用户应得 70-100 分
-- [ ] evidence 引用具体题目内容
+- 背景访谈：第一轮只问职业/身份，第二轮追问 AI 使用场景。
+- 第一批：8 道 `habit_batch` 题，四维各 2 题。
+- 中途对话 1：用户意见进入 `scenarioGuidance`，影响第二批。
+- 第二批：8 道具体场景题，不接受泛场景。
+- 中途对话 2：用户意见影响第三批。
+- 第三批：4 习惯 + 4 场景，合计 24 题。
+- 报告：跳过题不计分，24 题全答时每维 6 题。
+- 测试：`npm run test:browser` 只声明本地 self-tests / browser smoke，不代表 API E2E。

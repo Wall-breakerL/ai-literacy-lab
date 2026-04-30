@@ -11,7 +11,7 @@ import remarkGfm from "remark-gfm";
 interface ChatBubbleProps {
   message: Message;
   isTyping?: boolean;
-  /** Typing 时主行文案，默认「思考中…」；问卷生成轮可传「生成问卷中…」 */
+  /** Typing 时主行文案，默认「思考中…」；问卷生成轮可传「个性化生成问卷中…」 */
   typingPrimaryLabel?: string;
   /** 显示在主文案下方，例如多次重试仍等待时 */
   typingNotice?: string | null;
@@ -76,6 +76,7 @@ export function ChatBubble({
 }: ChatBubbleProps) {
   const isUser = message.role === "user";
   const safeContent = stripHiddenReasoning(message.content);
+  const displayModel = message.model === "deterministic" ? undefined : message.model;
 
   return (
     <motion.div
@@ -95,9 +96,9 @@ export function ChatBubble({
         </div>
 
         <div className="flex flex-col min-w-0">
-          {!isUser && !isTyping && message.model && (
+          {!isUser && !isTyping && displayModel && (
             <p className="mb-1 text-[12px] text-dim-gray tracking-raycast-small pl-0.5">
-              模型：{message.model}
+              模型：{displayModel}
               {message.thinkDurationSec != null
                 ? `（已思考${formatThinkDurationLabel(message.thinkDurationSec)}秒）`
                 : ""}

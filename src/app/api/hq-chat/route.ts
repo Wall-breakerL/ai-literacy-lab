@@ -1,10 +1,17 @@
+// [archived] AI-HQ v0.1 — pending rework as MBTI capability sub-module. See docs/codex-next-iteration.md §Phase 3.
 import { NextRequest, NextResponse } from "next/server";
-import { HQ_INTERVIEW_AGENT_A_SYSTEM } from "@/lib/hqAgents";
-import client, {
+import {
+  buildHQInterviewAgentAPrompt,
+  getHQRoundState,
+  HQ_INTERVIEW_AGENT_A_SYSTEM,
+} from "@/lib/hqAgents";
+import {
+  AGENT_A_MAX_TOKENS,
   AGENT_A_MODEL,
-  assertQwenApiKey,
+  assertClaudeApiKey,
+  createClaudeMessage,
   getUpstreamErrorMessage,
-} from "@/lib/minimax";
+} from "@/lib/claude";
 import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { withLlmRetry } from "@/lib/llmRetry";
 import type { Message } from "@/lib/types";
@@ -13,7 +20,7 @@ export const maxDuration = 60;
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const missing = assertQwenApiKey();
+  const missing = assertClaudeApiKey();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -25,31 +32,44 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const response = await withLlmRetry(() =>
-      client.chat.completions.create({
+    const roundState = getHQRoundState(body.messages);
+    if (roundState.isComplete) {
+      return NextResponse.json({
+        agentAMessage: "谢谢你完成这 5 段访谈。我已经有足够信息生成《AI-HQ 报告》，你可以点击下方按钮查看结果。",
+        agentAModel: "deterministic",
+        isComplete: true,
+      });
+    }
+
+    const prompt = buildHQInterviewAgentAPrompt({
+      messages: body.messages,
+      roundState,
+    });
+
+    const responseText = await withLlmRetry(() =>
+      createClaudeMessage({
         model: AGENT_A_MODEL,
+        system: HQ_INTERVIEW_AGENT_A_SYSTEM,
         messages: [
-          { role: "system", content: HQ_INTERVIEW_AGENT_A_SYSTEM },
-          ...body.messages.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
+          { role: "user", content: prompt },
         ],
         temperature: 0.65,
+        maxTokens: AGENT_A_MAX_TOKENS,
       })
     );
 
     const agentAMessage = stripHiddenReasoning(
-      response.choices[0].message.content ?? "感谢你的回答，请点击下方按钮生成报告。"
+      responseText || "感谢你的回答，请点击下方按钮生成报告。"
     );
 
-    const isComplete = agentAMessage.includes("__INTERVIEW_COMPLETE__");
     const cleanMessage = agentAMessage.replace("__INTERVIEW_COMPLETE__", "").trim();
 
     return NextResponse.json({
       agentAMessage: cleanMessage,
       agentAModel: AGENT_A_MODEL,
-      isComplete,
+      isComplete: false,
+      roundIndex: roundState.roundIndex,
+      roundId: roundState.round?.id,
     });
   } catch (error) {
     console.error("HQ chat API error:", error);

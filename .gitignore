@@ -34,3 +34,7 @@ next-env.d.ts
 # local reference with secrets — do not commit
 Minimax_Info
 .local-debug/
+.playwright-cli/
+
+# local image-generation workspace; runtime avatar assets live under public/
+/avatars/

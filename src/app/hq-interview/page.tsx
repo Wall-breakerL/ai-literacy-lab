@@ -1,3 +1,4 @@
+// [archived] AI-HQ v0.1 — pending rework as MBTI capability sub-module. See docs/codex-next-iteration.md §Phase 3.
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -11,6 +12,7 @@ import {
   nextRetryDelayMs,
   sleepAbortable,
 } from "@/lib/clientApiRetry";
+import { readSseResponse } from "@/lib/clientSse";
 
 function isHqReportPayload(data: unknown): data is HQReport {
   if (!data || typeof data !== "object") return false;
@@ -29,6 +31,9 @@ type HqChatApiSuccess = {
   agentAMessage: string;
   agentAModel?: string;
   isComplete: boolean;
+  roundIndex?: number;
+  roundId?: string;
+  thinkDurationSec?: number;
 };
 
 function isHqChatApiSuccess(data: unknown): data is HqChatApiSuccess {
@@ -96,6 +101,49 @@ async function fetchHqChatOnce(
   }
 }
 
+async function fetchHqChatStream(
+  messages: Message[],
+  signal: AbortSignal | undefined,
+  onDelta: (text: string) => void
+): Promise<HqChatApiSuccess> {
+  const res = await fetch("/api/hq-chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+
+  if (!res.ok || !res.headers.get("content-type")?.includes("text/event-stream")) {
+    const data = await res.json().catch(() => ({}));
+    const rec = data as Record<string, unknown>;
+    throw new Error(
+      typeof rec?.detail === "string" ? rec.detail : typeof rec?.error === "string" ? rec.error : `HTTP ${res.status}`
+    );
+  }
+
+  let donePayload: HqChatApiSuccess | null = null;
+  let streamError: string | null = null;
+
+  await readSseResponse(res, {
+    onEvent(event, data) {
+      const payload = data as Record<string, unknown>;
+      if (event === "delta" && typeof payload.text === "string") {
+        onDelta(payload.text);
+      } else if (event === "done") {
+        donePayload = payload as HqChatApiSuccess;
+      } else if (event === "error") {
+        streamError = typeof payload.message === "string" ? payload.message : "流式响应失败";
+      }
+    },
+  });
+
+  if (streamError) throw new Error(streamError);
+  if (!donePayload || !isHqChatApiSuccess(donePayload)) {
+    throw new Error("流式响应缺少完成事件");
+  }
+  return donePayload;
+}
+
 export default function HQInterviewPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -125,6 +173,46 @@ export default function HQInterviewPage() {
       for (let attempt = 1; attempt <= CLIENT_HQ_CHAT_MAX_ATTEMPTS; attempt++) {
         if (signal?.aborted) return;
 
+        let streamingMessageIndex: number | null = null;
+        try {
+          const data = await fetchHqChatStream(currentMessages, signal, (text) => {
+            if (streamingMessageIndex == null) {
+              streamingMessageIndex = currentMessages.length;
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: text,
+                  model: AGENT_STREAM_MODEL_FALLBACK,
+                },
+              ]);
+              return;
+            }
+            setMessages((prev) =>
+              prev.map((msg, index) =>
+                index === streamingMessageIndex ? { ...msg, content: `${msg.content}${text}` } : msg
+              )
+            );
+          });
+          const thinkDurationSec = (performance.now() - turnStartMs) / 1000;
+          setMessages((prev) => {
+            const finalMessage = {
+              role: "assistant" as const,
+              content: data.agentAMessage,
+              model: data.agentAModel ?? AGENT_STREAM_MODEL_FALLBACK,
+              thinkDurationSec: data.thinkDurationSec ?? thinkDurationSec,
+            };
+            if (streamingMessageIndex == null) return [...prev, finalMessage];
+            return prev.map((msg, index) => (index === streamingMessageIndex ? finalMessage : msg));
+          });
+          setIsComplete(data.isComplete);
+          return;
+        } catch (streamError) {
+          setMessages((prev) =>
+            streamingMessageIndex == null ? prev : prev.filter((_, index) => index !== streamingMessageIndex)
+          );
+        }
+
         const result = await fetchHqChatOnce(currentMessages, signal);
         if (result.ok) {
           const { data } = result;
@@ -134,7 +222,7 @@ export default function HQInterviewPage() {
             {
               role: "assistant",
               content: data.agentAMessage,
-              model: data.agentAModel ?? "qwen-plus",
+              model: data.agentAModel ?? AGENT_STREAM_MODEL_FALLBACK,
               thinkDurationSec,
             },
           ]);
@@ -161,7 +249,7 @@ export default function HQInterviewPage() {
       console.error("HQ interview error:", error);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", model: "qwen-plus", content: "抱歉，没能拿到访谈回复。请稍后再试。" },
+        { role: "assistant", model: AGENT_STREAM_MODEL_FALLBACK, content: "抱歉，没能拿到访谈回复。请稍后再试。" },
       ]);
     } finally {
       inFlightRef.current -= 1;
@@ -274,6 +362,9 @@ export default function HQInterviewPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+        <div className="mb-5 rounded-[12px] border border-[rgba(255,188,51,0.18)] bg-[rgba(255,188,51,0.06)] px-4 py-3 text-sm leading-relaxed text-light-gray">
+          AI-HQ 模块正在重构中，下版本会以 AI-MBTI 报告补充模块的形式回来。
+        </div>
         {messages.map((msg, idx) => (
           <ChatBubble key={idx} message={msg} />
         ))}
@@ -333,3 +424,5 @@ export default function HQInterviewPage() {
     </div>
   );
 }
+
+const AGENT_STREAM_MODEL_FALLBACK = "claude-opus-4-6";
