@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const started = performance.now();
   const sessionState = body.sessionState;
   const completedBatchKey = body.completedBatchKey;
   const answers = parseAnswers(body.answers);
@@ -45,22 +46,32 @@ export async function POST(req: NextRequest) {
   const warnings: string[] = [];
   let message = fallback;
   let source: OpeningSource = "fallback";
+  let modelOpening: { text: string; model: string } | null = null;
 
   const missing = assertClaudeApiKey();
   if (missing) {
     warnings.push(missing);
   } else {
-    const modelMessage = await generateOpening(sessionState, dialogKey, answers, skippedQuestionSamples).catch((error) => {
+    modelOpening = await generateOpening(sessionState, dialogKey, answers, skippedQuestionSamples).catch((error) => {
       warnings.push(getUpstreamErrorMessage(error) ?? String(error));
-      return "";
+      return null;
     });
-    if (modelMessage) {
-      message = modelMessage;
+    if (modelOpening?.text) {
+      message = modelOpening.text;
       source = "model";
     }
   }
 
-  return NextResponse.json({ message, source, dialogKey, warnings });
+  const responseModel = source === "model" && modelOpening ? modelOpening.model : "deterministic";
+
+  return NextResponse.json({
+    message,
+    source,
+    dialogKey,
+    warnings,
+    model: responseModel,
+    thinkDurationSec: (performance.now() - started) / 1000,
+  });
 }
 
 async function generateOpening(
@@ -68,7 +79,7 @@ async function generateOpening(
   dialogKey: MidDialogueKey,
   answers: QuestionnaireAnswer[],
   skippedQuestionSamples: MidDialogueOpeningSkippedQuestion[]
-): Promise<string> {
+): Promise<{ text: string; model: string } | null> {
   const params = {
     system: buildResearcherSystemPrompt(sessionState),
     messages: [
@@ -93,14 +104,16 @@ async function generateOpening(
       ...params,
       model: RESEARCHER_MODEL,
     });
-    return cleanOpeningText(result.textBlocks.join("\n"));
+    const text = cleanOpeningText(result.textBlocks.join("\n"));
+    return text ? { text, model: RESEARCHER_MODEL } : null;
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
     const result = await createClaudeMessageWithTools({
       ...params,
       model: RESEARCHER_FALLBACK_MODEL,
     });
-    return cleanOpeningText(result.textBlocks.join("\n"));
+    const text = cleanOpeningText(result.textBlocks.join("\n"));
+    return text ? { text, model: RESEARCHER_FALLBACK_MODEL } : null;
   }
 }
 

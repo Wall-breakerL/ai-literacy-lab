@@ -1,3 +1,14 @@
+#!/usr/bin/env node
+/**
+ * Phase 6/7 integration smoke test.
+ * Tests: interview flow, mid-dialog openings, questionnaire generation,
+ * report generation, and feedback storage.
+ *
+ * Usage: node scripts/smoke-phase6-phase7.mjs
+ * Requires: npm run dev (server running on localhost:3000)
+ * Optional: RUN_LLM_SMOKE=1 to include LLM-based tests
+ */
+
 import assert from "node:assert/strict";
 
 const baseUrl = (process.env.BASE_URL || process.env.TEST_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -221,6 +232,8 @@ async function smokeOpening() {
   });
   assertText(low.json.message, "low-skip opening.message");
   assertModelSource(low.json.source, "low-skip opening.source");
+  assert.ok(typeof low.json.model === "string" && low.json.model.length > 0, "low-skip opening.model");
+  assert.ok(typeof low.json.thinkDurationSec === "number", "low-skip opening.thinkDurationSec");
   assert.equal(low.json.dialogKey, "dialog1", "low-skip opening.dialogKey");
   assert.ok(Array.isArray(low.json.warnings), "low-skip opening.warnings must be an array");
 
@@ -231,6 +244,8 @@ async function smokeOpening() {
   });
   assertText(high.json.message, "high-skip opening.message");
   assertModelSource(high.json.source, "high-skip opening.source");
+  assert.ok(typeof high.json.model === "string" && high.json.model.length > 0, "high-skip opening.model");
+  assert.ok(typeof high.json.thinkDurationSec === "number", "high-skip opening.thinkDurationSec");
   assert.equal(high.json.dialogKey, "dialog2", "high-skip opening.dialogKey");
   assert.ok(Array.isArray(high.json.warnings), "high-skip opening.warnings must be an array");
 
@@ -259,6 +274,11 @@ async function smokeQuestionnaireGeneration() {
     assert.ok(Array.isArray(result.json.sessionState.questionnaire), `${batchMode}.sessionState.questionnaire must be an array`);
     assert.ok(result.json.sessionState.questionnaire.length >= existingQuestions.length + 8, `${batchMode}.sessionState.questionnaire should include generated questions`);
     assert.equal(typeof result.json.retryCount, "number", `${batchMode}.retryCount must be a number`);
+    assert.ok(
+      typeof result.json.model === "string" && result.json.model.length > 0,
+      `${batchMode}.model must be a non-empty string`
+    );
+    assert.ok(typeof result.json.thinkDurationSec === "number", `${batchMode}.thinkDurationSec`);
 
     generated[batchKey] = result.json.questions;
     sessionState = result.json.sessionState;

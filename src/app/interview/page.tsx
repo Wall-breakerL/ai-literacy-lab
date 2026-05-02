@@ -37,6 +37,8 @@ const CLIENT_QUESTIONNAIRE_GEN_RETRY_DELAY_MS = 60_000;
 const CLIENT_CHAT_HINT_AFTER_FAILURES = 1;
 /** Claude 说完「开始生成问卷」后，停留在聊天页的过渡时间。 */
 const QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS = 2_500;
+/** 中场对话结束后、与首批一致：先聊天页停留再进入全屏生成 */
+const QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL = "准备生成下一批问卷中…（预计 15–30s）";
 
 type Phase = "chat" | "generating" | "questionnaire" | "complete";
 
@@ -45,11 +47,17 @@ type QuestionnaireGenerateSuccess = {
   sessionState?: SessionState;
   message?: string;
   source?: "model" | "fallback";
+  /** 与服务端实际调用一致的上游模型 ID；fallback 问卷为 deterministic */
+  model?: string;
+  /** 服务端处理该请求的耗时（秒），与 /api/chat 语义一致 */
+  thinkDurationSec?: number;
 };
 
 type MidDialogOpeningSuccess = {
   message: string;
   source?: "model" | "fallback";
+  model?: string;
+  thinkDurationSec?: number;
 };
 
 type ChatApiSuccess = {
@@ -434,6 +442,11 @@ async function fetchMidDialogOpening(
   return {
     message: data.message.trim(),
     source: data.source,
+    model: typeof data.model === "string" ? data.model : undefined,
+    thinkDurationSec:
+      typeof data.thinkDurationSec === "number" && Number.isFinite(data.thinkDurationSec)
+        ? data.thinkDurationSec
+        : undefined,
   };
 }
 
@@ -523,7 +536,9 @@ export default function InterviewPage() {
       batchQuestions: QuestionnaireQuestion[],
       incomingState?: SessionState,
       readyMessage?: string,
-      source?: "model" | "fallback"
+      source?: "model" | "fallback",
+      assistantModel?: string,
+      thinkDurationSec?: number
     ) => {
       const phaseForBatch = getQuestionnairePhaseForBatch(batchKey);
       const currentState = sessionStateRef.current;
@@ -574,12 +589,17 @@ export default function InterviewPage() {
       }
       const message = readyMessage?.trim() || (source === "fallback" ? buildQuestionnaireReadyMessage(batchKey) : "");
       if (message) {
+        const bubbleModel =
+          source === "fallback" ? "deterministic" : (assistantModel ?? AGENT_STREAM_MODEL_FALLBACK);
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            model: source === "fallback" ? "deterministic" : AGENT_STREAM_MODEL_FALLBACK,
+            model: bubbleModel,
             content: message,
+            ...(thinkDurationSec != null && Number.isFinite(thinkDurationSec)
+              ? { thinkDurationSec }
+              : {}),
           },
         ]);
       }
@@ -588,24 +608,49 @@ export default function InterviewPage() {
   );
 
   const generateQuestionnaireBatch = useCallback(
-    async (batchKey: QuestionnaireBatchKey, options?: { signal?: AbortSignal; pauseBeforeSpinner?: boolean }) => {
+    async (
+      batchKey: QuestionnaireBatchKey,
+      options?: {
+        signal?: AbortSignal;
+        pauseBeforeSpinner?: boolean;
+        /** 为 true 时跳过聊天页准备阶段（2.5s 等已由调用方完成） */
+        skipChatPreparationPhase?: boolean;
+      }
+    ) => {
       const signal = options?.signal;
+      const skipChatPreparationPhase = options?.skipChatPreparationPhase === true;
+
       setPhase("chat");
       setGeneratingBatchKey(null);
       setPendingQuestionnaireBatchKey(null);
-      setIsPreparingQuestionnaireGeneration(true);
-      setIsTyping(false);
-      setTypingNotice(null);
-      setTypingPrimaryLabel("思考中…");
+
+      if (!skipChatPreparationPhase) {
+        setIsPreparingQuestionnaireGeneration(true);
+        setIsTyping(false);
+        setTypingNotice(null);
+        setTypingPrimaryLabel("思考中…");
+
+        try {
+          if (options?.pauseBeforeSpinner !== false) {
+            await waitForNextPaint(signal);
+            await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
+          }
+          if (signal?.aborted) return;
+
+          setIsPreparingQuestionnaireGeneration(false);
+        } catch (prepError) {
+          setIsPreparingQuestionnaireGeneration(false);
+          throw prepError;
+        }
+      } else {
+        setIsTyping(false);
+        setTypingNotice(null);
+        setTypingPrimaryLabel("思考中…");
+      }
 
       try {
-        if (options?.pauseBeforeSpinner !== false) {
-          await waitForNextPaint(signal);
-          await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
-        }
         if (signal?.aborted) return;
 
-        setIsPreparingQuestionnaireGeneration(false);
         setGeneratingBatchKey(batchKey);
         setPhase("generating");
 
@@ -637,7 +682,11 @@ export default function InterviewPage() {
           data.questions,
           data.sessionState ?? baseState,
           data.message,
-          data.source
+          data.source,
+          typeof data.model === "string" ? data.model : undefined,
+          typeof data.thinkDurationSec === "number" && Number.isFinite(data.thinkDurationSec)
+            ? data.thinkDurationSec
+            : undefined
         );
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
@@ -841,9 +890,24 @@ export default function InterviewPage() {
               setRoundCount(currentRound + 1);
               setIsComplete(false);
               midDialogStartIndexRef.current = null;
+              setIsTyping(false);
+              setIsPreparingQuestionnaireGeneration(true);
+              setTypingPrimaryLabel(QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL);
+              try {
+                await waitForNextPaint(signal);
+                await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
+              } catch (e) {
+                if (e instanceof DOMException && e.name === "AbortError") {
+                  setIsPreparingQuestionnaireGeneration(false);
+                  setTypingPrimaryLabel("思考中…");
+                  return;
+                }
+                throw e;
+              }
+              setIsPreparingQuestionnaireGeneration(false);
               await generateQuestionnaireBatch(nextBatchKey, {
                 signal,
-                pauseBeforeSpinner: true,
+                skipChatPreparationPhase: true,
               });
               return;
             }
@@ -938,9 +1002,24 @@ export default function InterviewPage() {
               setRoundCount(currentRound + 1);
               setIsComplete(false);
               midDialogStartIndexRef.current = null;
+              setIsTyping(false);
+              setIsPreparingQuestionnaireGeneration(true);
+              setTypingPrimaryLabel(QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL);
+              try {
+                await waitForNextPaint(signal);
+                await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
+              } catch (e) {
+                if (e instanceof DOMException && e.name === "AbortError") {
+                  setIsPreparingQuestionnaireGeneration(false);
+                  setTypingPrimaryLabel("思考中…");
+                  return;
+                }
+                throw e;
+              }
+              setIsPreparingQuestionnaireGeneration(false);
               await generateQuestionnaireBatch(nextBatchKey, {
                 signal,
-                pauseBeforeSpinner: true,
+                skipChatPreparationPhase: true,
               });
               return;
             }
@@ -1076,8 +1155,14 @@ export default function InterviewPage() {
       });
       const promptMessage: Message = {
         role: "assistant",
-        model: opening?.source === "model" ? AGENT_STREAM_MODEL_FALLBACK : "deterministic",
+        model:
+          opening?.source === "model"
+            ? (opening.model ?? AGENT_STREAM_MODEL_FALLBACK)
+            : "deterministic",
         content: opening?.message || buildMidDialogPrompt(activeBatchKey, newAnswers, baseMidDialogState),
+        ...(opening?.thinkDurationSec != null && Number.isFinite(opening.thinkDurationSec)
+          ? { thinkDurationSec: opening.thinkDurationSec }
+          : {}),
       };
       const nextMessages = [...messagesRef.current, promptMessage];
       setMessages(nextMessages);
@@ -1215,11 +1300,17 @@ export default function InterviewPage() {
             {messages.map((msg, idx) => (
               <ChatBubble key={idx} message={msg} />
             ))}
-            {isTyping && !isStreamingText && (
+            {(isTyping || isPreparingQuestionnaireGeneration) && !isStreamingText && (
               <ChatBubble
                 message={{ role: "assistant", content: "" }}
                 isTyping={true}
-                typingPrimaryLabel={typingPrimaryLabel}
+                typingPrimaryLabel={
+                  isPreparingQuestionnaireGeneration &&
+                  !isTyping &&
+                  (sessionState.phase === "mid_dialog1" || sessionState.phase === "mid_dialog2")
+                    ? QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL
+                    : typingPrimaryLabel
+                }
                 typingNotice={typingNotice}
               />
             )}
@@ -1311,4 +1402,5 @@ export default function InterviewPage() {
   );
 }
 
+/** 流式占位、错误提示或与旧版 API 兼容时；问卷/中场开场以服务端返回的 `model` 为准 */
 const AGENT_STREAM_MODEL_FALLBACK = "claude-opus-4-6";

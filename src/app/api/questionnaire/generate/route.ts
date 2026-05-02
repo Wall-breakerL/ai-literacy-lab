@@ -69,6 +69,8 @@ type BatchGenerationResult = {
   agentBOutput?: AgentBOutput;
   retryCount: number;
   validationIssue?: string;
+  /** Actual upstream model ID when LLM generation succeeded（含主模型失败后备用模型生效） */
+  modelUsed?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -88,6 +90,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const started = performance.now();
   const sessionState = body.sessionState;
   const batchMode = body.batchMode;
   const existingQuestions = parseQuestionnaireQuestions(body.existingQuestions);
@@ -145,12 +148,17 @@ export async function POST(req: NextRequest) {
     scenarioGuidance,
   });
 
+  const responseModel =
+    source === "model" ? (result.modelUsed ?? RESEARCHER_MODEL) : "deterministic";
+
   return NextResponse.json({
     questions: result.questions,
     sessionState: nextSessionState,
     message: buildBatchReadyMessage(batchMode, result.agentBOutput, source),
     batchMode,
     source,
+    model: responseModel,
+    thinkDurationSec: (performance.now() - started) / 1000,
     retryCount: result.retryCount,
     validationIssue: result.validationIssue,
     warnings,
@@ -191,7 +199,7 @@ async function generateWithOneRetry({
   let retryReason: string | undefined;
   let lastValidationIssue: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const output = await callResearcherBatchTool({
+    const { output, model } = await callResearcherBatchTool({
       sessionState,
       batchMode,
       existingQuestions,
@@ -205,6 +213,7 @@ async function generateWithOneRetry({
         questions,
         agentBOutput: output ?? undefined,
         retryCount: attempt,
+        modelUsed: model,
       };
     }
     lastValidationIssue = validationIssue;
@@ -229,7 +238,7 @@ async function callResearcherBatchTool({
   existingQuestions: QuestionnaireQuestion[];
   scenarioGuidance?: ScenarioGuidance;
   retryReason?: string;
-}): Promise<AgentBOutput | null> {
+}): Promise<{ output: AgentBOutput | null; model: string }> {
   const params = {
     system: buildResearcherSystemPrompt(sessionState),
     messages: [
@@ -251,18 +260,24 @@ async function callResearcherBatchTool({
   };
 
   try {
-    const result = await createClaudeMessageWithTools({
+    const apiResult = await createClaudeMessageWithTools({
       ...params,
       model: RESEARCHER_MODEL,
     });
-    return questionnaireBatchOutputFromToolUses(result.toolUses);
+    return {
+      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses),
+      model: RESEARCHER_MODEL,
+    };
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
-    const result = await createClaudeMessageWithTools({
+    const apiResult = await createClaudeMessageWithTools({
       ...params,
       model: RESEARCHER_FALLBACK_MODEL,
     });
-    return questionnaireBatchOutputFromToolUses(result.toolUses);
+    return {
+      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses),
+      model: RESEARCHER_FALLBACK_MODEL,
+    };
   }
 }
 

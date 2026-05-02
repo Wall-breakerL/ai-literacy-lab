@@ -77,6 +77,9 @@ export function ChatBubble({
   const isUser = message.role === "user";
   const safeContent = stripHiddenReasoning(message.content);
   const displayModel = message.model === "deterministic" ? undefined : message.model;
+  const hasThinkMs = message.thinkDurationSec != null && Number.isFinite(message.thinkDurationSec);
+  const showAssistantMeta =
+    !isTyping && !isUser && ((displayModel && displayModel.trim()) || hasThinkMs);
 
   return (
     <motion.div
@@ -96,12 +99,18 @@ export function ChatBubble({
         </div>
 
         <div className="flex flex-col min-w-0">
-          {!isUser && !isTyping && displayModel && (
+          {showAssistantMeta && (
             <p className="mb-1 text-[12px] text-dim-gray tracking-raycast-small pl-0.5">
-              模型：{displayModel}
-              {message.thinkDurationSec != null
-                ? `（已思考${formatThinkDurationLabel(message.thinkDurationSec)}秒）`
-                : ""}
+              {displayModel?.trim() ? (
+                <>
+                  模型：{displayModel}
+                  {hasThinkMs
+                    ? `（已思考${formatThinkDurationLabel(message.thinkDurationSec!)}秒）`
+                    : ""}
+                </>
+              ) : (
+                <>（已思考{formatThinkDurationLabel(message.thinkDurationSec!)}秒）</>
+              )}
             </p>
           )}
           <div

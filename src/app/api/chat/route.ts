@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
           roundLog!.agentA.model = agentAModel;
         } catch {
           researcherMessage = buildMidDialogueCompletionText(midDialogueKey);
-          agentAModel = "deterministic";
+          agentAModel = researcherModel;
           roundLog!.agentA.model = agentAModel;
         }
       }

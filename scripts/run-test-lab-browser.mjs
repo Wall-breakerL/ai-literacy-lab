@@ -1,3 +1,13 @@
+#!/usr/bin/env node
+/**
+ * Browser-based integration test using Playwright.
+ * Opens the test-lab page in headless browser and validates self-test results.
+ *
+ * Usage: node scripts/run-test-lab-browser.mjs
+ * Requires: npm run dev (server running)
+ * Optional: TEST_BASE_URL=http://localhost:3000 node scripts/run-test-lab-browser.mjs
+ */
+
 import { spawnSync } from "node:child_process";
 
 const baseUrl = process.env.TEST_BASE_URL || "http://localhost:3000";

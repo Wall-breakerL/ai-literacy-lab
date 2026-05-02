@@ -1,3 +1,13 @@
+#!/usr/bin/env node
+/**
+ * Tool calling validation script.
+ * Tests if the LLM provider correctly handles tool_use/tool_calls.
+ * Used for Phase 7 feedback feature validation.
+ *
+ * Usage: node scripts/check-llm-tools.mjs
+ * Requires: .env.local with LLM_PROVIDER and appropriate BASE_URL/API_KEY
+ */
+
 import { existsSync, readFileSync } from "node:fs";
 
 function loadEnvFile(filePath) {
@@ -143,64 +153,83 @@ const inputSchema = {
   additionalProperties: false,
 };
 
-const response =
+const openAiToolRequest = () =>
+  requestJson(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 256,
+      temperature: forcedTemperature ?? 0.2,
+      messages: [
+        {
+          role: "user",
+          content: "Use the tool to record this feedback: the report is useful but too generic.",
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: toolName,
+            description: "Capture a short structured feedback object.",
+            parameters: inputSchema,
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: toolName } },
+    }),
+  });
+
+const anthropicToolRequest = (toolChoice) =>
+  requestJson(`${baseUrl}/messages`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": version,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 256,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "user",
+          content: "Use the tool to record this feedback: the report is useful but too generic.",
+        },
+      ],
+      tools: [
+        {
+          name: toolName,
+          description: "Capture a short structured feedback object.",
+          input_schema: inputSchema,
+        },
+      ],
+      tool_choice: toolChoice,
+    }),
+  });
+
+let response =
   provider === "openai-compatible"
-    ? await requestJson(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 256,
-          temperature: forcedTemperature ?? 0.2,
-          messages: [
-            {
-              role: "user",
-              content: "Use the tool to record this feedback: the report is useful but too generic.",
-            },
-          ],
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: toolName,
-                description: "Capture a short structured feedback object.",
-                parameters: inputSchema,
-              },
-            },
-          ],
-          tool_choice: { type: "function", function: { name: toolName } },
-        }),
-      })
-    : await requestJson(`${baseUrl}/messages`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": version,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 256,
-          temperature: 0.2,
-          messages: [
-            {
-              role: "user",
-              content: "Use the tool to record this feedback: the report is useful but too generic.",
-            },
-          ],
-          tools: [
-            {
-              name: toolName,
-              description: "Capture a short structured feedback object.",
-              input_schema: inputSchema,
-            },
-          ],
-          tool_choice: { type: "tool", name: toolName },
-        }),
-      });
+    ? await openAiToolRequest()
+    : await anthropicToolRequest({ type: "tool", name: toolName });
+
+if (provider === "anthropic" && !response.ok) {
+  console.warn("Forced tool_choice failed; retrying with auto tool_choice.", summarizeError(response.status, response.body, response.requestId));
+  response = await anthropicToolRequest({ type: "auto" });
+}
+
+if (provider === "anthropic" && response.ok) {
+  const forcedToolUses = parseAnthropicToolUses(response.body);
+  if (!forcedToolUses.some((toolUse) => toolUse.name === toolName)) {
+    console.warn("Forced tool_choice did not return a tool use; retrying with auto tool_choice.");
+    response = await anthropicToolRequest({ type: "auto" });
+  }
+}
 
 if (!response.ok) {
   console.error("Tool-call request: FAIL", summarizeError(response.status, response.body, response.requestId));

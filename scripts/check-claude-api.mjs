@@ -1,3 +1,13 @@
+#!/usr/bin/env node
+/**
+ * API connectivity and model validation script.
+ * Tests: /models endpoint (if available) and chat completion for configured models.
+ * Supports both OpenAI-compatible and native Anthropic providers.
+ *
+ * Usage: node scripts/check-claude-api.mjs
+ * Requires: .env.local with LLM_PROVIDER and appropriate BASE_URL/API_KEY
+ */
+
 import { existsSync, readFileSync } from "node:fs";
 
 function loadEnvFile(filePath) {
@@ -114,7 +124,10 @@ if (modelsResponse.ok) {
   console.log("Models API: OK", ids);
 } else {
   const summary = summarizeError(modelsResponse.status, modelsResponse.body, modelsResponse.requestId);
-  if (provider === "openai-compatible" && !strictModelsCheck) {
+  const skipModelsProbe =
+    !strictModelsCheck &&
+    (provider === "openai-compatible" || modelsResponse.status === 404);
+  if (skipModelsProbe) {
     console.warn("Models API: SKIP", summary);
   } else {
     failures += 1;

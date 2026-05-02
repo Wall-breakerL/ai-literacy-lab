@@ -149,7 +149,8 @@ export async function POST(req: NextRequest) {
             agentAModel = repair.model;
           } catch {
             researcherMessage = buildMidDialogueCompletionText(midDialogueKey);
-            agentAModel = "deterministic";
+            // 工具已成功解析；仅补写可见句失败，仍标注本轮已调用的上游模型（勿用 deterministic，否则前端隐藏模型名）
+            agentAModel = researcherModel;
           }
         }
         if (!researcherMessage && !shouldGenerateAfterMidDialogue(agentBOutput)) {
