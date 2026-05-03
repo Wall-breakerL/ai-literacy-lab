@@ -25,14 +25,14 @@
 
 | 项目 | Pass 标准 |
 |---|---|
-| 数量 | Phase 6 主链路固定 24 题，三批 8+8+8 |
-| 覆盖 | Relation / Workflow / Epistemic / RepairScope 每批各 2 题，全流程各 6 题 |
+| 数量 | Phase 6 主链路固定 24 题，两部分 8+16 |
+| 覆盖 | Relation / Workflow / Epistemic / RepairScope 第一部分各 2 题、第二部分各 4 题，全流程各 6 题 |
 | 场景绑定 | 题干绑定用户职业、AI 工具、最近任务或目标 |
-| 批次结构 | `habit_batch` 全习惯题，`scenario_batch` 绑定具体场景，`mixed_batch` 每维 1 习惯 + 1 场景 |
-| 正反向题 | 每批每个维度 1 正向 + 1 反向 |
+| 批次结构 | `hybrid_batch1` 为 4 道习惯题 + 4 道场景题；`hybrid_batch2` 为 8 道习惯题 + 8 道场景题 |
+| 正反向题 | 第一部分每维 1 正向 + 1 反向；第二部分每维 2 正向 + 2 反向；两部分合计每维 3 正向 + 3 反向 |
 | 跳过选项 | “不了解 / 没想好”独立存在，不进入分数 |
 | 可回答性 | 题目不要求用户拥有不存在的经验 |
-| 中途校准 | 两段 mid-dialogue 能把用户修正写入 `scenarioGuidance` / `refinedTargetContext` |
+| 中途校准 | 第一部分后一轮 mid-dialogue 能把用户修正写入 `scenarioGuidance` / `refinedTargetContext` |
 
 ## AI-MBTI 报告质量
 

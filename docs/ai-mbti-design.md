@@ -11,15 +11,13 @@ FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代
 当前 v6.0 主流程是单 researcher flow，不再是运行时 Agent A / Agent B 双代理协作。
 
 1. **背景访谈**：researcher 先问职业或身份，再追问主要 AI 使用场景。前两轮只收集背景、recentUse 和当前目标，不直接判断四维倾向。
-2. **Phase 6 第一批问卷**：生成 `habit_batch`，8 道习惯题。
-3. **中途对话 1**：询问第一批题目感受、跳过原因和真实使用场景，写入 `scenarioGuidance` / `refinedTargetContext`。
-4. **Phase 6 第二批问卷**：生成 `scenario_batch`，8 道目标场景题。
-5. **中途对话 2**：询问场景题是否贴合，允许用户要求更具体、更抽象或换场景。
-6. **Phase 6 第三批问卷**：生成 `mixed_batch`，8 道习惯 + 场景混合题。
-7. **报告生成**：服务端确定性计分，LLM 只写解释、建议、prompt 模板和报告文案。
-8. **Phase 7 反馈**：报告底部增加 1-2 轮反馈对话，整理成结构化反馈并写入 Notion；未配置或写入失败时保存到 `.local-debug/feedback/`。
+2. **Phase 6 第一部分问卷**：生成 `hybrid_batch1`，8 道题。
+3. **中途对话**：询问第一部分题目感受、跳过原因和第二部分真实使用场景，写入 `scenarioGuidance` / `refinedTargetContext`。
+4. **Phase 6 第二部分问卷**：生成 `hybrid_batch2`，16 道题。
+5. **报告生成**：服务端确定性计分，LLM 只写解释、建议、prompt 模板和报告文案。
+6. **Phase 7 反馈**：报告底部增加 1-2 轮反馈对话，整理成结构化反馈并写入 Notion；未配置或写入失败时保存到 `.local-debug/feedback/`。
 
-旧版 “16/20 道单次问卷” 和 “Agent A/B 通信协议” 属于 legacy design。代码中仍保留兼容入口，但文档和新迭代应以三批 24 题为准。
+旧版 “16/20 道单次问卷” 和 “Agent A/B 通信协议” 属于 legacy design。代码中仍保留兼容入口，但文档和新迭代应以两部分 24 题为准。
 
 ## 3. 评估模型
 
@@ -36,36 +34,32 @@ FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代
 
 ## 4. Phase 6 问卷设计
 
-总题数固定为 24 题，三批各 8 题：
+总题数固定为 24 题，第一部分 8 题、第二部分 16 题：
 
-- `habit_batch`：8 道习惯题，`scenario` 必须是字面量 `习惯`。
-- `scenario_batch`：8 道具体或半具体场景题，必须绑定 `targetContext`、`refinedTargetContext` 或 `scenarioGuidance`。
-- `mixed_batch`：4 道习惯题 + 4 道场景题；每个维度各 1 道习惯题和 1 道场景题。
+- `hybrid_batch1`：8 题，4 道习惯题 + 4 道场景题。
+- `hybrid_batch2`：16 题，8 道习惯题 + 8 道场景题，结合中途对话和第一部分题目做互补。
 
-每批结构固定：
+每部分结构固定：
 
-- Relation / Workflow / Epistemic / RepairScope 各 2 题。
-- 每个维度 1 道 `reverse=false`，1 道 `reverse=true`。
+- `hybrid_batch1` 中 Relation / Workflow / Epistemic / RepairScope 各 2 题，每维 1 正向 + 1 反向。
+- `hybrid_batch2` 中 Relation / Workflow / Epistemic / RepairScope 各 4 题，每维 2 正向 + 2 反向。
+- 两部分合计后，每个维度 6 题，其中 3 道正向、3 道反向。
 - `reverse=false` 代表认同越强越靠近高端：Collaborative / Exploratory / Trusting / Local。
 - `reverse=true` 代表认同越强越靠近低端：Instrumental / Framed / Auditing / Global。
 
-题目生成失败或校验失败时，使用三套本地 fallback batch。旧版 16 题 fallback 仅为 legacy 单问卷路径保留。
+题目生成失败或校验失败时，使用两套本地 fallback batch。旧版 16 题 fallback 仅为 legacy 单问卷路径保留。
 
 ## 5. 中途对话机制
 
 中途对话不是闲聊，而是 Phase 6 的校准机制。
 
-`dialog1` 在第一批习惯题后触发，重点了解：
+`dialog1` 在第一部分问卷后触发，重点了解：
 
-- 用户觉得习惯题是否贴近。
-- 跳过题是否因为没有经验、不理解、场景不适合。
-- 第二批场景题应围绕哪些真实任务。
+- 用户觉得第一部分题目是否贴近。
+- 跳过题是否因为题意不清、没有类似经历，或对这个方向不感兴趣。
+- 第二部分题目应围绕哪些真实 AI 使用场景。
 
-`dialog2` 在第二批场景题后触发，重点了解：
-
-- 场景题是否贴合。
-- 第三批是否需要更具体、更抽象或避开某类题材。
-- 用户是否给出新的真实场景。
+中途对话只追一轮。除非用户明确退出，否则用户回复后即写入结构化字段并生成第二部分问卷。
 
 结构化输出使用 `ScenarioGuidance`：
 
@@ -124,11 +118,11 @@ interface ScenarioGuidance {
 |---|---|
 | `src/lib/researcher.ts` | researcher prompt、tool schema、批次问卷和中途对话逻辑 |
 | `src/lib/sessionState.ts` | `SessionState`、批次答案展平、phase helper |
-| `src/lib/questionnaireValidation.ts` | 8 题批次、24 题总卷、场景有效性和去重校验 |
-| `src/lib/fallbackQuestionnaire.ts` | 三批 fallback 问卷和 legacy 16 题 fallback |
-| `src/app/api/questionnaire/generate/route.ts` | Phase 6 8 题批次生成接口 |
+| `src/lib/questionnaireValidation.ts` | 8+16 批次、24 题总卷、场景有效性和去重校验 |
+| `src/lib/fallbackQuestionnaire.ts` | 两部分 fallback 问卷和 legacy 16 题 fallback |
+| `src/app/api/questionnaire/generate/route.ts` | Phase 6 8+16 批次生成接口 |
 | `src/app/api/mid-dialog/opening/route.ts` | 中途对话开场生成接口 |
-| `src/app/interview/page.tsx` | 访谈、三批问卷、中途对话前端状态机 |
+| `src/app/interview/page.tsx` | 访谈、两部分问卷、中途对话前端状态机 |
 | `src/lib/reportScoring.ts` | 服务端确定性计分 |
 | `src/app/api/report/route.ts` | 报告生成入口 |
 | `src/lib/feedbackAgent.ts` | Phase 7 反馈对话整理 |

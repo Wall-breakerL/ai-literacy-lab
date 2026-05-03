@@ -11,8 +11,8 @@
 | 名称 | 位置 | 职责 | 质量关注 |
 |---|---|---|---|
 | AI-MBTI Researcher Interview | `src/lib/researcher.ts`, `src/app/api/chat/route.ts`, `src/app/api/chat/stream/route.ts` | Phase 6 初始访谈，先问职业/身份，再问平时 AI 使用场景，并写入 SessionState | 第 0 轮只问职业/身份；第 1 轮提取 role 并追问 AI 使用；第 2 轮提取 recentUse 后进入问卷 |
-| AI-MBTI Mid-dialogue Opening | `src/lib/researcher.ts`, `src/app/api/mid-dialog/opening/route.ts`, `src/app/interview/page.tsx` | Phase 6 两次中途场景校准开场，由模型生成开放式问题，必要时引用跳过题 | 必须开放式，包含“你觉得”以及“你平时/你更希望”，避免“适合吗/对吗/是不是/贴合吗” |
-| AI-MBTI Researcher Tools | `src/lib/researcher.ts` | 通过 tool call 更新访谈状态并生成 Phase 6 分批问卷 | 四维覆盖、正反向题、场景绑定、可回答性；每批生成完成后给用户一句自然过渡 |
+| AI-MBTI Mid-dialogue Opening | `src/lib/researcher.ts`, `src/app/api/mid-dialog/opening/route.ts`, `src/app/interview/page.tsx` | Phase 6 第一部分后的单轮场景校准开场，由模型生成开放式问题，必要时引用跳过题 | 有跳过题时引用 1-2 道询问题意/经历/兴趣；无跳过题时询问整体感受和第二部分场景 |
+| AI-MBTI Researcher Tools | `src/lib/researcher.ts` | 通过 tool call 更新访谈状态并生成 Phase 6 两部分问卷 | 四维覆盖、正反向题、场景绑定、可回答性；每部分生成完成后给用户一句自然完成提示 |
 | AI-MBTI Report Agent | `src/lib/reportAgent.ts` | 基于确定性计分和回答生成报告，并生成 Phase 5 可携带产物 | 证据、建议、prompt 模板、置信表达、manifesto 可用性 |
 | AI-MBTI Feedback Agent | `src/lib/feedbackAgent.ts`, `src/app/api/feedback/chat/route.ts` | Phase 7 报告页 1-2 轮反馈对话，并整理成结构化 Notion 反馈 | 最多追问一次；不为报告辩解；优先沉淀可改进的题目、报告、prompt 和流程问题 |
 | AI-HQ Agent A | `src/lib/hqAgents.ts` | archived：固定 5 段访谈 | 保留 v0.1 代码，暂不作为主线入口 |
@@ -21,7 +21,7 @@
 ## 当前 Phase 6 约定
 
 - 初始开场保持轻量：先问职业/身份，不在第一句话里同时追问 AI 使用方式或目标。
-- 中途对话开场走开放式校准；fallback 文案按上一批跳过率分为 `<25%`、`25-50%`、`>50%` 三档调整追问深度。
+- 中途对话开场只在第一部分后触发；有跳过题时稳定抽样 1-2 道代表题，无跳过题时询问整体感受和第二部分场景。
 - deterministic fallback 只用于模型/API 失败，或本地 fallback 问卷/本地 fallback 文案路径；正常模型成功时不合成本地成功文案替代模型输出。
 
 ## 修改 Prompt 前检查
@@ -115,13 +115,13 @@
 - `src/app/api/chat/stream/route.ts`
 
 原因：
-- 中途对话里用户说“我说不清楚 / 嗯”这类低信息回复时，模型可能持续返回 `needs_more_context`，导致前端一直停在聊天界面，下一批问卷不出现。
+- 中途对话里用户说“我说不清楚 / 嗯”这类低信息回复时，模型可能持续返回 `needs_more_context`，导致前端一直停在聊天界面，第二部分问卷不出现。
 - OpenAI-compatible tool-call 模式下模型可能只返回工具调用、不返回正文；旧逻辑会把 `directive.hint` 当成用户可见回复，导致“用更具体的日常行为场景引导用户描述”这类内部指令泄漏到聊天气泡。
 
 改动：
 - 增加中途对话专用可见回复兜底，不再把 `directive.hint` 当作用户回复展示。
 - prompt 明确 `directive.hint` 是内部提示，正文才是用户会看到的内容。
-- 增加一次追问上限：如果同一段中途对话已经追问过一次，用户继续低信息回复，则按当前场景 `finish_mid_dialog` 并 `shouldGenerateNextBatch=true`。
+- 中途对话收敛为一轮：除非用户明确退出，否则按当前场景 `finish_mid_dialog` 并 `shouldGenerateNextBatch=true`。
 
 验证：
 - `npm run typecheck`
@@ -129,7 +129,7 @@
 - `/api/chat/stream` 复现 smoke：用户先说“我说不清楚”，再说“嗯”，第二轮返回 `finish_mid_dialog` 且 `shouldGenerateNextBatch=true`。
 
 风险：
-- 低信息回复会按当前上下文继续生成下一批，可能少拿到一条场景修正；这是为了避免用户被卡在中途对话里。
+- 低信息回复会按当前上下文继续生成第二部分，可能少拿到一条场景修正；这是为了避免用户被卡在中途对话里。
 
 ### 2026-04-30：Phase 6 问卷生成完成过渡
 
@@ -145,17 +145,17 @@
 改动：
 - `generate_questionnaire_batch` 工具新增 `userFacingMessage`，要求模型输出一条用户可见的生成完成提示。
 - `/api/questionnaire/generate` 返回模型生成的 `message`；只有模型/API 失败或问卷结构校验失败并启用本地 fallback 问卷时，才使用本地批次完成提示。
-- 前端生成完成后回到聊天流；若 `message` 非空则追加助手消息，若模型成功但 `message` 为空则不合成本地成功文案，只把底部输入框替换为“开始第 X/3 批问卷”按钮；用户点击后再进入问卷作答。
-- 进入第一批问卷前的 Opus 过渡正文必须是陈述式，不得再追问目标、课程作业、个人项目或学习新技术；若模型在转问卷轮输出问句，API 会丢弃该正文并直接进入生成流程。
+- 前端生成完成后回到聊天流并追加完成提示；底部输入框替换为“开始第 X/2 部分问卷”按钮；用户点击后再进入问卷作答。
+- 进入第一部分问卷前不再展示 Opus 过渡正文；前端只显示“个性化生成问卷中”的气泡 2.5s，再进入全屏生成态。
 
 验证：
 - `npm run typecheck`
 - `npm run lint`
-- `/api/questionnaire/generate` smoke：返回 8 题和 model `message`
+- `/api/questionnaire/generate` smoke：返回 12 题和 model `message`
 
 风险：
 - `userFacingMessage` 质量依赖模型；正常模型成功但文案为空时不会显示本地拟人化兜底，用户会直接看到开始问卷按钮。只有模型/API 失败或本地 fallback 问卷启用时才显示 deterministic 兜底文案。
-- 若转问卷轮 Opus 违反契约输出新问题，这句会被隐藏，因此用户可能直接看到转圈生成页；这是为了避免出现“问了问题但不给用户回答机会”的割裂体验。
+- 若转问卷轮 Opus 输出过渡正文，这句会被隐藏；这是为了避免生成问卷前出现冗余对话步骤。
 
 ### 2026-04-30：Phase 6 中途对话完成补句契约
 
@@ -165,7 +165,7 @@
 - `src/app/api/chat/stream/route.ts`
 
 原因：
-- 中途对话完成并触发下一批问卷时，OpenAI-compatible tool-call 成功路径可能只有工具调用、没有正文，导致前端无可见助手过渡消息。
+- 中途对话完成并触发第二部分问卷时，OpenAI-compatible tool-call 成功路径可能只有工具调用、没有正文，导致前端无可见助手过渡消息。
 - JSON `/api/chat` 与 `/api/chat/stream` 需要一致返回 `thinkDurationSec`，方便前端展示同一耗时语义。
 
 改动：

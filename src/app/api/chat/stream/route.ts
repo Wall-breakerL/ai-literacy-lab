@@ -26,7 +26,6 @@ import {
   normalizeInitialInterviewOpening,
   normalizeMidDialogueOutput,
   normalizeMidDialogueTransitionRepairText,
-  normalizeQuestionnaireTransitionText,
   QUESTIONNAIRE_ENTRY_ROUND,
   researcherTextFromResult,
   UPDATE_MID_DIALOGUE_TOOL,
@@ -191,7 +190,7 @@ export async function POST(req: NextRequest) {
     agentBOutput = normalizeAgentBOutput(agentBOutput, messages);
 
     if (shouldTransition) {
-      const transitionMessage = normalizeQuestionnaireTransitionText(researcherMessage);
+      const transitionMessage = "";
       agentBOutput = { ...agentBOutput, nextQuestions: [] };
       const sessionState = nextSessionState(baseSessionState, agentBOutput, roundCount, "questionnaire_batch1");
       if (transitionMessage) {
@@ -281,12 +280,11 @@ function getResearcherRoundCount(roundCount: number): number {
 
 function getMidDialogueKey(phase: SessionState["phase"]): MidDialogueKey | undefined {
   if (phase === "mid_dialog1") return "dialog1";
-  if (phase === "mid_dialog2") return "dialog2";
   return undefined;
 }
 
 function getChatContinuationPhase(sessionState: SessionState): SessionState["phase"] {
-  if (sessionState.phase === "mid_dialog1" || sessionState.phase === "mid_dialog2") {
+  if (sessionState.phase === "mid_dialog1") {
     return sessionState.phase;
   }
   return "interview";

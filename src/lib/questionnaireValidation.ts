@@ -54,21 +54,19 @@ export function validateQuestionnaireBatch(
   mode: QuestionnaireBatchMode
 ): questions is QuestionnaireQuestion[] {
   if (!Array.isArray(questions)) return false;
-  if (questions.length !== 8) return false;
-  if (!validateQuestionShapeAndDirection(questions, 2, 1, 1)) return false;
+  if (mode !== "hybrid_batch1" && mode !== "hybrid_batch2") return false;
+
+  // hybrid_batch1: 8 题（四维各 2 题）
+  // hybrid_batch2: 16 题（四维各 4 题）
+  const expectedCount = mode === "hybrid_batch1" ? 8 : 16;
+  const expectedPerDimension = mode === "hybrid_batch1" ? 2 : 4;
+
+  if (questions.length !== expectedCount) return false;
+  if (!validateQuestionShapeAndDirection(questions, expectedPerDimension)) return false;
 
   const habitCount = countHabitQuestions(questions);
-  if (mode === "habit_batch") return habitCount === questions.length;
-  if (mode === "scenario_batch") {
-    return habitCount === 0 && questions.every((question) => isSpecificScenario(question.scenario));
-  }
-
-  return habitCount === 4 && questions.every((question) =>
-    isHabitScenario(question.scenario) || isSpecificScenario(question.scenario)
-  ) && DIMENSIONS.every((dimension) => {
-    const items = questions.filter((item) => item.dimension === dimension);
-    return countHabitQuestions(items) === 1;
-  });
+  const expectedHabits = mode === "hybrid_batch1" ? 4 : 8;
+  return habitCount === expectedHabits;
 }
 
 export function validateQuestionnaireTotal(
@@ -76,7 +74,8 @@ export function validateQuestionnaireTotal(
 ): questions is QuestionnaireQuestion[] {
   if (!Array.isArray(questions)) return false;
   if (questions.length !== 24) return false;
-  return validateQuestionShapeAndDirection(questions, 6, 3, 3);
+  if (!validateQuestionShapeAndDirection(questions, 6)) return false;
+  return countHabitQuestions(questions) === 12;
 }
 
 export function questionTextSimilarity(left: string, right: string): number {
@@ -135,15 +134,11 @@ export function hasSimilarQuestionText(
 
 function validateQuestionShapeAndDirection(
   questions: unknown[],
-  expectedPerDimension: number,
-  expectedForward: number,
-  expectedReverse: number
+  expectedPerDimension: number
 ): questions is QuestionnaireQuestion[] {
   const counts = new Map<Dimension, number>();
-  const reverseCounts = new Map<Dimension, { forward: number; reverse: number }>();
   for (const dimension of DIMENSIONS) {
     counts.set(dimension, 0);
-    reverseCounts.set(dimension, { forward: 0, reverse: 0 });
   }
 
   for (const item of questions) {
@@ -162,19 +157,11 @@ function validateQuestionShapeAndDirection(
 
     const dimension = question.dimension as Dimension;
     counts.set(dimension, (counts.get(dimension) ?? 0) + 1);
-    const current = reverseCounts.get(dimension)!;
-    if (question.reverse) current.reverse += 1;
-    else current.forward += 1;
   }
 
   return DIMENSIONS.every((dimension) => {
     const count = counts.get(dimension) ?? 0;
-    const reverse = reverseCounts.get(dimension)!;
-    return (
-      count === expectedPerDimension &&
-      reverse.forward === expectedForward &&
-      reverse.reverse === expectedReverse
-    );
+    return count === expectedPerDimension;
   });
 }
 
@@ -189,9 +176,9 @@ function isHabitScenario(scenario: string): boolean {
 export function isSpecificScenario(scenario: string): boolean {
   const clean = scenario.trim().replace(/[。．]+$/, "");
   if (!clean || isHabitScenario(clean)) return false;
-  if (clean.length < 6) return false;
-  if (/^(日常|平时|一般|普通|常规)?使用\s*(AI|ai)$/.test(clean)) return false;
-  if (/^(日常|平时|一般|普通|常规)?AI\s*(使用|协作|任务)$/.test(clean)) return false;
+  if (clean.length < 3) return false;
+  if (/^(日常|平时|一般|普通|常规)?使用\s*(AI|ai)\s*(时|的时候)?$/.test(clean)) return false;
+  if (/^(日常|平时|一般|普通|常规)?AI\s*(使用|协作|任务)\s*(时|的时候)?$/.test(clean)) return false;
   if (/^(当前|这个|某个|一些)?(任务|场景|工作|事情)$/.test(clean)) return false;
   if (/泛泛|通用场景|默认场景|用户确认后的场景/.test(clean)) return false;
   return true;

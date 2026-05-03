@@ -36,7 +36,6 @@ import {
   normalizeInitialInterviewOpening,
   normalizeMidDialogueOutput,
   normalizeMidDialogueTransitionRepairText,
-  normalizeQuestionnaireTransitionText,
   QUESTIONNAIRE_ENTRY_ROUND,
   RESEARCHER_TOOL_SYSTEM,
   researcherTextFromResult,
@@ -117,7 +116,7 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-const DEFAULT_CHAT_RETRY_DELAY_MS = 20_000;
+const DEFAULT_CHAT_RETRY_DELAY_MS = 30_000;
 /** 问卷生成和转问卷轮次较重，重试间隔放宽。 */
 const QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS = 60_000;
 
@@ -400,9 +399,7 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({
-        agentAMessage: researcherFailed
-          ? "好的，让我根据你的背景为你生成一套专属问卷。"
-          : normalizeQuestionnaireTransitionText(researcherMessage),
+        agentAMessage: "",
         agentAModel,
         agentBOutput,
         sessionState,
@@ -495,12 +492,11 @@ function getResearcherRoundCount(roundCount: number): number {
 
 function getMidDialogueKey(phase: SessionState["phase"]): MidDialogueKey | undefined {
   if (phase === "mid_dialog1") return "dialog1";
-  if (phase === "mid_dialog2") return "dialog2";
   return undefined;
 }
 
 function getChatContinuationPhase(sessionState: SessionState): SessionState["phase"] {
-  if (sessionState.phase === "mid_dialog1" || sessionState.phase === "mid_dialog2") {
+  if (sessionState.phase === "mid_dialog1") {
     return sessionState.phase;
   }
   return "interview";
@@ -667,12 +663,12 @@ function buildFallbackAgentBOutput(
   if (isMidDialogue) {
     return {
       analysis: {
-        reasoning: "中途对话解析失败，按当前场景继续生成下一批题目。",
+        reasoning: "中途对话解析失败，按当前场景继续生成第二部分问卷。",
         background_summary: state.background.summary ?? "用户背景已记录。",
       },
       directive: {
         action: "finish_mid_dialog",
-        hint: "好的，我会按你当前的场景继续调整下一批题目。",
+        hint: "好的，我会按你当前的场景继续调整第二部分问卷。",
       },
       targetContext,
       nextQuestions: [],

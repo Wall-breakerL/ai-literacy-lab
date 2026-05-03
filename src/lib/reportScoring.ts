@@ -2,6 +2,8 @@ import { flattenBatchAnswers } from "@/lib/sessionState";
 import type { Dimension, DimensionReport, QuestionnaireAnswer, SessionState } from "@/lib/types";
 
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
+const LIKERT_MIN = 1;
+const LIKERT_MAX = 6;
 
 const DIMENSION_META: Record<
   Dimension,
@@ -45,13 +47,20 @@ const DIMENSION_META: Record<
 
 function clampRawScore(score: number): number {
   if (!Number.isFinite(score)) return 3;
-  return Math.min(6, Math.max(1, Math.round(score)));
+  return Math.min(LIKERT_MAX, Math.max(LIKERT_MIN, Math.round(score)));
+}
+
+function toLikertPercent(rawScore: number): number {
+  const span = LIKERT_MAX - LIKERT_MIN;
+  if (span <= 0) return 50;
+  return ((rawScore - LIKERT_MIN) / span) * 100;
 }
 
 export function scoreAnswer(answer: QuestionnaireAnswer): number | null {
   if (answer.skipped || answer.score == null) return null;
   const raw = clampRawScore(answer.score);
-  return answer.reverse ? (6 - raw) * 20 : (raw - 1) * 20;
+  const normalized = toLikertPercent(raw);
+  return answer.reverse ? 100 - normalized : normalized;
 }
 
 function getConfidence(answeredCount: number) {

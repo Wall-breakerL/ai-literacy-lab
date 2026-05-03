@@ -1,7 +1,7 @@
-/** 浏览器端请求 /api/* 时的重试参数（与访谈页一致） */
+/** 浏览器端请求 /api/* 时的重试参数（用于报告等非聊天页面） */
 export const API_RETRY_MAX_ATTEMPTS = 5;
 /** 每次失败后、下一次请求前的固定等待时间（毫秒）。 */
-export const API_RETRY_DELAY_MS = 20_000;
+export const API_RETRY_DELAY_MS = 60_000;
 
 export function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

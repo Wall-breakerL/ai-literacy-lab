@@ -16,9 +16,8 @@ const runLlmSmoke = process.env.RUN_LLM_SMOKE === "1";
 
 const dimensions = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 const batchModes = [
-  ["habit_batch", "batch1", "questionnaire_batch1"],
-  ["scenario_batch", "batch2", "questionnaire_batch2"],
-  ["mixed_batch", "batch3", "questionnaire_batch3"],
+  ["hybrid_batch1", "batch1", "questionnaire_batch1"],
+  ["hybrid_batch2", "batch2", "questionnaire_batch2"],
 ];
 
 const scenarioGuidance = {
@@ -88,20 +87,49 @@ function makeAnswers(questions, scores) {
 }
 
 function minimalQuestions(label) {
-  return dimensions.flatMap((dimension) => [
+  const batch1 = dimensions.flatMap((dimension, dimensionIndex) => [
     {
       dimension,
       question: `${label} ${dimension} direct question`,
-      scenario: label === "habit" ? "habit" : `${label} product work scenario`,
+      scenario: dimensionIndex % 2 === 0 ? "习惯" : `${label} product work scenario`,
       reverse: false,
     },
     {
       dimension,
       question: `${label} ${dimension} reverse question`,
-      scenario: label === "habit" ? "habit" : `${label} product work scenario`,
+      scenario: dimensionIndex % 2 === 0 ? `${label} product work scenario` : "习惯",
       reverse: true,
     },
   ]);
+
+  const batch2 = dimensions.flatMap((dimension, dimensionIndex) => [
+    {
+      dimension,
+      question: `${label} ${dimension} complementary question 1`,
+      scenario: dimensionIndex % 2 === 0 ? "习惯" : `${label} product work scenario`,
+      reverse: false,
+    },
+    {
+      dimension,
+      question: `${label} ${dimension} complementary question 2`,
+      scenario: dimensionIndex % 2 === 0 ? `${label} product work scenario` : "习惯",
+      reverse: true,
+    },
+    {
+      dimension,
+      question: `${label} ${dimension} complementary question 3`,
+      scenario: "习惯",
+      reverse: false,
+    },
+    {
+      dimension,
+      question: `${label} ${dimension} complementary question 4`,
+      scenario: `${label} product work scenario`,
+      reverse: true,
+    },
+  ]);
+
+  return label.includes("batch1") ? batch1 : batch2;
 }
 
 function assertRecord(value, label) {
@@ -135,14 +163,29 @@ function assertQuestion(question, label) {
 
 function assertQuestionBatch(questions, label) {
   assert.ok(Array.isArray(questions), `${label} must be an array`);
-  assert.equal(questions.length, 8, `${label} must contain 8 questions`);
+
+  // hybrid_batch1: 8 题, hybrid_batch2: 16 题
+  const expectedLength = label.includes("batch1") ? 8 : 16;
+  const expectedHabits = label.includes("batch1") ? 4 : 8;
+  const expectedPerDimension = label.includes("batch1") ? 2 : 4;
+
+  assert.equal(questions.length, expectedLength, `${label} must contain ${expectedLength} questions`);
+
   for (const [index, question] of questions.entries()) {
     assertQuestion(question, `${label}[${index}]`);
   }
+
+  assert.equal(
+    questions.filter((question) => question.scenario === "习惯").length,
+    expectedHabits,
+    `${label} must include ${expectedHabits} habit questions`
+  );
+
   for (const dimension of dimensions) {
     const items = questions.filter((question) => question.dimension === dimension);
-    assert.equal(items.length, 2, `${label} must include 2 ${dimension} questions`);
-    assert.equal(items.filter((question) => question.reverse).length, 1, `${label} must include 1 reverse ${dimension} question`);
+    assert.equal(items.length, expectedPerDimension, `${label} must include ${expectedPerDimension} ${dimension} questions`);
+    const reverseCount = items.filter((question) => question.reverse).length;
+    assert.ok(reverseCount >= 1 && reverseCount < expectedPerDimension, `${label} must include mixed direction ${dimension} questions`);
   }
 }
 
@@ -211,45 +254,30 @@ async function assertServerReady() {
 }
 
 async function smokeOpening() {
-  const lowQuestions = minimalQuestions("low-skip");
-  const highQuestions = minimalQuestions("high-skip");
+  const questions = minimalQuestions("mid-dialog-batch1");
   const baseSession = {
     ...createSessionState("smoke-opening"),
     questionnaireBatches: {
-      batch1: lowQuestions,
-      batch2: highQuestions,
+      batch1: questions,
     },
     batchAnswers: {
-      batch1: makeAnswers(lowQuestions, [4, 5, 3, 4]),
-      batch2: makeAnswers(highQuestions, [null, null, null, 3]),
+      batch1: makeAnswers(questions, [null, 5, null, 4]),
     },
   };
 
-  const low = await postJson("/api/mid-dialog/opening", {
+  const opening = await postJson("/api/mid-dialog/opening", {
     sessionState: baseSession,
     completedBatchKey: "batch1",
     answers: baseSession.batchAnswers.batch1,
   });
-  assertText(low.json.message, "low-skip opening.message");
-  assertModelSource(low.json.source, "low-skip opening.source");
-  assert.ok(typeof low.json.model === "string" && low.json.model.length > 0, "low-skip opening.model");
-  assert.ok(typeof low.json.thinkDurationSec === "number", "low-skip opening.thinkDurationSec");
-  assert.equal(low.json.dialogKey, "dialog1", "low-skip opening.dialogKey");
-  assert.ok(Array.isArray(low.json.warnings), "low-skip opening.warnings must be an array");
+  assertText(opening.json.message, "opening.message");
+  assertModelSource(opening.json.source, "opening.source");
+  assert.ok(typeof opening.json.model === "string" && opening.json.model.length > 0, "opening.model");
+  assert.ok(typeof opening.json.thinkDurationSec === "number", "opening.thinkDurationSec");
+  assert.equal(opening.json.dialogKey, "dialog1", "opening.dialogKey");
+  assert.ok(Array.isArray(opening.json.warnings), "opening.warnings must be an array");
 
-  const high = await postJson("/api/mid-dialog/opening", {
-    sessionState: baseSession,
-    completedBatchKey: "batch2",
-    answers: baseSession.batchAnswers.batch2,
-  });
-  assertText(high.json.message, "high-skip opening.message");
-  assertModelSource(high.json.source, "high-skip opening.source");
-  assert.ok(typeof high.json.model === "string" && high.json.model.length > 0, "high-skip opening.model");
-  assert.ok(typeof high.json.thinkDurationSec === "number", "high-skip opening.thinkDurationSec");
-  assert.equal(high.json.dialogKey, "dialog2", "high-skip opening.dialogKey");
-  assert.ok(Array.isArray(high.json.warnings), "high-skip opening.warnings must be an array");
-
-  console.log("ok mid-dialog opening low/high skip payloads");
+  console.log("ok single mid-dialog opening payload");
 }
 
 async function smokeQuestionnaireGeneration() {
@@ -267,12 +295,18 @@ async function smokeQuestionnaireGeneration() {
 
     assert.equal(result.json.batchMode, batchMode, `${batchMode}.batchMode`);
     assertModelSource(result.json.source, `${batchMode}.source`);
+    assertText(result.json.message, `${batchMode}.message`);
+    assert.ok(
+      String(result.json.message).includes("点击按钮"),
+      `${batchMode}.message 应提示点击按钮进入作答`
+    );
     assertQuestionBatch(result.json.questions, `${batchMode}.questions`);
     assertSessionState(result.json.sessionState, `${batchMode}.sessionState`);
     assert.equal(result.json.sessionState.phase, expectedPhase, `${batchMode}.sessionState.phase`);
     assertQuestionBatch(result.json.sessionState.questionnaireBatches[batchKey], `${batchMode}.sessionState.questionnaireBatches.${batchKey}`);
     assert.ok(Array.isArray(result.json.sessionState.questionnaire), `${batchMode}.sessionState.questionnaire must be an array`);
-    assert.ok(result.json.sessionState.questionnaire.length >= existingQuestions.length + 8, `${batchMode}.sessionState.questionnaire should include generated questions`);
+    const expectedMinLength = batchMode === "hybrid_batch1" ? 8 : existingQuestions.length + 16;
+    assert.ok(result.json.sessionState.questionnaire.length >= expectedMinLength, `${batchMode}.sessionState.questionnaire should include generated questions`);
     assert.equal(typeof result.json.retryCount, "number", `${batchMode}.retryCount must be a number`);
     assert.ok(
       typeof result.json.model === "string" && result.json.model.length > 0,
@@ -285,20 +319,19 @@ async function smokeQuestionnaireGeneration() {
     existingQuestions = result.json.sessionState.questionnaire;
   }
 
-  console.log("ok questionnaire generate habit/scenario/mixed batches");
+  console.log("ok questionnaire generate hybrid 8+16 batches");
   return { sessionState, generated };
 }
 
 async function smokeReport(generated) {
   const sessionState = {
     ...createSessionState("smoke-report"),
-    phase: "questionnaire_batch3",
+    phase: "questionnaire_batch2",
     questionnaireBatches: generated,
     questionnaire: Object.values(generated).flat(),
     batchAnswers: {
       batch1: makeAnswers(generated.batch1, [5, 4, 2, 3]),
       batch2: makeAnswers(generated.batch2, [4, 5, null, 2]),
-      batch3: makeAnswers(generated.batch3, [3, 4, 5, null]),
     },
   };
 

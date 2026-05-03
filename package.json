@@ -1,6 +1,6 @@
 {
   "name": "human-ai-performance-lab",
-  "version": "6.0.1",
+  "version": "6.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,9 @@
     "check:llm-tools": "node scripts/check-llm-tools.mjs",
     "check:claude": "node scripts/check-claude-api.mjs",
     "test:browser": "node scripts/run-test-lab-browser.mjs",
-    "smoke:phase6-phase7": "node scripts/smoke-phase6-phase7.mjs"
+    "smoke:phase6-phase7": "node scripts/smoke-phase6-phase7.mjs",
+    "selfcheck:fallback-5r": "SELFCHECK_ROUNDS=5 node scripts/selfcheck-fallback-5r.mjs",
+    "selfcheck:fallback-10r": "SELFCHECK_ROUNDS=10 node scripts/selfcheck-fallback-5r.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.0",

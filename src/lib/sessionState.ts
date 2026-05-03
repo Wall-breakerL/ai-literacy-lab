@@ -1,6 +1,7 @@
 import { DEFAULT_TARGET_CONTEXT } from "@/lib/targetContext";
 import type {
   AgentBOutput,
+  LegacyQuestionnaireBatchKey,
   Message,
   QuestionnaireAnswer,
   QuestionnaireBatchKey,
@@ -15,7 +16,8 @@ import type {
 
 const MAX_EVIDENCE = 12;
 const MAX_OPEN_PROBES = 8;
-const BATCH_KEYS: QuestionnaireBatchKey[] = ["batch1", "batch2", "batch3"];
+/** 报告与旧会话展开顺序：含 legacy batch3 */
+const LEGACY_BATCH_ORDER: LegacyQuestionnaireBatchKey[] = ["batch1", "batch2", "batch3"];
 const PHASES = new Set<SessionPhase>([
   "interview",
   "questionnaire_batch1",
@@ -71,8 +73,8 @@ export function applySessionStatePatch(
   const turn = options?.turn ?? state.turn + 1;
   const phase = options?.phase ?? patch.phase ?? state.phase;
   const backgroundPatch = patch.background ?? {};
-  const tools = mergeStrings(state.background.tools, backgroundPatch.tools);
-  const evidence = mergeEvidence(state.evidence, patch.newEvidence ?? []);
+  const tools = mergeStrings(toStringList(state.background.tools), backgroundPatch.tools);
+  const evidence = mergeEvidence(Array.isArray(state.evidence) ? state.evidence : [], patch.newEvidence ?? []);
 
   return {
     ...state,
@@ -84,7 +86,7 @@ export function applySessionStatePatch(
       tools,
     },
     evidence,
-    openProbes: mergeStrings([], patch.openProbes ?? state.openProbes).slice(0, MAX_OPEN_PROBES),
+    openProbes: mergeStrings([], patch.openProbes ?? toStringList(state.openProbes)).slice(0, MAX_OPEN_PROBES),
     questionnaire: patch.questionnaire ?? state.questionnaire,
     answers: patch.answers ?? state.answers,
     questionnaireBatches: mergeBatchRecord(state.questionnaireBatches, patch.questionnaireBatches),
@@ -129,14 +131,16 @@ export function summarizeSessionStateForPrompt(state: SessionState): string {
     .slice(-6)
     .map((item) => `- ${item.dimension ?? "背景"} / ${item.signal} / ${item.evidenceKind}：${item.quote}`)
     .join("\n") || "（暂无）";
-  const probes = state.openProbes.length > 0 ? state.openProbes.join("；") : "（暂无）";
+  const tools = toStringList(state.background.tools);
+  const openProbes = toStringList(state.openProbes);
+  const probes = openProbes.length > 0 ? openProbes.join("；") : "（暂无）";
   const target = getEffectiveTargetContext(state);
   const guidance = state.scenarioGuidance
     ? `状态：${state.scenarioGuidance.status}；粒度：${state.scenarioGuidance.granularity}；场景：${state.scenarioGuidance.scenarioSummary || "（暂无）"}；包含：${state.scenarioGuidance.includeTopics.join("、") || "（暂无）"}；避免：${state.scenarioGuidance.avoidTopics.join("、") || "（暂无）"}${state.scenarioGuidance.userCorrectionQuote ? `；用户修正：${state.scenarioGuidance.userCorrectionQuote}` : ""}`
     : "（暂无）";
   return `【SessionState】
 身份：${state.background.role}
-工具：${state.background.tools.join("、") || "未明确"}
+工具：${tools.join("、") || "未明确"}
 近期使用：${state.background.recentUse}
 目标：${state.background.goal}（${state.background.goalStatus}/${state.background.goalType}）
 摘要：${state.background.summary || "（暂无）"}
@@ -161,31 +165,28 @@ export function getEffectiveTargetContext(state: SessionState): TargetContext {
 export function flattenQuestionnaireBatches(
   batches: SessionState["questionnaireBatches"] | undefined
 ): QuestionnaireQuestion[] {
-  return BATCH_KEYS.flatMap((key) => batches?.[key] ?? []);
+  return LEGACY_BATCH_ORDER.flatMap((key) => batches?.[key] ?? []);
 }
 
 export function flattenBatchAnswers(
   batchAnswers: SessionState["batchAnswers"] | undefined
 ): QuestionnaireAnswer[] {
-  return BATCH_KEYS.flatMap((key) => batchAnswers?.[key] ?? []);
+  return LEGACY_BATCH_ORDER.flatMap((key) => batchAnswers?.[key] ?? []);
 }
 
+/** 当前主动流程问卷阶段 → 批次键（不含旧版 questionnaire_batch3；旧数据靠 flatten 展开） */
 export function getBatchKeyForPhase(phase: SessionPhase): QuestionnaireBatchKey | undefined {
   if (phase === "questionnaire_batch1") return "batch1";
   if (phase === "questionnaire_batch2") return "batch2";
-  if (phase === "questionnaire_batch3") return "batch3";
   return undefined;
 }
 
 export function getBatchModeForKey(key: QuestionnaireBatchKey): QuestionnaireBatchMode {
-  if (key === "batch1") return "habit_batch";
-  if (key === "batch2") return "scenario_batch";
-  return "mixed_batch";
+  return key === "batch1" ? "hybrid_batch1" : "hybrid_batch2";
 }
 
 export function getNextBatchKey(key: QuestionnaireBatchKey): QuestionnaireBatchKey | undefined {
   if (key === "batch1") return "batch2";
-  if (key === "batch2") return "batch3";
   return undefined;
 }
 
@@ -212,10 +213,10 @@ function compactBackground(background: Partial<SessionState["background"]>): Par
   ) as Partial<SessionState["background"]>;
 }
 
-function mergeStrings(current: string[], incoming?: string[]): string[] {
+function mergeStrings(current: string[] | undefined, incoming?: string[]): string[] {
   const seen = new Set<string>();
   const merged: string[] = [];
-  for (const item of [...current, ...(incoming ?? [])]) {
+  for (const item of [...toStringList(current), ...toStringList(incoming)]) {
     const clean = item.trim();
     if (!clean || seen.has(clean)) continue;
     seen.add(clean);
@@ -224,16 +225,21 @@ function mergeStrings(current: string[], incoming?: string[]): string[] {
   return merged;
 }
 
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 function mergeBatchRecord<T>(
-  current: Partial<Record<QuestionnaireBatchKey, T[]>> | undefined,
-  incoming: Partial<Record<QuestionnaireBatchKey, T[]>> | undefined
-): Partial<Record<QuestionnaireBatchKey, T[]>> | undefined {
+  current: Partial<Record<LegacyQuestionnaireBatchKey, T[]>> | undefined,
+  incoming: Partial<Record<LegacyQuestionnaireBatchKey, T[]>> | undefined
+): Partial<Record<LegacyQuestionnaireBatchKey, T[]>> | undefined {
   if (!incoming) return current;
   return { ...(current ?? {}), ...incoming };
 }
 
 function formatBatchSummary(state: SessionState): string {
-  const questionParts = BATCH_KEYS.map((key) => {
+  const questionParts = LEGACY_BATCH_ORDER.map((key) => {
     const questions = state.questionnaireBatches?.[key]?.length ?? 0;
     const answers = state.batchAnswers?.[key]?.length ?? 0;
     return `${key}: ${questions}题/${answers}答`;

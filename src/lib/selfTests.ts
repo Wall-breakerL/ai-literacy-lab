@@ -10,8 +10,11 @@ import {
   validateQuestionnaireBatch,
   validateQuestionnaireTotal,
 } from "@/lib/questionnaireValidation";
+import { questionnaireReadyMessageForBatchKey, questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
+import { flattenBatchAnswers, getBatchKeyForPhase, getNextBatchKey } from "@/lib/sessionState";
 import { completePortableArtifacts, normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
 import {
+  normalizeMidDialogueOutput,
   normalizeMidDialogueTransitionRepairText,
   normalizeMidDialogueVisibleText,
 } from "@/lib/researcher";
@@ -26,7 +29,7 @@ import {
   type HQProbeResult,
   type HQReportDraft,
 } from "@/lib/hqScoring";
-import type { Dimension, HQDimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
+import type { AgentBOutput, Dimension, HQDimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
   name: string;
@@ -80,6 +83,37 @@ function skippedAnswer(dimension: Dimension, score: number | null = null): Quest
     skipped: true,
     skipReason: "unsure_or_not_applicable",
   };
+}
+
+function countHabitQuestions(questions: QuestionnaireQuestion[]): number {
+  return questions.filter((question) => question.scenario.trim() === "习惯").length;
+}
+
+function assertHybridBatchShape(
+  questions: QuestionnaireQuestion[],
+  label: string,
+  expected: { count: number; habits: number; perDimension: number }
+) {
+  assert(questions.length === expected.count, `${label} 应为 ${expected.count} 题`);
+  assert(countHabitQuestions(questions) === expected.habits, `${label} 应包含 ${expected.habits} 道习惯题`);
+  assert(
+    questions.length - countHabitQuestions(questions) === expected.count - expected.habits,
+    `${label} 应包含 ${expected.count - expected.habits} 道场景题`
+  );
+  for (const dimension of DIMENSIONS) {
+    const items = questions.filter((question) => question.dimension === dimension);
+    assert(items.length === expected.perDimension, `${label} 每维应有 ${expected.perDimension} 题：${dimension}`);
+  }
+}
+
+function assertHybridTotalBalance(questions: QuestionnaireQuestion[]) {
+  assert(questions.length === 24, "总卷应为 24 题");
+  assert(countHabitQuestions(questions) === 12, "总卷应包含 12 道习惯题");
+  for (const dimension of DIMENSIONS) {
+    const items = questions.filter((question) => question.dimension === dimension);
+    assert(items.length === 6, `总卷每维应有 6 题：${dimension}`);
+    assert(items.filter((question) => question.reverse).length === 3, `总卷每维应有 3 道反向题：${dimension}`);
+  }
 }
 
 function sessionState(overrides: Partial<SessionState>): SessionState {
@@ -223,19 +257,68 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(batchResolved.length === 2, `缺少扁平答案时应展开 batchAnswers，实际 ${batchResolved.length}`);
       assert(batchResolved[0]?.question === "batch answer", "batchAnswers 应按批次顺序展开");
     }),
-    test("AI-MBTI", "Phase 6 兜底批次结构合法", () => {
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.habit_batch, "habit_batch"), "habit_batch fallback 应合法");
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.scenario_batch, "scenario_batch"), "scenario_batch fallback 应合法");
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.mixed_batch, "mixed_batch"), "mixed_batch fallback 应合法");
-      assert(validateQuestionnaireTotal(FALLBACK_QUESTIONNAIRE_TOTAL), "三批 fallback 合并后应是合法 24 题");
+    test("AI-MBTI", "Phase 6 active 批次键与就绪文案", () => {
+      assert(getBatchKeyForPhase("questionnaire_batch1") === "batch1", "questionnaire_batch1 → batch1");
+      assert(getBatchKeyForPhase("questionnaire_batch2") === "batch2", "questionnaire_batch2 → batch2");
+      assert(
+        getBatchKeyForPhase("questionnaire_batch3") === undefined,
+        "旧第三段阶段不映射到 active batch 键"
+      );
+      assert(getBatchKeyForPhase("interview") === undefined, "interview 无批次键");
+      assert(getNextBatchKey("batch1") === "batch2", "batch1 后仅 batch2");
+      assert(getNextBatchKey("batch2") === undefined, "batch2 后无下一批");
+      const msg1 = questionnaireReadyMessageForBatchKey("batch1");
+      const msg2 = questionnaireReadyMessageForBatchKey("batch2");
+      assert(msg1.includes("点击按钮"), "就绪文案应提示点击按钮进入作答");
+      assert(msg2.includes("点击按钮"), "第二部分就绪文案应提示点击按钮");
+      assert(
+        questionnaireReadyMessageForBatchMode("hybrid_batch1") === msg1 &&
+          questionnaireReadyMessageForBatchMode("hybrid_batch2") === msg2,
+        "batchMode 就绪文案应与批次键一致"
+      );
     }),
-    test("AI-MBTI", "Phase 6 场景批次拒绝泛场景", () => {
-      const genericScenarioBatch: QuestionnaireQuestion[] = FALLBACK_QUESTIONNAIRE_BATCHES.scenario_batch.map((question) => ({
+    test("AI-MBTI", "Phase 6 flattenBatchAnswers 含 legacy batch3", () => {
+      const a1 = { ...answer("Relation", 5), question: "b1" };
+      const a2 = { ...answer("Workflow", 4), question: "b2" };
+      const a3 = { ...answer("Epistemic", 3), question: "b3" };
+      const flat = flattenBatchAnswers({
+        batch1: [a1],
+        batch2: [a2],
+        batch3: [a3],
+      });
+      assert(
+        flat.length === 3 && flat[0]?.question === "b1" && flat[1]?.question === "b2" && flat[2]?.question === "b3",
+        "应按 batch1→batch2→batch3 顺序展开含旧批次答案"
+      );
+    }),
+    test("AI-MBTI", "Phase 6 两段式兜底批次结构合法", () => {
+      const first = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1;
+      const second = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2;
+      assertHybridBatchShape(first, "hybrid_batch1 fallback", {
+        count: 8,
+        habits: 4,
+        perDimension: 2,
+      });
+      assertHybridBatchShape(second, "hybrid_batch2 fallback", {
+        count: 16,
+        habits: 8,
+        perDimension: 4,
+      });
+      assert(validateQuestionnaireBatch(first, "hybrid_batch1"), "hybrid_batch1 fallback 应合法");
+      assert(validateQuestionnaireBatch(second, "hybrid_batch2"), "hybrid_batch2 fallback 应合法");
+      assert(validateQuestionnaireTotal(FALLBACK_QUESTIONNAIRE_TOTAL), "两部分 fallback 合并后应是合法 24 题");
+      assertHybridTotalBalance(FALLBACK_QUESTIONNAIRE_TOTAL);
+    }),
+    test("AI-MBTI", "Phase 6 hybrid 批次允许泛场景（放宽校验）", () => {
+      const genericScenarioBatch: QuestionnaireQuestion[] = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question) => ({
         ...question,
-        scenario: "日常使用 AI",
+        scenario: question.scenario === "习惯" ? "习惯" : "日常使用 AI",
       }));
       assert(!isSpecificScenario("日常使用 AI"), "泛场景不应被视为具体场景");
-      assert(!validateQuestionnaireBatch(genericScenarioBatch, "scenario_batch"), "scenario_batch 不应接受泛场景");
+      assert(!isSpecificScenario("使用 AI 时"), "带时间后缀的泛场景也不应被视为具体场景");
+      assert(isSpecificScenario("写代码"), "三字但明确的中文任务场景应被接受");
+      assert(isSpecificScenario("写代码时"), "短但明确的中文任务场景应被接受");
+      assert(validateQuestionnaireBatch(genericScenarioBatch, "hybrid_batch2"), "hybrid batch 现已允许泛场景");
     }),
     test("AI-MBTI", "Phase 6 问卷去重检测", () => {
       const similar = findSimilarQuestionText(
@@ -268,9 +351,49 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         "过渡补句不应泄漏 directive.hint"
       );
       assert(
-        normalizeMidDialogueTransitionRepairText("好，我会按你刚才说的写代码场景生成下一批题目。").startsWith("好，我会"),
+        normalizeMidDialogueTransitionRepairText("好，我会按你刚才说的写代码场景生成第二部分题目。").startsWith("好，我会"),
         "正常生成过渡句应保留"
       );
+    }),
+    test("AI-MBTI", "Phase 6 中途对话保留场景修正状态并直接进入第二部分", () => {
+      const opening: Message = {
+        role: "assistant",
+        content: "第一部分答下来你觉得整体感觉怎么样？",
+      };
+      const userReply: Message = {
+        role: "user",
+        content: "这些题可以，但第二部分更希望围绕代码评审，不要问泛泛写作。",
+      };
+      const output: AgentBOutput = {
+        analysis: {
+          reasoning: "用户给出第二部分的真实场景修正。",
+          background_summary: "用户希望围绕代码评审继续。",
+        },
+        directive: { action: "clarify" },
+        nextQuestions: [],
+        scenarioGuidance: {
+          status: "refined",
+          scenarioSummary: "代码评审",
+          granularity: "specific",
+          includeTopics: ["代码评审"],
+          avoidTopics: ["泛泛写作"],
+          userCorrectionQuote: userReply.content,
+        },
+        shouldGenerateNextBatch: false,
+      };
+      const normalized = normalizeMidDialogueOutput({
+        agentBOutput: output,
+        messages: [opening, userReply],
+        sessionState: sessionState({
+          phase: "mid_dialog1",
+          midDialogues: { dialog1: [opening] },
+        }),
+        dialogKey: "dialog1",
+      });
+      assert(normalized.directive.action === "finish_mid_dialog", "中途对话应一轮后结束");
+      assert(normalized.shouldGenerateNextBatch === true, "中途对话后应直接生成第二部分");
+      assert(normalized.scenarioGuidance?.status === "refined", "应保留 refined 场景修正状态");
+      assert(normalized.scenarioGuidance?.includeTopics.includes("代码评审"), "应保留 includeTopics");
     }),
     test("AI-MBTI", "四维报告总是补齐", () => {
       const scored = scoreQuestionnaireAnswers([answer("Relation", 6)]);
