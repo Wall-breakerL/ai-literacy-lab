@@ -20,8 +20,11 @@ export type GoalType =
   | "creative_work"
   | "other";
 export type DimensionConfidence = "high" | "medium" | "low";
-export type QuestionnaireBatchKey = "batch1" | "batch2" | "batch3";
-export type QuestionnaireBatchMode = "habit_batch" | "scenario_batch" | "mixed_batch";
+/** Active AI-MBTI 两段式问卷仅两批 */
+export type QuestionnaireBatchKey = "batch1" | "batch2";
+/** 旧会话 / 报告展开可能仍含第三批次 */
+export type LegacyQuestionnaireBatchKey = QuestionnaireBatchKey | "batch3";
+export type QuestionnaireBatchMode = "hybrid_batch1" | "hybrid_batch2";
 export type MidDialogueKey = "dialog1" | "dialog2";
 export type MidDialogueStatus =
   | "confirmed"
@@ -102,8 +105,8 @@ export interface SessionState {
   openProbes: string[];
   questionnaire?: QuestionnaireQuestion[];
   answers?: QuestionnaireAnswer[];
-  questionnaireBatches?: Partial<Record<QuestionnaireBatchKey, QuestionnaireQuestion[]>>;
-  batchAnswers?: Partial<Record<QuestionnaireBatchKey, QuestionnaireAnswer[]>>;
+  questionnaireBatches?: Partial<Record<LegacyQuestionnaireBatchKey, QuestionnaireQuestion[]>>;
+  batchAnswers?: Partial<Record<LegacyQuestionnaireBatchKey, QuestionnaireAnswer[]>>;
   midDialogues?: Partial<Record<MidDialogueKey, Message[]>>;
   refinedTargetContext?: TargetContext;
   scenarioGuidance?: ScenarioGuidance;
@@ -115,8 +118,8 @@ export type SessionStatePatch = {
   openProbes?: string[];
   questionnaire?: QuestionnaireQuestion[];
   answers?: QuestionnaireAnswer[];
-  questionnaireBatches?: Partial<Record<QuestionnaireBatchKey, QuestionnaireQuestion[]>>;
-  batchAnswers?: Partial<Record<QuestionnaireBatchKey, QuestionnaireAnswer[]>>;
+  questionnaireBatches?: Partial<Record<LegacyQuestionnaireBatchKey, QuestionnaireQuestion[]>>;
+  batchAnswers?: Partial<Record<LegacyQuestionnaireBatchKey, QuestionnaireAnswer[]>>;
   midDialogues?: Partial<Record<MidDialogueKey, Message[]>>;
   refinedTargetContext?: TargetContext;
   scenarioGuidance?: ScenarioGuidance;

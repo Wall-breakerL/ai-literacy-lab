@@ -13,7 +13,7 @@ import {
   type MidDialogueOpeningSkippedQuestion,
 } from "@/lib/researcher";
 import { getBatchSkipRate, isSessionState } from "@/lib/sessionState";
-import type { MidDialogueKey, QuestionnaireAnswer, QuestionnaireBatchKey, SessionState } from "@/lib/types";
+import type { MidDialogueKey, QuestionnaireAnswer, SessionState } from "@/lib/types";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -31,17 +31,16 @@ export async function POST(req: NextRequest) {
 
   if (!body || !isSessionState(body.sessionState) || !isCompletedBatchKey(body.completedBatchKey)) {
     return NextResponse.json(
-      { error: "bad_request", detail: "请求体需要包含 sessionState 与 completedBatchKey=batch1/batch2。" },
+      { error: "bad_request", detail: "请求体需要包含 sessionState 与 completedBatchKey=batch1。" },
       { status: 400 }
     );
   }
 
   const started = performance.now();
   const sessionState = body.sessionState;
-  const completedBatchKey = body.completedBatchKey;
   const answers = parseAnswers(body.answers);
-  const dialogKey = completedBatchKey === "batch1" ? "dialog1" : "dialog2";
-  const skippedQuestionSamples = collectSkippedQuestionSamples(dialogKey, sessionState, answers);
+  const dialogKey: MidDialogueKey = "dialog1";
+  const skippedQuestionSamples = collectSkippedQuestionSamples(sessionState, answers);
   const fallback = buildFallbackOpening(dialogKey, answers, skippedQuestionSamples);
   const warnings: string[] = [];
   let message = fallback;
@@ -130,47 +129,25 @@ function buildFallbackOpening(
   answers: QuestionnaireAnswer[],
   skippedQuestionSamples: MidDialogueOpeningSkippedQuestion[]
 ): string {
-  const skipRate = getBatchSkipRate(answers);
   const skippedText = formatSkippedQuestionReferences(skippedQuestionSamples);
   if (dialogKey === "dialog1") {
-    if (skipRate > 0.5) {
+    if (skippedText) {
       return skippedText
-        ? `看起来刚才的习惯题不太贴近你，比如${skippedText}${skippedQuestionSamples.length > 1 ? "这两道题" : "这道题"}。你觉得哪些习惯题不太贴？你平时用 AI 主要做什么？`
-        : "看起来刚才的习惯题不太贴近你。你觉得哪些习惯题不太贴？你平时用 AI 主要做什么？";
+        ? `刚才有几题你选了「不了解 / 没想好」，比如${skippedText}${skippedQuestionSamples.length > 1 ? "这两道题" : "这道题"}。你觉得是题意不清楚、没有类似经历，还是对这个方向不太感兴趣？`
+        : "刚才有几题你选了「不了解 / 没想好」。你觉得是题意不清楚、没有类似经历，还是对这个方向不太感兴趣？";
     }
-    if (skipRate >= 0.25) {
-      return skippedText
-        ? `刚才有几道习惯题你选了「不了解 / 没想好」，比如${skippedText}${skippedQuestionSamples.length > 1 ? "这两道题" : "这道题"}。你觉得接下来的场景题，更希望围绕什么任务来问？`
-        : "刚才有几道习惯题你选了「不了解 / 没想好」。你觉得接下来的场景题，更希望围绕什么任务来问？";
-    }
-    return "刚才的习惯题答下来你觉得感觉怎么样？接下来我想问一些具体场景，你平时用 AI 主要在哪些环节用得多？";
+    return "第一部分答下来你觉得整体感觉怎么样？第二部分你更希望围绕哪些真实 AI 使用场景来问？";
   }
-  if (skipRate > 0.5) {
-    return skippedText
-      ? `看起来这些场景题还是不太贴近你，比如${skippedText}${skippedQuestionSamples.length > 1 ? "这两道题" : "这道题"}。你觉得这些场景哪里不太贴？你平时用 AI 最常做的是什么？`
-      : "看起来这些场景题还是不太贴近你。你觉得这些场景哪里不太贴？你平时用 AI 最常做的是什么？";
-  }
-  if (skipRate >= 0.25) {
-    return skippedText
-      ? `刚才有几道场景题你选了「不了解 / 没想好」，比如${skippedText}${skippedQuestionSamples.length > 1 ? "这两道题" : "这道题"}。你觉得哪些场景不太贴？或者你更希望问什么场景？`
-      : "刚才有几道场景题你选了「不了解 / 没想好」。你觉得哪些场景不太贴？或者你更希望问什么场景？";
-  }
-  return "这些场景题你觉得感觉怎么样？最后一批你更希望怎么调整场景颗粒度？可以说说想更具体，还是更抽象一些。";
+  return "第一部分答下来你觉得整体感觉怎么样？第二部分你更希望围绕哪些真实 AI 使用场景来问？";
 }
 
 function collectSkippedQuestionSamples(
-  dialogKey: MidDialogueKey,
   sessionState: SessionState,
   answers: QuestionnaireAnswer[]
 ): MidDialogueOpeningSkippedQuestion[] {
-  const source = dialogKey === "dialog2"
-    ? [
-        ...(sessionState.batchAnswers?.batch2?.length ? sessionState.batchAnswers.batch2 : answers),
-        ...(sessionState.batchAnswers?.batch1 ?? []),
-      ]
-    : answers;
+  const source = answers.length ? answers : sessionState.batchAnswers?.batch1 ?? [];
   const seen = new Set<string>();
-  return source.flatMap((answer) => {
+  const skipped = source.flatMap((answer) => {
     if (!isSkippedAnswer(answer)) return [];
     const question = answer.question.trim();
     if (!question) return [];
@@ -182,7 +159,13 @@ function collectSkippedQuestionSamples(
       scenario: answer.scenario,
       question,
     }];
-  }).slice(0, 2);
+  });
+  return skipped
+    .sort((left, right) =>
+      stableHash(`${sessionState.sessionId}|${left.dimension}|${left.question}`) -
+      stableHash(`${sessionState.sessionId}|${right.dimension}|${right.question}`)
+    )
+    .slice(0, 2);
 }
 
 function isSkippedAnswer(answer: QuestionnaireAnswer): boolean {
@@ -203,8 +186,16 @@ function compactQuestionReference(sample: MidDialogueOpeningSkippedQuestion): st
   return text.length <= 42 ? text : `${text.slice(0, 41)}…`;
 }
 
-function isCompletedBatchKey(value: unknown): value is Exclude<QuestionnaireBatchKey, "batch3"> {
-  return value === "batch1" || value === "batch2";
+function stableHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function isCompletedBatchKey(value: unknown): value is "batch1" {
+  return value === "batch1";
 }
 
 function parseAnswers(value: unknown): QuestionnaireAnswer[] {

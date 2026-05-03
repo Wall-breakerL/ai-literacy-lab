@@ -8,9 +8,11 @@ import {
   getUpstreamErrorMessage,
 } from "@/lib/claude";
 import { getFallbackQuestionnaireBatch } from "@/lib/fallbackQuestionnaire";
+import { questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
 import {
   findSimilarQuestionText,
   validateQuestionnaireBatch,
+  validateQuestionnaireTotal,
 } from "@/lib/questionnaireValidation";
 import {
   applySessionStatePatch,
@@ -38,7 +40,7 @@ import type {
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-const BATCH_MODES: QuestionnaireBatchMode[] = ["habit_batch", "scenario_batch", "mixed_batch"];
+const BATCH_MODES: QuestionnaireBatchMode[] = ["hybrid_batch1", "hybrid_batch2"];
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 const MID_DIALOGUE_STATUSES: MidDialogueStatus[] = [
   "confirmed",
@@ -47,19 +49,17 @@ const MID_DIALOGUE_STATUSES: MidDialogueStatus[] = [
   "needs_more_context",
   "exit_requested",
 ];
-const BATCH_KEYS: QuestionnaireBatchKey[] = ["batch1", "batch2", "batch3"];
+const BATCH_KEYS: QuestionnaireBatchKey[] = ["batch1", "batch2"];
 const SIMILARITY_THRESHOLD = 0.72;
 
 const MODE_TO_BATCH_KEY: Record<QuestionnaireBatchMode, QuestionnaireBatchKey> = {
-  habit_batch: "batch1",
-  scenario_batch: "batch2",
-  mixed_batch: "batch3",
+  hybrid_batch1: "batch1",
+  hybrid_batch2: "batch2",
 };
 
 const MODE_TO_PHASE: Record<QuestionnaireBatchMode, SessionState["phase"]> = {
-  habit_batch: "questionnaire_batch1",
-  scenario_batch: "questionnaire_batch2",
-  mixed_batch: "questionnaire_batch3",
+  hybrid_batch1: "questionnaire_batch1",
+  hybrid_batch2: "questionnaire_batch2",
 };
 
 type GenerationSource = "model" | "fallback";
@@ -71,6 +71,29 @@ type BatchGenerationResult = {
   validationIssue?: string;
   /** Actual upstream model ID when LLM generation succeeded（含主模型失败后备用模型生效） */
   modelUsed?: string;
+  debug?: QuestionnaireGenerateDebug;
+};
+
+type QuestionnaireGenerateDebug = {
+  enabled: true;
+  attempts: QuestionnaireGenerateDebugAttempt[];
+  routeValidationIssue?: string;
+  upstreamError?: string;
+};
+
+type QuestionnaireGenerateDebugAttempt = {
+  attempt: number;
+  model: string;
+  stopReason?: string;
+  textBlocks: string[];
+  toolUses: Array<{
+    name: string;
+    inputKeys: string[];
+    inputPreview: unknown;
+  }>;
+  parsedQuestionCount: number;
+  parsedQuestions: QuestionnaireQuestion[];
+  validationIssue?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -80,6 +103,7 @@ export async function POST(req: NextRequest) {
         batchMode?: unknown;
         existingQuestions?: unknown;
         scenarioGuidance?: unknown;
+        debug?: unknown;
       }
     | null;
 
@@ -101,8 +125,10 @@ export async function POST(req: NextRequest) {
   });
 
   const warnings: string[] = [];
+  const debugEnabled = isQuestionnaireGenerateDebugEnabled(req, body.debug);
   let source: GenerationSource = "model";
   let result: BatchGenerationResult | null = null;
+  let upstreamDebug: QuestionnaireGenerateDebug | undefined;
 
   const missing = assertClaudeApiKey();
   if (missing) {
@@ -113,8 +139,17 @@ export async function POST(req: NextRequest) {
       batchMode,
       existingQuestions,
       scenarioGuidance,
+      debugEnabled,
     }).catch((error) => {
-      warnings.push(getUpstreamErrorMessage(error) ?? String(error));
+      const message = getUpstreamErrorMessage(error) ?? String(error);
+      warnings.push(message);
+      if (debugEnabled) {
+        upstreamDebug = {
+          enabled: true,
+          attempts: [],
+          upstreamError: message,
+        };
+      }
       return null;
     });
   }
@@ -125,6 +160,13 @@ export async function POST(req: NextRequest) {
       questions: fallbackQuestions,
       retryCount: 0,
       validationIssue: warnings[warnings.length - 1],
+      debug: debugEnabled
+        ? {
+            enabled: true,
+            attempts: upstreamDebug?.attempts ?? [],
+            upstreamError: upstreamDebug?.upstreamError ?? warnings[warnings.length - 1],
+          }
+        : undefined,
     };
   }
 
@@ -137,6 +179,12 @@ export async function POST(req: NextRequest) {
       questions: fallbackQuestions,
       retryCount: result.retryCount,
       validationIssue,
+      debug: result.debug
+        ? {
+            ...result.debug,
+            routeValidationIssue: validationIssue,
+          }
+        : undefined,
     };
   }
 
@@ -151,10 +199,10 @@ export async function POST(req: NextRequest) {
   const responseModel =
     source === "model" ? (result.modelUsed ?? RESEARCHER_MODEL) : "deterministic";
 
-  return NextResponse.json({
+  const responseBody = {
     questions: result.questions,
     sessionState: nextSessionState,
-    message: buildBatchReadyMessage(batchMode, result.agentBOutput, source),
+    message: questionnaireReadyMessageForBatchMode(batchMode),
     batchMode,
     source,
     model: responseModel,
@@ -162,27 +210,33 @@ export async function POST(req: NextRequest) {
     retryCount: result.retryCount,
     validationIssue: result.validationIssue,
     warnings,
-  });
-}
+    ...(debugEnabled && result.debug ? { debug: result.debug } : {}),
+  };
 
-function buildBatchReadyMessage(
-  batchMode: QuestionnaireBatchMode,
-  agentBOutput: AgentBOutput | undefined,
-  source: GenerationSource
-): string | undefined {
-  const generated = agentBOutput?.userFacingMessage?.trim();
-  if (generated) return generated.slice(0, 140);
-
-  const label =
-    batchMode === "habit_batch"
-      ? "第一批习惯题"
-      : batchMode === "scenario_batch"
-        ? "第二批场景题"
-        : "最后一批混合题";
-  if (source === "fallback") {
-    return `${label}已经准备好了。我会先按当前信息出题，作答时遇到不贴近的题可以直接选「不了解 / 没想好」。`;
+  if (debugEnabled) {
+    console.info("[questionnaire/generate debug]", JSON.stringify({
+      sessionId: sessionState.sessionId,
+      batchMode,
+      source,
+      model: responseModel,
+      retryCount: result.retryCount,
+      validationIssue: result.validationIssue,
+      attempts: result.debug?.attempts.map((attempt) => ({
+        attempt: attempt.attempt,
+        model: attempt.model,
+        stopReason: attempt.stopReason,
+        toolUses: attempt.toolUses.map((toolUse) => ({
+          name: toolUse.name,
+          inputKeys: toolUse.inputKeys,
+        })),
+        parsedQuestionCount: attempt.parsedQuestionCount,
+        validationIssue: attempt.validationIssue,
+      })),
+      warnings,
+    }, null, 2));
   }
-  return undefined;
+
+  return NextResponse.json(responseBody);
 }
 
 async function generateWithOneRetry({
@@ -190,16 +244,19 @@ async function generateWithOneRetry({
   batchMode,
   existingQuestions,
   scenarioGuidance,
+  debugEnabled,
 }: {
   sessionState: SessionState;
   batchMode: QuestionnaireBatchMode;
   existingQuestions: QuestionnaireQuestion[];
   scenarioGuidance?: ScenarioGuidance;
+  debugEnabled: boolean;
 }): Promise<BatchGenerationResult | null> {
   let retryReason: string | undefined;
   let lastValidationIssue: string | undefined;
+  const debugAttempts: QuestionnaireGenerateDebugAttempt[] = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { output, model } = await callResearcherBatchTool({
+    const { output, model, raw } = await callResearcherBatchTool({
       sessionState,
       batchMode,
       existingQuestions,
@@ -208,12 +265,36 @@ async function generateWithOneRetry({
     });
     const questions = output?.nextQuestions ?? [];
     const validationIssue = validateBatchForRoute(questions, batchMode, existingQuestions);
+    if (debugEnabled) {
+      debugAttempts.push({
+        attempt,
+        model,
+        stopReason: raw.stopReason,
+        textBlocks: raw.textBlocks.map((text) => truncateString(text, 2000)),
+        toolUses: raw.toolUses.map((toolUse) => ({
+          name: toolUse.name,
+          inputKeys: toolUse.input && typeof toolUse.input === "object"
+            ? Object.keys(toolUse.input as Record<string, unknown>)
+            : [],
+          inputPreview: truncateUnknown(toolUse.input, 5000),
+        })),
+        parsedQuestionCount: questions.length,
+        parsedQuestions: questions,
+        validationIssue,
+      });
+    }
     if (!validationIssue) {
       return {
         questions,
         agentBOutput: output ?? undefined,
         retryCount: attempt,
         modelUsed: model,
+        debug: debugEnabled
+          ? {
+              enabled: true,
+              attempts: debugAttempts,
+            }
+          : undefined,
       };
     }
     lastValidationIssue = validationIssue;
@@ -223,6 +304,12 @@ async function generateWithOneRetry({
     questions: [],
     retryCount: 1,
     validationIssue: lastValidationIssue,
+    debug: debugEnabled
+      ? {
+          enabled: true,
+          attempts: debugAttempts,
+        }
+      : undefined,
   };
 }
 
@@ -238,7 +325,7 @@ async function callResearcherBatchTool({
   existingQuestions: QuestionnaireQuestion[];
   scenarioGuidance?: ScenarioGuidance;
   retryReason?: string;
-}): Promise<{ output: AgentBOutput | null; model: string }> {
+}): Promise<{ output: AgentBOutput | null; model: string; raw: Awaited<ReturnType<typeof createClaudeMessageWithTools>> }> {
   const params = {
     system: buildResearcherSystemPrompt(sessionState),
     messages: [
@@ -265,8 +352,9 @@ async function callResearcherBatchTool({
       model: RESEARCHER_MODEL,
     });
     return {
-      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses),
+      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses, apiResult.textBlocks),
       model: RESEARCHER_MODEL,
+      raw: apiResult,
     };
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
@@ -275,9 +363,31 @@ async function callResearcherBatchTool({
       model: RESEARCHER_FALLBACK_MODEL,
     });
     return {
-      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses),
+      output: questionnaireBatchOutputFromToolUses(apiResult.toolUses, apiResult.textBlocks),
       model: RESEARCHER_FALLBACK_MODEL,
+      raw: apiResult,
     };
+  }
+}
+
+function isQuestionnaireGenerateDebugEnabled(req: NextRequest, requested: unknown): boolean {
+  if (process.env.NODE_ENV === "production") return requested === "force";
+  if (requested === false) return false;
+  if (requested === true || requested === "1" || requested === "true") return true;
+  return req.nextUrl.searchParams.get("debug") === "1" || process.env.QUESTIONNAIRE_GENERATE_DEBUG === "1";
+}
+
+function truncateString(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}…[truncated]` : value;
+}
+
+function truncateUnknown(value: unknown, maxLength: number): unknown {
+  try {
+    const text = JSON.stringify(value);
+    if (!text || text.length <= maxLength) return value;
+    return `${text.slice(0, maxLength)}…[truncated]`;
+  } catch {
+    return "[unserializable]";
   }
 }
 
@@ -287,13 +397,38 @@ function validateBatchForRoute(
   existingQuestions: QuestionnaireQuestion[]
 ): string | undefined {
   if (!validateQuestionnaireBatch(questions, batchMode)) {
-    return `${batchMode} 必须是 8 题、四维各 2 题、每维正反各 1，并满足该批次的场景规则。`;
+    const expected = batchMode === "hybrid_batch1"
+      ? "8 题、四维各 2 题、4 道习惯题 + 4 道场景题"
+      : "16 题、四维各 4 题、8 道习惯题 + 8 道场景题";
+    return `${batchMode} 必须是 ${expected}，并满足该部分的场景和正反向规则。实际输出：${describeQuestionnaireBatchShape(questions)}。`;
+  }
+  if (batchMode === "hybrid_batch2" && existingQuestions.length >= 8) {
+    const total = [...existingQuestions, ...questions];
+    if (!validateQuestionnaireTotal(total)) {
+      return "两部分合计必须是 24 题；每维 6 题、3 正向 + 3 反向，并且总计 12 道习惯题 + 12 道场景题。";
+    }
   }
   const similar = findSimilarQuestionText(questions, existingQuestions, SIMILARITY_THRESHOLD);
   if (similar) {
     return `题干过于相似（${Math.round(similar.similarity * 100)}%）：「${similar.question}」≈「${similar.existingQuestion}」`;
   }
   return undefined;
+}
+
+function describeQuestionnaireBatchShape(questions: QuestionnaireQuestion[]): string {
+  if (!Array.isArray(questions)) return "不是数组";
+  const habitCount = questions.filter((question) => question.scenario.trim() === "习惯").length;
+  const dimensionSummary = DIMENSIONS.map((dimension) => {
+    const items = questions.filter((question) => question.dimension === dimension);
+    const reverseCount = items.filter((question) => question.reverse).length;
+    return `${dimension} ${items.length}题/${items.length - reverseCount}正${reverseCount}反`;
+  }).join("；");
+  const scenarios = questions
+    .map((question) => question.scenario.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .join("、");
+  return `${questions.length}题，${habitCount}道习惯题，${dimensionSummary}，场景：${scenarios || "无"}`;
 }
 
 function buildNextSessionState({

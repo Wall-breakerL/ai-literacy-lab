@@ -1,17 +1,17 @@
-# Codex Phase 6 实现状态：三批问卷与中途校准
+# Codex Phase 6 实现状态：两部分问卷与中途校准
 
-> 本文记录 v6.0 当前实现状态。Phase 6 的产品方向已经落到主链路：固定 24 题、三批 8+8+8、两段中途对话。旧版 16/20 单问卷仍作为 legacy compatibility 保留，但不是当前主流程口径。
+> 本文记录 v6.0 当前实现状态。Phase 6 的产品方向已经落到主链路：固定 24 题、两部分 8+16、一轮中途对话。旧版 16/20 单问卷仍作为 legacy compatibility 保留，但不是当前主流程口径。
 
 ## 1. 已落地的产品决策
 
 1. **24 题固定结构**  
-   当前主流程固定三批，每批 8 题，总计 24 题。每批四维各 2 题，每维 1 正向 + 1 反向。
+   当前主流程固定两部分，第一部分 8 题、第二部分 16 题，总计 24 题。第一部分四维各 2 题、4 习惯 + 4 场景；第二部分四维各 4 题、8 习惯 + 8 场景；两部分合计每维 3 正向 + 3 反向。
 
-2. **两段中途对话保留**  
-   第一批后进入 `mid_dialog1`，第二批后进入 `mid_dialog2`。中途对话用于采集题目贴合度、跳过原因、真实场景和颗粒度偏好。
+2. **一轮中途对话保留**  
+   第一部分后进入 `mid_dialog1`。中途对话用于采集题目贴合度、跳过原因、真实场景和颗粒度偏好。
 
 3. **用户反馈结构化落地**  
-   用户说不合适、太具体、换场景、没有类似经历等反馈，需要写入 `scenarioGuidance` 和必要的 `refinedTargetContext`，供后续批次生成使用。
+   用户说不合适、太具体、换场景、没有类似经历等反馈，需要写入 `scenarioGuidance` 和必要的 `refinedTargetContext`，供第二部分生成使用。
 
 4. **问卷生成等待文案**  
    问卷生成状态使用“个性化生成问卷中”，避免把问卷生成说成“分析对话中”。
@@ -21,12 +21,12 @@
 
 ## 2. 当前代码事实
 
-- `/interview` 已是 Phase 6 客户端状态机：背景访谈、三批问卷、两段中途对话、报告跳转。
+- `/interview` 已是 Phase 6 客户端状态机：背景访谈、两部分问卷、一轮中途对话、报告跳转。
 - `SessionState` 已包含 `questionnaireBatches`、`batchAnswers`、`midDialogues`、`refinedTargetContext`、`scenarioGuidance`。
 - `SessionPhase` 已包含 `questionnaire_batch1`、`mid_dialog1`、`questionnaire_batch2`、`mid_dialog2`、`questionnaire_batch3`、`report`，并保留 legacy recovery / questionnaire phase。
-- `/api/questionnaire/generate` 已生成单批 8 题，并在模型失败或校验失败时回落到 batch fallback。
-- `validateQuestionnaireBatch` 校验单批 8 题结构；`validateQuestionnaireTotal` 校验 24 题总结构。
-- `FALLBACK_QUESTIONNAIRE_BATCHES` 已提供 habit / scenario / mixed 三套 fallback；`FALLBACK_QUESTIONNAIRE_TOTAL` 合并为 24 题。
+- `/api/questionnaire/generate` 已生成 8+16 两部分，并在模型失败或校验失败时回落到 batch fallback。
+- `validateQuestionnaireBatch` 校验 8+16 批次结构；`validateQuestionnaireTotal` 校验 24 题总结构。
+- `FALLBACK_QUESTIONNAIRE_BATCHES` 已提供 `hybrid_batch1` / `hybrid_batch2` 两套 fallback；`FALLBACK_QUESTIONNAIRE_TOTAL` 合并为 24 题。
 - `reportScoring` 已支持 24 题；confidence 阈值为 `>=4 high`、`2-3 medium`、`<2 low`。
 - `/api/report` 已通过 `resolveReportQuestionnaireAnswers` 支持 `questionnaireAnswers`、`sessionState.answers`、`sessionState.batchAnswers` 优先级兜底。
 - `/test-lab` 当前可见测试只运行 AI-MBTI self-tests；AI-HQ 区块显示 skipped。
@@ -37,7 +37,7 @@
 
 ```ts
 type QuestionnaireBatchKey = "batch1" | "batch2" | "batch3";
-type QuestionnaireBatchMode = "habit_batch" | "scenario_batch" | "mixed_batch";
+type QuestionnaireBatchMode = "hybrid_batch1" | "hybrid_batch2";
 type MidDialogueKey = "dialog1" | "dialog2";
 
 type SessionPhase =
@@ -85,9 +85,10 @@ scenarioGuidance?: ScenarioGuidance;
 
 批次规则：
 
-- `habit_batch`：8 题全部 `scenario: "习惯"`。
-- `scenario_batch`：8 题都必须是具体或半具体场景，不能是泛场景。
-- `mixed_batch`：4 习惯 + 4 场景，每个维度 1 习惯 + 1 场景。
+- `hybrid_batch1`：8 题，4 道 `scenario: "习惯"`，4 道具体或半具体场景。
+- `hybrid_batch2`：16 题，8 道 `scenario: "习惯"`，8 道具体或半具体场景。
+- 第一部分四维各 2 题、每维 1 正向 + 1 反向；第二部分四维各 4 题、每维 2 正向 + 2 反向。
+- 两部分合计每维 6 题、3 正向 + 3 反向。
 - 传入 `existingQuestions` 后，题干相似度过高会触发重试；仍失败则 fallback。
 
 ## 5. 中途对话契约
@@ -114,10 +115,10 @@ interface ScenarioGuidance {
 
 处理规则：
 
-- 用户说继续或没问题：`confirmed`，生成下一批。
+- 用户说继续或没问题：`confirmed`，生成第二部分。
 - 用户给出真实场景修正：`refined`，更新 `refinedTargetContext`。
 - 用户说场景太具体：`abstract_scenarios`，后续降低具象程度。
-- 用户反馈不清：`needs_more_context`，最多追问一次。
+- 用户反馈不清：不继续追问，按当前场景生成第二部分。
 - 用户明确不想继续：`exit_requested`，不生成低质量报告。
 
 ## 6. 前端状态机
@@ -127,9 +128,7 @@ interface ScenarioGuidance {
 1. 背景访谈完成后生成 batch1。
 2. batch1 答完后保存 `batchAnswers.batch1` 和扁平 `answers`，进入 `mid_dialog1`。
 3. `mid_dialog1` 完成后生成 batch2。
-4. batch2 答完后保存答案，进入 `mid_dialog2`。
-5. `mid_dialog2` 完成后生成 batch3。
-6. batch3 答完后展平答案并进入报告页。
+4. batch2 答完后展平答案并进入报告页。
 
 UI 要点：
 
@@ -159,8 +158,8 @@ UI 要点：
 - confidence 阈值。
 - 跳过题不参与置信度和分数。
 - `batchAnswers` 报告入口兜底。
-- 三批 fallback 结构合法，合并后为 24 题。
-- 场景批次拒绝泛场景。
+- 两部分 fallback 结构合法，合并后为 24 题。
+- hybrid 批次拒绝泛场景。
 - 问卷去重检测。
 - 中途对话可见文案不泄漏内部提示。
 - 四维报告补齐。

@@ -43,7 +43,8 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-surface-100 rounded-[16px] border border-[rgba(255,255,255,0.06)] shadow-card-ring overflow-hidden"
+      whileHover={{ y: -4 }}
+      className="bg-surface-100 rounded-[16px] border border-[rgba(255,255,255,0.06)] shadow-card-ring overflow-hidden hover:border-[rgba(85,179,255,0.3)] hover:shadow-glow-blue-sm transition-all duration-300"
     >
       {/* Header */}
       <button
@@ -71,9 +72,11 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
               {meta.lowLetter} · {meta.lowLabel} {lowScore}
             </span>
             <div className="w-24 h-1.5 bg-dark-border rounded-full overflow-hidden">
-              <div
-                className="h-full bg-raycast-blue rounded-full transition-all duration-700"
-                style={{ width: `${report.score}%` }}
+              <motion.div
+                className="h-full rounded-full score-bar-shimmer"
+                initial={{ width: 0 }}
+                animate={{ width: `${report.score}%` }}
+                transition={{ duration: 0.7, delay: index * 0.1 + 0.3, ease: [0.16, 1, 0.3, 1] }}
               />
             </div>
             <span className="text-[12px] text-dim-gray whitespace-nowrap">
@@ -93,15 +96,32 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
       <AnimatePresence>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0, scale: 0.95 }}
+            animate={{ height: "auto", opacity: 1, scale: 1 }}
+            exit={{ height: 0, opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-6 space-y-5 border-t border-[rgba(255,255,255,0.06)] pt-5">
+            <motion.div
+              className="px-6 pb-6 space-y-5 border-t border-[rgba(255,255,255,0.06)] pt-5"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: {},
+                visible: {
+                  transition: {
+                    staggerChildren: 0.1,
+                  },
+                },
+              }}
+            >
               {/* Basis */}
-              <div>
+              <motion.div
+                variants={{
+                  hidden: { opacity: 0, y: 10 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+              >
                 <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-3">
                   判断依据
                 </p>
@@ -119,11 +139,16 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
                     <p className="text-[16px] font-semibold text-near-white">{report.tendencyLabel}</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Evidence */}
               {report.evidence.length > 0 && (
-                <div>
+                <motion.div
+                  variants={{
+                    hidden: { opacity: 0, y: 10 },
+                    visible: { opacity: 1, y: 0 },
+                  }}
+                >
                   <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-3">
                     用户原话 / 答题证据
                   </p>
@@ -140,11 +165,16 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
                       </div>
                     ))}
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* Analysis */}
-              <div>
+              <motion.div
+                variants={{
+                  hidden: { opacity: 0, y: 10 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+              >
                 <div className="mb-2 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-raycast-blue" />
                   <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase">
@@ -152,8 +182,8 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
                   </p>
                 </div>
                 <MarkdownText content={analysisContent} variant="body" />
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

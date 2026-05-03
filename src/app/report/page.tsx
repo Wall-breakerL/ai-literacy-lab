@@ -7,17 +7,21 @@ import { DimensionCard } from "@/components/DimensionCard";
 import { FeedbackDialogue } from "@/components/FeedbackDialogue";
 import { MarkdownText } from "@/components/MarkdownText";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
+import { ParticleBackground } from "@/components/ParticleBackground";
+import { HolographicLoading } from "@/components/HolographicLoading";
 import { normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
 import { flattenBatchAnswers, isSessionState } from "@/lib/sessionState";
 import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
-import { ArrowLeft, ClipboardList, Fingerprint, Loader2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, Fingerprint, Check, Copy } from "lucide-react";
 import {
-  API_RETRY_MAX_ATTEMPTS,
   isRetryableApiFailure,
-  nextRetryDelayMs,
   sleepAbortable,
 } from "@/lib/clientApiRetry";
+
+const REPORT_MAX_ATTEMPTS = 2;
+const REPORT_REQUEST_TIMEOUT_MS = 75_000;
+const REPORT_RETRY_DELAY_MS = 15_000;
 
 function isFinalReport(data: unknown): data is FinalReport {
   if (!data || typeof data !== "object") return false;
@@ -75,6 +79,15 @@ function compactText(text?: string, maxLength = 140) {
 
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  const id = window.setTimeout(() => {
+    controller.abort(new DOMException("Request timed out", "TimeoutError"));
+  }, ms);
+  controller.signal.addEventListener("abort", () => window.clearTimeout(id), { once: true });
+  return controller.signal;
 }
 
 function buildStyleOverview(report: ReportPageModel, strongest: DimensionItem) {
@@ -193,8 +206,11 @@ export default function ReportPage() {
   const [report, setReport] = useState<FinalReport | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<FeedbackContext | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reportReady, setReportReady] = useState(false);
   const [error, setError] = useState("");
   const [waitHint, setWaitHint] = useState<string | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -267,13 +283,14 @@ export default function ReportPage() {
       let failureCount = 0;
       let lastErr = "生成报告失败，请稍后再试。";
 
-      for (let attempt = 0; attempt < API_RETRY_MAX_ATTEMPTS; attempt++) {
+      for (let attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
         if (cancelled) return;
         try {
           const res = await fetch("/api/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ messages, identity: identityStr, questionnaireAnswers, targetContext, sessionState }),
+            signal: timeoutSignal(REPORT_REQUEST_TIMEOUT_MS),
           });
 
           let data: unknown = {};
@@ -295,10 +312,10 @@ export default function ReportPage() {
             lastErr = detail;
             failureCount += 1;
             if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            console.error("Report API error:", res.status, data, `attempt ${attempt + 1}/${API_RETRY_MAX_ATTEMPTS}`);
-            const retry = isRetryableApiFailure(res.status, detail) && attempt < API_RETRY_MAX_ATTEMPTS - 1;
+            console.error("Report API error:", res.status, data, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
+            const retry = isRetryableApiFailure(res.status, detail) && attempt < REPORT_MAX_ATTEMPTS - 1;
             if (retry) {
-              await sleepAbortable(nextRetryDelayMs(attempt));
+              await sleepAbortable(REPORT_RETRY_DELAY_MS);
               continue;
             }
             break;
@@ -308,9 +325,9 @@ export default function ReportPage() {
             lastErr = d.error;
             failureCount += 1;
             if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            const retry = attempt < API_RETRY_MAX_ATTEMPTS - 1;
+            const retry = attempt < REPORT_MAX_ATTEMPTS - 1;
             if (retry) {
-              await sleepAbortable(nextRetryDelayMs(attempt));
+              await sleepAbortable(REPORT_RETRY_DELAY_MS);
               continue;
             }
             break;
@@ -320,8 +337,8 @@ export default function ReportPage() {
             lastErr = "报告格式异常，正在重试…";
             failureCount += 1;
             if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            if (attempt < API_RETRY_MAX_ATTEMPTS - 1) {
-              await sleepAbortable(nextRetryDelayMs(attempt));
+            if (attempt < REPORT_MAX_ATTEMPTS - 1) {
+              await sleepAbortable(REPORT_RETRY_DELAY_MS);
               continue;
             }
             break;
@@ -339,23 +356,24 @@ export default function ReportPage() {
               targetContext,
             }),
           );
-          setLoading(false);
+          setReportReady(true);
           return;
         } catch (err) {
           if (cancelled) return;
           const msg = err instanceof Error ? err.message : String(err);
           lastErr = msg;
-          console.error("Report fetch error:", err, `attempt ${attempt + 1}/${API_RETRY_MAX_ATTEMPTS}`);
+          console.error("Report fetch error:", err, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
           const networkLike =
             err instanceof TypeError ||
-            /fetch|network|Failed to fetch|Load failed|ECONNRESET|ETIMEDOUT/i.test(msg);
+            err instanceof DOMException && err.name === "TimeoutError" ||
+            /fetch|network|Failed to fetch|Load failed|ECONNRESET|ETIMEDOUT|timed out/i.test(msg);
           if (networkLike) {
             failureCount += 1;
             if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
           }
-          const retry = networkLike && attempt < API_RETRY_MAX_ATTEMPTS - 1;
+          const retry = networkLike && attempt < REPORT_MAX_ATTEMPTS - 1;
           if (retry) {
-            await sleepAbortable(nextRetryDelayMs(attempt));
+            await sleepAbortable(REPORT_RETRY_DELAY_MS);
             continue;
           }
           break;
@@ -374,23 +392,15 @@ export default function ReportPage() {
     };
   }, [router]);
 
-  if (loading) {
+  if (loading && !showReport && !error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-void relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[rgba(85,179,255,0.05)] rounded-full blur-[80px] pointer-events-none" />
-        <Loader2 className="w-8 h-8 text-raycast-blue animate-spin mb-6" />
-        <p className="text-light-gray text-[16px] tracking-[0.2px] text-center">
-          正在深度分析你的 AI-MBTI 特征...
-        </p>
-        <p className="text-dim-gray text-[13px] tracking-raycast-small mt-4 text-center max-w-md leading-relaxed px-2">
-          耐心等待，请不要退出浏览器。
-        </p>
-        {waitHint ? (
-          <p className="text-dim-gray text-[12px] tracking-raycast-small mt-2 text-center max-w-md px-2">
-            {waitHint}
-          </p>
-        ) : null}
-      </div>
+      <HolographicLoading
+        reportReady={reportReady}
+        onComplete={() => {
+          setShowReport(true);
+          setLoading(false);
+        }}
+      />
     );
   }
 
@@ -446,9 +456,25 @@ export default function ReportPage() {
   const signature = buildSignature(uiReport);
   const promptTemplates = uiReport.promptTemplates ?? [];
 
+  const copyToClipboard = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-void py-12 px-4 sm:px-6">
-      <div className="max-w-3xl mx-auto space-y-12">
+    <div className="min-h-screen bg-void py-12 px-4 sm:px-6 relative">
+      <ParticleBackground variant="subtle" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: showReport ? 1 : 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="max-w-3xl mx-auto space-y-12 relative z-10"
+      >
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -515,7 +541,7 @@ export default function ReportPage() {
                 key={item.id}
                 type="button"
                 onClick={() => scrollToSection(item.id)}
-                className="h-9 shrink-0 rounded-pill border border-[rgba(255,255,255,0.08)] bg-surface-100 px-3 text-[13px] font-semibold text-light-gray transition-colors hover:border-raycast-blue hover:text-near-white"
+                className="h-9 shrink-0 rounded-pill border border-[rgba(255,255,255,0.08)] bg-surface-100 px-3 text-[13px] font-semibold text-light-gray transition-all hover:border-raycast-blue hover:text-near-white hover:scale-105"
               >
                 {item.label}
               </button>
@@ -532,7 +558,18 @@ export default function ReportPage() {
           className="scroll-mt-6 bg-surface-100 p-6 sm:p-8 rounded-[20px] shadow-card-ring border border-[rgba(255,255,255,0.06)] relative overflow-hidden"
         >
           {/* Ambient Glow */}
-          <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[rgba(85,179,255,0.05)] rounded-full blur-[60px] pointer-events-none" />
+          <motion.div
+            className="absolute top-0 right-0 w-[300px] h-[300px] bg-[rgba(85,179,255,0.05)] rounded-full blur-[60px] pointer-events-none"
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.05, 0.08, 0.05],
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
 
           <div className="relative z-10 grid gap-6 md:grid-cols-[168px_minmax(0,1fr)_220px] md:items-center">
             <div className="flex justify-center md:justify-start">
@@ -560,20 +597,37 @@ export default function ReportPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {report.tags.map((tag, i) => (
-                  <span
+                  <motion.span
                     key={i}
-                    className="px-3 py-1 bg-card-surface border border-[rgba(255,255,255,0.08)] rounded-pill text-[12px] font-semibold text-light-gray"
+                    whileHover={{ rotate: 2, scale: 1.05 }}
+                    className="px-3 py-1 bg-card-surface border border-[rgba(255,255,255,0.08)] rounded-pill text-[12px] font-semibold text-light-gray hover:border-raycast-blue hover:text-near-white transition-all cursor-default"
                   >
                     {tag}
-                  </span>
+                  </motion.span>
                 ))}
               </div>
             </div>
 
             {/* Radar Chart */}
-            <div className="mx-auto h-[220px] w-full max-w-[220px]">
+            <div className="mx-auto h-[220px] w-full max-w-[220px] relative">
+              <div
+                className="absolute inset-0 rounded-full opacity-20 pointer-events-none"
+                style={{
+                  background: "conic-gradient(from 0deg, transparent 0deg, rgba(85, 179, 255, 0.3) 90deg, transparent 180deg)",
+                  animation: "scan 4s linear infinite",
+                }}
+              />
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <defs>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
                   <PolarGrid stroke="rgba(255,255,255,0.1)" />
                   <PolarAngleAxis
                     dataKey="subject"
@@ -585,6 +639,11 @@ export default function ReportPage() {
                     stroke="#55b3ff"
                     fill="#55b3ff"
                     fillOpacity={0.2}
+                    strokeWidth={2}
+                    filter="url(#glow)"
+                    isAnimationActive={true}
+                    animationDuration={1000}
+                    animationBegin={200}
                   />
                 </RadarChart>
               </ResponsiveContainer>
@@ -689,17 +748,38 @@ export default function ReportPage() {
                 {promptTemplates.map((template, index) => (
                   <div
                     key={`${template.title}-${index}`}
-                    className="min-w-0 rounded-[12px] border border-[rgba(85,179,255,0.14)] bg-[rgba(85,179,255,0.04)] p-4"
+                    className="min-w-0 rounded-[12px] border border-[rgba(85,179,255,0.14)] bg-[rgba(85,179,255,0.04)] p-4 relative group"
                   >
-                    <div className="mb-3 min-w-0">
+                    <div className="mb-3 min-w-0 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="break-words text-[14px] font-semibold text-near-white">{template.title}</p>
                         <p className="mt-1 break-words text-[12px] text-dim-gray">{template.useCase}</p>
                       </div>
+                      <motion.button
+                        type="button"
+                        onClick={() => copyToClipboard(template.prompt, index)}
+                        className="shrink-0 p-2 rounded-lg bg-surface-100 border border-[rgba(255,255,255,0.08)] text-light-gray hover:text-near-white hover:border-raycast-blue transition-all"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        {copiedIndex === index ? (
+                          <Check className="w-4 h-4 text-raycast-green" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </motion.button>
                     </div>
                     <pre className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-light-gray font-mono tracking-[0.1px]">
                       {template.prompt}
                     </pre>
+                    {copiedIndex === index && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 rounded-[12px] pointer-events-none border-2 border-raycast-green shadow-[0_0_20px_rgba(95,201,146,0.4)]"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -753,7 +833,7 @@ export default function ReportPage() {
         ) : null}
 
         {feedbackContext ? <FeedbackDialogue context={feedbackContext} /> : null}
-      </div>
+      </motion.div>
     </div>
   );
 }

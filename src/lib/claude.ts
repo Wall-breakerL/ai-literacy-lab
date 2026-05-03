@@ -187,6 +187,31 @@ function openAiCompatibleUrl(path: string): string {
   return `${OPENAI_COMPATIBLE_BASE_URL.replace(/\/$/, "")}${path}`;
 }
 
+/**
+ * DashScope OpenAI-compatible Qwen hybrid-thinking models reject forced `tool_choice`
+ * unless `enable_thinking` is explicitly false on non-stream calls. Merge vendor extras
+ * here so all `/chat/completions` callers stay gateway-agnostic at the route layer.
+ */
+function mergeOpenAiCompatibleChatBody(base: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...base };
+  const baseUrl = OPENAI_COMPATIBLE_BASE_URL.toLowerCase();
+  const isDashScope =
+    baseUrl.includes("dashscope.aliyuncs.com") || baseUrl.includes("dashscope-intl.aliyuncs.com");
+  if (isDashScope && process.env.OPENAI_COMPATIBLE_ENABLE_THINKING?.trim() !== "1") {
+    body.enable_thinking = false;
+  }
+  const extraJson = process.env.OPENAI_COMPATIBLE_EXTRA_JSON?.trim();
+  if (!extraJson) return body;
+  const parsed = safeJsonParse(extraJson);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[claude] OPENAI_COMPATIBLE_EXTRA_JSON must be a JSON object; ignoring.");
+    }
+    return body;
+  }
+  return { ...body, ...(parsed as Record<string, unknown>) };
+}
+
 function getOpenAiCompatibleApiKey(): string {
   return (
     process.env.OPENAI_COMPATIBLE_API_KEY?.trim() ||
@@ -533,13 +558,15 @@ export async function* createClaudeMessageStream({
       "content-type": "application/json",
       authorization: `Bearer ${getOpenAiCompatibleApiKey()}`,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
-      temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
-      messages: chatMessages,
-      stream: true,
-    }),
+    body: JSON.stringify(
+      mergeOpenAiCompatibleChatBody({
+        model,
+        max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
+        temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
+        messages: chatMessages,
+        stream: true,
+      })
+    ),
     cache: "no-store",
   });
 
@@ -632,12 +659,14 @@ async function createOpenAiCompatibleChatCompletion({
       "content-type": "application/json",
       authorization: `Bearer ${getOpenAiCompatibleApiKey()}`,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
-      temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
-      messages: chatMessages,
-    }),
+    body: JSON.stringify(
+      mergeOpenAiCompatibleChatBody({
+        model,
+        max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
+        temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
+        messages: chatMessages,
+      })
+    ),
     cache: "no-store",
   });
 
@@ -645,19 +674,19 @@ async function createOpenAiCompatibleChatCompletion({
   const parsed = raw ? safeJsonParse(raw) : null;
 
   if (!response.ok) {
-    const body = parsed as ClaudeErrorPayload | null;
-    const upstreamMessage = body?.error?.message || body?.message;
+    const errBody = parsed as ClaudeErrorPayload | null;
+    const upstreamMessage = errBody?.error?.message || errBody?.message;
     const requestId = response.headers.get("x-request-id") ?? response.headers.get("request-id");
     const message = describeClaudeHttpError({
       status: response.status,
-      type: body?.error?.type,
+      type: errBody?.error?.type,
       message: upstreamMessage,
       requestId,
       provider: "openai-compatible",
     }) ?? `OpenAI-compatible API request failed with status ${response.status}`;
     throw new ClaudeApiError(message, {
       status: response.status,
-      type: body?.error?.type,
+      type: errBody?.error?.type,
       body: parsed ?? raw,
       requestId,
     });
@@ -710,14 +739,16 @@ async function createOpenAiCompatibleChatCompletionWithTools({
       "content-type": "application/json",
       authorization: `Bearer ${getOpenAiCompatibleApiKey()}`,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
-      temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
-      messages: chatMessages,
-      tools: tools.map(toOpenAiCompatibleTool),
-      tool_choice: toOpenAiCompatibleToolChoice(toolChoice),
-    }),
+    body: JSON.stringify(
+      mergeOpenAiCompatibleChatBody({
+        model,
+        max_tokens: maxTokens ?? AGENT_B_MAX_TOKENS,
+        temperature: OPENAI_COMPATIBLE_FORCE_TEMPERATURE ?? temperature,
+        messages: chatMessages,
+        tools: tools.map(toOpenAiCompatibleTool),
+        tool_choice: toOpenAiCompatibleToolChoice(toolChoice),
+      })
+    ),
     cache: "no-store",
   });
 
@@ -725,19 +756,19 @@ async function createOpenAiCompatibleChatCompletionWithTools({
   const parsed = raw ? safeJsonParse(raw) : null;
 
   if (!response.ok) {
-    const body = parsed as ClaudeErrorPayload | null;
-    const upstreamMessage = body?.error?.message || body?.message;
+    const errBody = parsed as ClaudeErrorPayload | null;
+    const upstreamMessage = errBody?.error?.message || errBody?.message;
     const requestId = response.headers.get("x-request-id") ?? response.headers.get("request-id");
     const message = describeClaudeHttpError({
       status: response.status,
-      type: body?.error?.type,
+      type: errBody?.error?.type,
       message: upstreamMessage,
       requestId,
       provider: "openai-compatible",
     }) ?? `OpenAI-compatible API tool request failed with status ${response.status}`;
     throw new ClaudeApiError(message, {
       status: response.status,
-      type: body?.error?.type,
+      type: errBody?.error?.type,
       body: parsed ?? raw,
       requestId,
     });

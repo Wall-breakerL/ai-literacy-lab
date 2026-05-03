@@ -38,7 +38,7 @@ Next.js 14 App Router · TypeScript (strict) · Tailwind · Framer Motion · Rec
 
 ### Two LLM provider modes (see `src/lib/claude.ts`)
 `LLM_PROVIDER` switches between:
-- `openai-compatible` → calls `${OPENAI_COMPATIBLE_BASE_URL}/chat/completions`. Some gateways require `OPENAI_COMPATIBLE_FORCE_TEMPERATURE=1`.
+- `openai-compatible` → calls `${OPENAI_COMPATIBLE_BASE_URL}/chat/completions`. Some gateways require `OPENAI_COMPATIBLE_FORCE_TEMPERATURE=1`. For **Alibaba DashScope** (`OPENAI_COMPATIBLE_BASE_URL` containing `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com`), `src/lib/claude.ts` automatically merges `enable_thinking: false` into every `/chat/completions` body so **forced `tool_choice`** (questionnaire and researcher tools) matches Qwen hybrid-thinking rules. Override with `OPENAI_COMPATIBLE_ENABLE_THINKING=1` or add vendor fields via `OPENAI_COMPATIBLE_EXTRA_JSON` (JSON object, shallow-merged last).
 - `anthropic` → calls `${ANTHROPIC_BASE_URL}/messages` with `ANTHROPIC_VERSION`.
 
 `createClaudeMessageWithTools()` is the unified entrypoint and handles tool-use across both providers. Main AI-MBTI models are configured by `CLAUDE_RESEARCHER_MODEL`, `CLAUDE_RESEARCHER_FALLBACK_MODEL`, and `CLAUDE_RESEARCHER_MAX_TOKENS`. `ENABLE_PROMPT_CACHE=1` toggles prompt caching. `CLAUDE_AGENT_A_MODEL` / `CLAUDE_AGENT_B_MODEL` remain as legacy aliases for archived or compatibility paths.

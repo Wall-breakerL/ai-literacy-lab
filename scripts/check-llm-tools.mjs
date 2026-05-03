@@ -110,6 +110,29 @@ function validateToolInput(input) {
   );
 }
 
+/** Keep in sync with `mergeOpenAiCompatibleChatBody` in src/lib/claude.ts */
+function mergeOpenAiCompatibleChatBody(openAiBaseUrl, base) {
+  const body = { ...base };
+  const u = (openAiBaseUrl || "").toLowerCase();
+  if (
+    (u.includes("dashscope.aliyuncs.com") || u.includes("dashscope-intl.aliyuncs.com")) &&
+    process.env.OPENAI_COMPATIBLE_ENABLE_THINKING?.trim() !== "1"
+  ) {
+    body.enable_thinking = false;
+  }
+  const extra = process.env.OPENAI_COMPATIBLE_EXTRA_JSON?.trim();
+  if (!extra) return body;
+  try {
+    const parsed = JSON.parse(extra);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { ...body, ...parsed };
+    }
+  } catch {
+    /* ignore */
+  }
+  return body;
+}
+
 loadEnvFile(".env.local");
 
 const provider = normalizeProvider(process.env.LLM_PROVIDER);
@@ -160,28 +183,30 @@ const openAiToolRequest = () =>
       "content-type": "application/json",
       authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: 256,
-      temperature: forcedTemperature ?? 0.2,
-      messages: [
-        {
-          role: "user",
-          content: "Use the tool to record this feedback: the report is useful but too generic.",
-        },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: toolName,
-            description: "Capture a short structured feedback object.",
-            parameters: inputSchema,
+    body: JSON.stringify(
+      mergeOpenAiCompatibleChatBody(baseUrl, {
+        model,
+        max_tokens: 256,
+        temperature: forcedTemperature ?? 0.2,
+        messages: [
+          {
+            role: "user",
+            content: "Use the tool to record this feedback: the report is useful but too generic.",
           },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: toolName } },
-    }),
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: toolName,
+              description: "Capture a short structured feedback object.",
+              parameters: inputSchema,
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: toolName } },
+      })
+    ),
   });
 
 const anthropicToolRequest = (toolChoice) =>

@@ -3,16 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Send, FileText, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 import {
   Message,
   AgentBOutput,
   QuestionnaireQuestion,
   QuestionnaireAnswer,
   QuestionnaireBatchKey,
+  ScenarioGuidance,
   SessionPhase,
   SessionState,
 } from "@/lib/types";
 import { QUESTIONNAIRE_ENTRY_ROUND } from "@/lib/researcher";
+import { questionnaireReadyMessageForBatchKey } from "@/lib/questionnaireReadyMessage";
 import {
   applySessionStatePatch,
   createInitialSessionState,
@@ -20,25 +23,26 @@ import {
   flattenQuestionnaireBatches,
   getBatchKeyForPhase,
   getBatchModeForKey,
-  getBatchSkipRate,
 } from "@/lib/sessionState";
 import { ChatBubble } from "@/components/ChatBubble";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { QuestionnaireCard } from "@/components/QuestionnaireCard";
-import { readSseResponse } from "@/lib/clientSse";
+import { QuestionnaireGenerating } from "@/components/QuestionnaireGenerating";
 
 /** 客户端对 /api/chat 的最大尝试次数（含首次请求），应对网络抖动与偶发 502。 */
 const CLIENT_CHAT_MAX_ATTEMPTS = 5;
 /** 每次失败后、发起下一次请求前的固定等待时间（普通聊天轮）。 */
-const CLIENT_CHAT_RETRY_DELAY_MS = 20_000;
+const CLIENT_CHAT_RETRY_DELAY_MS = 30_000;
 /** 问卷生成客户端重试间隔，与服务端批次生成重试对齐。 */
 const CLIENT_QUESTIONNAIRE_GEN_RETRY_DELAY_MS = 60_000;
 /** 连续失败达到此次数后，在「思考中」下显示网络提示（1 = 第一次失败即显示；仍会继续重试直至上限）。 */
 const CLIENT_CHAT_HINT_AFTER_FAILURES = 1;
-/** Claude 说完「开始生成问卷」后，停留在聊天页的过渡时间。 */
+/** 进入全屏问卷生成前，在聊天页展示过渡气泡的时长。 */
 const QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS = 2_500;
-/** 中场对话结束后、与首批一致：先聊天页停留再进入全屏生成 */
-const QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL = "准备生成下一批问卷中…（预计 15–30s）";
+/** 访谈结束或中场对话结束后，生成前 2.5s 统一气泡文案 */
+const QUESTIONNAIRE_PREP_GEN_LABEL = "个性化生成问卷中…";
+/** 单次问卷生成请求的客户端保险超时，避免等待页无限停在 90%。 */
+const QUESTIONNAIRE_GENERATE_REQUEST_TIMEOUT_MS = 75_000;
 
 type Phase = "chat" | "generating" | "questionnaire" | "complete";
 
@@ -51,6 +55,10 @@ type QuestionnaireGenerateSuccess = {
   model?: string;
   /** 服务端处理该请求的耗时（秒），与 /api/chat 语义一致 */
   thinkDurationSec?: number;
+  retryCount?: number;
+  validationIssue?: string;
+  warnings?: string[];
+  debug?: unknown;
 };
 
 type MidDialogOpeningSuccess = {
@@ -137,42 +145,27 @@ function isMidDialogOpeningSuccess(data: unknown): data is MidDialogOpeningSucce
 
 function getQuestionnairePhaseForBatch(batchKey: QuestionnaireBatchKey): SessionPhase {
   if (batchKey === "batch1") return "questionnaire_batch1";
-  if (batchKey === "batch2") return "questionnaire_batch2";
-  return "questionnaire_batch3";
+  return "questionnaire_batch2";
 }
 
 function getMidDialogPhaseAfterBatch(batchKey: QuestionnaireBatchKey): SessionPhase | undefined {
   if (batchKey === "batch1") return "mid_dialog1";
-  if (batchKey === "batch2") return "mid_dialog2";
   return undefined;
 }
 
 function getMidDialogueKeyForPhase(phase: SessionPhase) {
   if (phase === "mid_dialog1") return "dialog1" as const;
-  if (phase === "mid_dialog2") return "dialog2" as const;
   return undefined;
 }
 
 function getNextBatchKeyForMidDialogPhase(phase: SessionPhase): QuestionnaireBatchKey | undefined {
   if (phase === "mid_dialog1") return "batch2";
-  if (phase === "mid_dialog2") return "batch3";
   return undefined;
 }
 
-function getBatchNumber(batchKey: QuestionnaireBatchKey): 1 | 2 | 3 {
+function getBatchNumber(batchKey: QuestionnaireBatchKey): 1 | 2 {
   if (batchKey === "batch1") return 1;
-  if (batchKey === "batch2") return 2;
-  return 3;
-}
-
-function buildQuestionnaireReadyMessage(batchKey: QuestionnaireBatchKey): string {
-  const label =
-    batchKey === "batch1"
-      ? "第一批习惯题"
-      : batchKey === "batch2"
-        ? "第二批场景题"
-        : "最后一批混合题";
-  return `${label}已经准备好了。你可以从下一页开始作答，遇到不贴近的题可以直接选「不了解 / 没想好」。`;
+  return 2;
 }
 
 function buildMidDialogPrompt(
@@ -180,35 +173,19 @@ function buildMidDialogPrompt(
   answers: QuestionnaireAnswer[],
   state: SessionState
 ): string {
-  const skipRate = getBatchSkipRate(answers);
   const skippedSamples = collectSkippedQuestionSamples(batchKey, answers, state);
   const skippedText = formatSkippedQuestionReferences(skippedSamples);
 
   if (batchKey === "batch1") {
-    if (skipRate > 0.5) {
+    if (skippedText) {
       return skippedText
-        ? `看起来刚才的习惯题不太贴近你，比如${skippedText}${skippedSamples.length > 1 ? "这两道题" : "这道题"}。你觉得哪些习惯题不太贴？你平时用 AI 主要做什么？`
-        : "看起来刚才的习惯题不太贴近你。你觉得哪些习惯题不太贴？你平时用 AI 主要做什么？";
+        ? `刚才有几题你选了「不了解 / 没想好」，比如${skippedText}${skippedSamples.length > 1 ? "这两道题" : "这道题"}。你觉得是题意不清楚、没有类似经历，还是对这个方向不太感兴趣？`
+        : "刚才有几题你选了「不了解 / 没想好」。你觉得是题意不清楚、没有类似经历，还是对这个方向不太感兴趣？";
     }
-    if (skipRate >= 0.25) {
-      return skippedText
-        ? `刚才有几道习惯题你选了「不了解 / 没想好」，比如${skippedText}${skippedSamples.length > 1 ? "这两道题" : "这道题"}。你觉得接下来的场景题，更希望围绕什么任务来问？`
-        : "刚才有几道习惯题你选了「不了解 / 没想好」。你觉得接下来的场景题，更希望围绕什么任务来问？";
-    }
-    return "刚才的习惯题答下来你觉得感觉怎么样？接下来我想问一些具体场景，你平时用 AI 主要在哪些环节用得多？";
+    return "第一部分答下来你觉得整体感觉怎么样？第二部分你更希望围绕哪些真实 AI 使用场景来问？";
   }
 
-  if (skipRate > 0.5) {
-    return skippedText
-      ? `看起来这些场景题还是不太贴近你，比如${skippedText}${skippedSamples.length > 1 ? "这两道题" : "这道题"}。你觉得这些场景哪里不太贴？你平时用 AI 最常做的是什么？`
-      : "看起来这些场景题还是不太贴近你。你觉得这些场景哪里不太贴？你平时用 AI 最常做的是什么？";
-  }
-  if (skipRate >= 0.25) {
-    return skippedText
-      ? `刚才有几道场景题你选了「不了解 / 没想好」，比如${skippedText}${skippedSamples.length > 1 ? "这两道题" : "这道题"}。你觉得哪些场景不太贴？或者你更希望问什么场景？`
-      : "刚才有几道场景题你选了「不了解 / 没想好」。你觉得哪些场景不太贴？或者你更希望问什么场景？";
-  }
-  return "这些场景题你觉得感觉怎么样？最后一批你更希望怎么调整场景颗粒度？可以说说想更具体，还是更抽象一些。";
+  return "第一部分答下来你觉得整体感觉怎么样？第二部分你更希望围绕哪些真实 AI 使用场景来问？";
 }
 
 function collectSkippedQuestionSamples(
@@ -216,12 +193,7 @@ function collectSkippedQuestionSamples(
   answers: QuestionnaireAnswer[],
   state: SessionState
 ): QuestionnaireAnswer[] {
-  const source = batchKey === "batch2"
-    ? [
-        ...(state.batchAnswers?.batch2?.length ? state.batchAnswers.batch2 : answers),
-        ...(state.batchAnswers?.batch1 ?? []),
-      ]
-    : answers;
+  const source = batchKey === "batch1" ? answers : state.batchAnswers?.batch1 ?? answers;
   const seen = new Set<string>();
   return source.filter((answer) => {
     if (!(answer.skipped || answer.score == null)) return false;
@@ -231,7 +203,18 @@ function collectSkippedQuestionSamples(
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 2);
+  }).sort((left, right) =>
+    stableHash(`${state.sessionId}|${left.dimension}|${left.question}`) -
+    stableHash(`${state.sessionId}|${right.dimension}|${right.question}`)
+  ).slice(0, 2);
+}
+
+function stableHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
 }
 
 function formatSkippedQuestionReferences(samples: QuestionnaireAnswer[]): string {
@@ -246,6 +229,37 @@ function compactQuestionReference(sample: QuestionnaireAnswer): string {
   const scenarioPrefix = sample.scenario && sample.scenario !== "习惯" ? `${sample.scenario}：` : "";
   const text = `${scenarioPrefix}${sample.question}`.replace(/\s+/g, " ").trim();
   return text.length <= 42 ? text : `${text.slice(0, 41)}…`;
+}
+
+function buildOneShotScenarioGuidance(input: string, state: SessionState): ScenarioGuidance {
+  const text = input.replace(/\s+/g, " ").trim();
+  const lower = text.toLowerCase();
+  const asksForAbstract =
+    /抽象|别太具体|不要太具体|太具体|泛一点|通用/.test(text);
+  const reportsMismatch =
+    /不贴|不太贴|没经历|没有经历|不适合|不相关|不理解|看不懂|没想好|不了解/.test(text);
+  const wantsContinue =
+    /继续|可以|都行|随便|ok|okay|好/.test(lower) || text.length === 0;
+  const target = state.refinedTargetContext ?? {
+    role: state.background.role,
+    recentUse: state.background.recentUse,
+    goal: state.background.goal,
+    goalStatus: state.background.goalStatus,
+    goalType: state.background.goalType,
+  };
+
+  return {
+    status: asksForAbstract
+      ? "abstract_scenarios"
+      : reportsMismatch || !wantsContinue
+        ? "refined"
+        : "confirmed",
+    scenarioSummary: text || target.recentUse || target.goal,
+    granularity: asksForAbstract ? "abstract" : "balanced",
+    avoidTopics: reportsMismatch && text ? [text] : [],
+    includeTopics: text && !reportsMismatch ? [text] : [target.recentUse, target.goal].filter(Boolean),
+    userCorrectionQuote: text || undefined,
+  };
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -290,11 +304,32 @@ function waitForNextPaint(signal?: AbortSignal): Promise<void> {
   });
 }
 
+function timeoutSignal(ms: number, parent?: AbortSignal): AbortSignal {
+  const controller = new AbortController();
+  const id = window.setTimeout(() => {
+    controller.abort(new DOMException("Request timed out", "TimeoutError"));
+  }, ms);
+  const cleanup = () => window.clearTimeout(id);
+  const abortFromParent = () => {
+    cleanup();
+    controller.abort(parent?.reason ?? new DOMException("Aborted", "AbortError"));
+  };
+  parent?.addEventListener("abort", abortFromParent, { once: true });
+  controller.signal.addEventListener(
+    "abort",
+    () => {
+      cleanup();
+      parent?.removeEventListener("abort", abortFromParent);
+    },
+    { once: true }
+  );
+  return controller.signal;
+}
+
 function isQuestionnaireGenerationLeadInTurn(phase: SessionPhase, roundCount: number): boolean {
   return (
     (phase === "interview" && roundCount >= QUESTIONNAIRE_ENTRY_ROUND) ||
-    phase === "mid_dialog1" ||
-    phase === "mid_dialog2"
+    phase === "mid_dialog1"
   );
 }
 
@@ -372,62 +407,12 @@ async function fetchChatOnce(
   }
 }
 
-async function fetchChatStream(
-  body: {
-    messages: Message[];
-    roundCount: number;
-    sessionState?: SessionState;
-  },
-  signal: AbortSignal | undefined,
-  onDelta: (text: string) => void,
-  onStatus: (label: string) => void
-): Promise<ChatApiSuccess> {
-  const res = await fetch("/api/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-
-  if (!res.ok || !res.headers.get("content-type")?.includes("text/event-stream")) {
-    const data = await res.json().catch(() => ({}));
-    const rec = data as Record<string, unknown>;
-    throw new Error(
-      typeof rec?.detail === "string" ? rec.detail : typeof rec?.error === "string" ? rec.error : `HTTP ${res.status}`
-    );
-  }
-
-  let donePayload: ChatApiSuccess | null = null;
-  let streamError: string | null = null;
-
-  await readSseResponse(res, {
-    onEvent(event, data) {
-      const payload = data as Record<string, unknown>;
-      if (event === "delta" && typeof payload.text === "string") {
-        onDelta(payload.text);
-      } else if (event === "status" && typeof payload.label === "string") {
-        onStatus(payload.label);
-      } else if (event === "done") {
-        donePayload = payload as ChatApiSuccess;
-      } else if (event === "error") {
-        streamError = typeof payload.message === "string" ? payload.message : "流式响应失败";
-      }
-    },
-  });
-
-  if (streamError) throw new Error(streamError);
-  if (!donePayload || !isChatApiSuccess(donePayload)) {
-    throw new Error("流式响应缺少完成事件");
-  }
-  return donePayload;
-}
-
 async function fetchMidDialogOpening(
   completedBatchKey: QuestionnaireBatchKey,
   batchAnswers: QuestionnaireAnswer[],
   sessionState: SessionState
 ): Promise<MidDialogOpeningSuccess | null> {
-  if (completedBatchKey === "batch3") return null;
+  if (completedBatchKey !== "batch1") return null;
   const res = await fetch("/api/mid-dialog/opening", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -455,7 +440,6 @@ export default function InterviewPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isStreamingText, setIsStreamingText] = useState(false);
   const [isPreparingQuestionnaireGeneration, setIsPreparingQuestionnaireGeneration] = useState(false);
   const [typingNotice, setTypingNotice] = useState<string | null>(null);
   const [typingPrimaryLabel, setTypingPrimaryLabel] = useState("思考中…");
@@ -473,6 +457,7 @@ export default function InterviewPage() {
   const [questionnaireProgress, setQuestionnaireProgress] = useState({ current: 0, total: 0 });
   const [generatingBatchKey, setGeneratingBatchKey] = useState<QuestionnaireBatchKey | null>(null);
   const [pendingQuestionnaireBatchKey, setPendingQuestionnaireBatchKey] = useState<QuestionnaireBatchKey | null>(null);
+  const [isQuestionnaireReady, setIsQuestionnaireReady] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(0);
@@ -538,8 +523,10 @@ export default function InterviewPage() {
       readyMessage?: string,
       source?: "model" | "fallback",
       assistantModel?: string,
-      thinkDurationSec?: number
+      thinkDurationSec?: number,
+      options?: { deferUiTransition?: boolean }
     ) => {
+      const deferUiTransition = options?.deferUiTransition === true;
       const phaseForBatch = getQuestionnairePhaseForBatch(batchKey);
       const currentState = sessionStateRef.current;
       const baseState: SessionState = incomingState
@@ -573,8 +560,10 @@ export default function InterviewPage() {
       };
 
       commitSessionState(nextState);
-      setPhase("chat");
-      setGeneratingBatchKey(null);
+      if (!deferUiTransition) {
+        setPhase("chat");
+        setGeneratingBatchKey(null);
+      }
       setPendingQuestionnaireBatchKey(batchKey);
       setQuestions(batchQuestions);
       setCurrentQuestionIndex(0);
@@ -587,7 +576,8 @@ export default function InterviewPage() {
         clearTimeout(questionnaireEnterDelayRef.current);
         questionnaireEnterDelayRef.current = null;
       }
-      const message = readyMessage?.trim() || (source === "fallback" ? buildQuestionnaireReadyMessage(batchKey) : "");
+      const message =
+        readyMessage?.trim() || (source === "fallback" ? questionnaireReadyMessageForBatchKey(batchKey) : "");
       if (message) {
         const bubbleModel =
           source === "fallback" ? "deterministic" : (assistantModel ?? AGENT_STREAM_MODEL_FALLBACK);
@@ -623,12 +613,13 @@ export default function InterviewPage() {
       setPhase("chat");
       setGeneratingBatchKey(null);
       setPendingQuestionnaireBatchKey(null);
+      setIsQuestionnaireReady(false);
 
       if (!skipChatPreparationPhase) {
         setIsPreparingQuestionnaireGeneration(true);
         setIsTyping(false);
         setTypingNotice(null);
-        setTypingPrimaryLabel("思考中…");
+        setTypingPrimaryLabel(QUESTIONNAIRE_PREP_GEN_LABEL);
 
         try {
           if (options?.pauseBeforeSpinner !== false) {
@@ -664,11 +655,15 @@ export default function InterviewPage() {
             batchMode: getBatchModeForKey(batchKey),
             existingQuestions,
             scenarioGuidance: baseState.scenarioGuidance,
+            debug: process.env.NODE_ENV !== "production",
           }),
-          signal,
+          signal: timeoutSignal(QUESTIONNAIRE_GENERATE_REQUEST_TIMEOUT_MS, signal),
         });
 
         const data: unknown = await res.json().catch(() => ({}));
+        if (process.env.NODE_ENV !== "production" && data && typeof data === "object") {
+          console.info("[questionnaire/generate response]", data);
+        }
         if (!res.ok || !isQuestionnaireGenerateSuccess(data) || data.questions.length === 0) {
           const detail =
             data && typeof data === "object" && typeof (data as { detail?: unknown }).detail === "string"
@@ -686,24 +681,31 @@ export default function InterviewPage() {
           typeof data.model === "string" ? data.model : undefined,
           typeof data.thinkDurationSec === "number" && Number.isFinite(data.thinkDurationSec)
             ? data.thinkDurationSec
-            : undefined
+            : undefined,
+          { deferUiTransition: true }
         );
+        setIsQuestionnaireReady(true);
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           setPhase("chat");
           setGeneratingBatchKey(null);
+          setIsQuestionnaireReady(false);
           return;
         }
+        const isTimeout = error instanceof DOMException && error.name === "TimeoutError";
         console.error("Questionnaire generation error:", error);
         setPhase("chat");
         setGeneratingBatchKey(null);
         setPendingQuestionnaireBatchKey(null);
+        setIsQuestionnaireReady(false);
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
             model: AGENT_STREAM_MODEL_FALLBACK,
-            content: "抱歉，没能生成下一批问卷。请稍后再试。",
+            content: isTimeout
+              ? "问卷生成时间过长，已自动停止。请稍后再试。"
+              : "抱歉，没能生成问卷。请稍后再试。",
           },
         ]);
       } finally {
@@ -728,6 +730,63 @@ export default function InterviewPage() {
     }
   }, []);
 
+  const generateSecondBatchFromOneShotMidDialog = useCallback(
+    async (
+      currentMessages: Message[],
+      currentRound: number,
+      options?: { signal?: AbortSignal }
+    ) => {
+      const signal = options?.signal;
+      const dialogKey = getMidDialogueKeyForPhase(sessionStateRef.current.phase);
+      const nextBatchKey = getNextBatchKeyForMidDialogPhase(sessionStateRef.current.phase);
+      if (!dialogKey || !nextBatchKey) return false;
+
+      const userFeedback = [...currentMessages]
+        .reverse()
+        .find((message) => message.role === "user")?.content ?? "";
+      const dialogueMessages = currentMessages.slice(midDialogStartIndexRef.current ?? 0);
+      const currentState = sessionStateRef.current;
+      const stateWithDialogue = applySessionStatePatch(
+        currentState,
+        {
+          midDialogues: { [dialogKey]: dialogueMessages },
+          scenarioGuidance: buildOneShotScenarioGuidance(userFeedback, currentState),
+          phase: currentState.phase,
+        },
+        { phase: currentState.phase }
+      );
+
+      commitSessionState(stateWithDialogue);
+      setRoundCount(currentRound + 1);
+      setIsComplete(false);
+      midDialogStartIndexRef.current = null;
+      setIsTyping(false);
+      setTypingNotice(null);
+      setIsPreparingQuestionnaireGeneration(true);
+      setTypingPrimaryLabel(QUESTIONNAIRE_PREP_GEN_LABEL);
+
+      try {
+        await waitForNextPaint(signal);
+        await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setIsPreparingQuestionnaireGeneration(false);
+          setTypingPrimaryLabel("思考中…");
+          return true;
+        }
+        throw e;
+      }
+
+      setIsPreparingQuestionnaireGeneration(false);
+      await generateQuestionnaireBatch(nextBatchKey, {
+        signal,
+        skipChatPreparationPhase: true,
+      });
+      return true;
+    },
+    [commitSessionState, generateQuestionnaireBatch]
+  );
+
   const triggerTurn = useCallback(
     async (
       currentMessages: Message[],
@@ -740,9 +799,7 @@ export default function InterviewPage() {
       setTypingNotice(null);
       const currentPhase = sessionStateRef.current.phase;
       const isQuestionnaireGenRound = isQuestionnaireGenerationLeadInTurn(currentPhase, currentRound);
-      setTypingPrimaryLabel(
-        isQuestionnaireGenRound ? "个性化生成问卷中…（预计 15–30s）" : "思考中…"
-      );
+      setTypingPrimaryLabel(isQuestionnaireGenRound ? QUESTIONNAIRE_PREP_GEN_LABEL : "思考中…");
 
       try {
         const body = {
@@ -762,188 +819,6 @@ export default function InterviewPage() {
 
         for (let attempt = 1; attempt <= CLIENT_CHAT_MAX_ATTEMPTS; attempt++) {
           if (signal?.aborted) return;
-
-          let streamingMessageIndex: number | null = null;
-          let streamedText = "";
-          let pendingStreamText = "";
-          let streamTimer: ReturnType<typeof setInterval> | null = null;
-          const flushResolvers: Array<() => void> = [];
-          const resolveFlushResolvers = () => {
-            if (pendingStreamText.length > 0 || streamTimer) return;
-            while (flushResolvers.length > 0) {
-              flushResolvers.shift()?.();
-            }
-          };
-          const ensureStreamingMessage = () => {
-            if (streamingMessageIndex != null) return;
-            streamingMessageIndex = currentMessages.length;
-            setIsStreamingText(true);
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "assistant",
-                content: "",
-                model: AGENT_STREAM_MODEL_FALLBACK,
-              },
-            ]);
-          };
-          const pumpStreamText = () => {
-            ensureStreamingMessage();
-            if (!pendingStreamText) {
-              if (streamTimer) {
-                clearInterval(streamTimer);
-                streamTimer = null;
-              }
-              resolveFlushResolvers();
-              return;
-            }
-            const take = pendingStreamText.length > 80 ? 4 : pendingStreamText.length > 24 ? 2 : 1;
-            streamedText += pendingStreamText.slice(0, take);
-            pendingStreamText = pendingStreamText.slice(take);
-            setMessages((prev) =>
-              prev.map((msg, index) =>
-                index === streamingMessageIndex ? { ...msg, content: streamedText } : msg
-              )
-            );
-            if (!pendingStreamText && streamTimer) {
-              clearInterval(streamTimer);
-              streamTimer = null;
-              resolveFlushResolvers();
-            }
-          };
-          const enqueueStreamText = (text: string) => {
-            if (!text) return;
-            ensureStreamingMessage();
-            pendingStreamText += text;
-            if (!streamTimer) {
-              streamTimer = setInterval(pumpStreamText, 18);
-              pumpStreamText();
-            }
-          };
-          const flushStreamText = () => {
-            if (!pendingStreamText && !streamTimer) return Promise.resolve();
-            return new Promise<void>((resolve) => {
-              flushResolvers.push(resolve);
-            });
-          };
-          const stopStreamText = () => {
-            if (streamTimer) {
-              clearInterval(streamTimer);
-              streamTimer = null;
-            }
-            pendingStreamText = "";
-            setIsStreamingText(false);
-            resolveFlushResolvers();
-          };
-          try {
-            const data = await fetchChatStream(
-              {
-                messages: currentMessages,
-                roundCount: currentRound,
-                sessionState: sessionStateRef.current,
-              },
-              signal,
-              enqueueStreamText,
-              (label) => setTypingPrimaryLabel(label)
-            );
-            await flushStreamText();
-
-            const thinkDurationSec = (performance.now() - turnStartMs) / 1000;
-            const assistantMessage = visibleAssistantMessageFromChatData(data, thinkDurationSec);
-            const nextTranscript = assistantMessage ? [...currentMessages, assistantMessage] : currentMessages;
-            const previousSessionPhase = sessionStateRef.current.phase;
-            if (data.sessionState) {
-              commitSessionState(data.sessionState);
-            }
-
-            if (previousSessionPhase === "interview" && data.nextPhase === "questionnaire") {
-              setMessages(nextTranscript);
-              setRoundCount(currentRound + 1);
-              setIsTyping(false);
-              await generateQuestionnaireBatch("batch1", {
-                signal,
-                pauseBeforeSpinner: Boolean(assistantMessage),
-              });
-              return;
-            }
-
-            const nextBatchKey = getNextBatchKeyForMidDialogPhase(previousSessionPhase);
-            const shouldGenerateNextBatch =
-              Boolean(nextBatchKey) &&
-              (data.agentBOutput.shouldGenerateNextBatch ||
-                data.agentBOutput.directive.action === "finish_mid_dialog");
-            if (nextBatchKey && shouldGenerateNextBatch) {
-              const dialogKey = getMidDialogueKeyForPhase(previousSessionPhase);
-              const dialogueMessages = nextTranscript.slice(midDialogStartIndexRef.current ?? 0);
-              const stateWithDialogue: SessionState = {
-                ...sessionStateRef.current,
-                phase: previousSessionPhase,
-                midDialogues: dialogKey
-                  ? {
-                      ...(sessionStateRef.current.midDialogues ?? {}),
-                      [dialogKey]: dialogueMessages,
-                    }
-                  : sessionStateRef.current.midDialogues,
-              };
-              commitSessionState(stateWithDialogue);
-              setMessages(nextTranscript);
-              setRoundCount(currentRound + 1);
-              setIsComplete(false);
-              midDialogStartIndexRef.current = null;
-              setIsTyping(false);
-              setIsPreparingQuestionnaireGeneration(true);
-              setTypingPrimaryLabel(QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL);
-              try {
-                await waitForNextPaint(signal);
-                await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
-              } catch (e) {
-                if (e instanceof DOMException && e.name === "AbortError") {
-                  setIsPreparingQuestionnaireGeneration(false);
-                  setTypingPrimaryLabel("思考中…");
-                  return;
-                }
-                throw e;
-              }
-              setIsPreparingQuestionnaireGeneration(false);
-              await generateQuestionnaireBatch(nextBatchKey, {
-                signal,
-                skipChatPreparationPhase: true,
-              });
-              return;
-            }
-
-            if (data.isComplete && !savedLocalLogRef.current) {
-              savedLocalLogRef.current = true;
-              void persistLocalDebugRun({
-                sessionId: debugSessionIdRef.current,
-                identity: "用户",
-                startedAt: startedAtRef.current,
-                finishedAt: new Date().toISOString(),
-                transcript: nextTranscript,
-              });
-            }
-
-            setMessages((prev) => {
-              if (!assistantMessage) {
-                return streamingMessageIndex == null
-                  ? prev
-                  : prev.filter((_, index) => index !== streamingMessageIndex);
-              }
-              if (streamingMessageIndex == null) return [...prev, assistantMessage];
-              return prev.map((msg, index) =>
-                index === streamingMessageIndex ? assistantMessage : msg
-              );
-            });
-            setIsStreamingText(false);
-            setIsComplete(previousSessionPhase === "interview" ? data.isComplete : false);
-            setRoundCount(currentRound + 1);
-            return;
-          } catch {
-            stopStreamText();
-            setMessages((prev) =>
-              streamingMessageIndex == null ? prev : prev.filter((_, index) => index !== streamingMessageIndex)
-            );
-          }
 
           const result = await fetchChatOnce(body, signal);
           if (result.ok) {
@@ -979,51 +854,6 @@ export default function InterviewPage() {
               return;
             }
 
-            const nextBatchKey = getNextBatchKeyForMidDialogPhase(previousSessionPhase);
-            const shouldGenerateNextBatch =
-              Boolean(nextBatchKey) &&
-              (data.agentBOutput.shouldGenerateNextBatch ||
-                data.agentBOutput.directive.action === "finish_mid_dialog");
-            if (nextBatchKey && shouldGenerateNextBatch) {
-              const dialogKey = getMidDialogueKeyForPhase(previousSessionPhase);
-              const dialogueMessages = nextTranscript.slice(midDialogStartIndexRef.current ?? 0);
-              const stateWithDialogue: SessionState = {
-                ...sessionStateRef.current,
-                phase: previousSessionPhase,
-                midDialogues: dialogKey
-                  ? {
-                      ...(sessionStateRef.current.midDialogues ?? {}),
-                      [dialogKey]: dialogueMessages,
-                    }
-                  : sessionStateRef.current.midDialogues,
-              };
-              commitSessionState(stateWithDialogue);
-              setMessages(nextTranscript);
-              setRoundCount(currentRound + 1);
-              setIsComplete(false);
-              midDialogStartIndexRef.current = null;
-              setIsTyping(false);
-              setIsPreparingQuestionnaireGeneration(true);
-              setTypingPrimaryLabel(QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL);
-              try {
-                await waitForNextPaint(signal);
-                await sleep(QUESTIONNAIRE_GENERATION_TRANSITION_DELAY_MS, signal);
-              } catch (e) {
-                if (e instanceof DOMException && e.name === "AbortError") {
-                  setIsPreparingQuestionnaireGeneration(false);
-                  setTypingPrimaryLabel("思考中…");
-                  return;
-                }
-                throw e;
-              }
-              setIsPreparingQuestionnaireGeneration(false);
-              await generateQuestionnaireBatch(nextBatchKey, {
-                signal,
-                skipChatPreparationPhase: true,
-              });
-              return;
-            }
-
             if (assistantMessage) {
               setMessages((prev) => [
                 ...prev,
@@ -1046,7 +876,7 @@ export default function InterviewPage() {
             throw new Error(lastMessage);
           }
 
-          // 每次可重试失败后固定等待再发下一轮请求（问卷生成轮为 60s，其余 20s）。
+          // 每次可重试失败后固定等待再发下一轮请求（问卷生成轮为 60s，其余 30s）。
           await sleep(clientRetryDelayMs, signal);
         }
 
@@ -1063,7 +893,6 @@ export default function InterviewPage() {
           },
         ]);
       } finally {
-        setIsStreamingText(false);
         inFlightRef.current -= 1;
         if (inFlightRef.current === 0) {
           setIsTyping(false);
@@ -1215,6 +1044,11 @@ export default function InterviewPage() {
     setMessages(newMessages);
     setInputValue("");
 
+    if (sessionStateRef.current.phase === "mid_dialog1") {
+      void generateSecondBatchFromOneShotMidDialog(newMessages, roundCount);
+      return;
+    }
+
     triggerTurn(newMessages, roundCount);
   };
 
@@ -1257,8 +1091,7 @@ export default function InterviewPage() {
 
   const activeBatchKey = pendingQuestionnaireBatchKey ?? getBatchKeyForPhase(sessionState.phase) ?? generatingBatchKey;
   const activeBatchNumber = activeBatchKey ? getBatchNumber(activeBatchKey) : null;
-  const isMidDialogPhase =
-    sessionState.phase === "mid_dialog1" || sessionState.phase === "mid_dialog2";
+  const isMidDialogPhase = sessionState.phase === "mid_dialog1";
   const headerTitle =
     phase === "chat"
       ? generatingBatchKey
@@ -1284,7 +1117,7 @@ export default function InterviewPage() {
         {(phase === "questionnaire" || generatingBatchKey || pendingQuestionnaireBatchKey) && activeBatchNumber && (
           <div className="flex items-center gap-3">
             <span className="text-[12px] font-semibold text-light-gray">
-              第 {activeBatchNumber}/3 批
+              第 {activeBatchNumber}/2 部分
             </span>
             {phase === "questionnaire" && (
               <ProgressIndicator questionnaireProgress={questionnaireProgress} />
@@ -1300,17 +1133,11 @@ export default function InterviewPage() {
             {messages.map((msg, idx) => (
               <ChatBubble key={idx} message={msg} />
             ))}
-            {(isTyping || isPreparingQuestionnaireGeneration) && !isStreamingText && (
+            {(isTyping || isPreparingQuestionnaireGeneration) && (
               <ChatBubble
                 message={{ role: "assistant", content: "" }}
                 isTyping={true}
-                typingPrimaryLabel={
-                  isPreparingQuestionnaireGeneration &&
-                  !isTyping &&
-                  (sessionState.phase === "mid_dialog1" || sessionState.phase === "mid_dialog2")
-                    ? QUESTIONNAIRE_NEXT_BATCH_PREPARING_LABEL
-                    : typingPrimaryLabel
-                }
+                typingPrimaryLabel={typingPrimaryLabel}
                 typingNotice={typingNotice}
               />
             )}
@@ -1324,7 +1151,7 @@ export default function InterviewPage() {
                 className="w-full h-[52px] bg-[hsla(0,0%,100%,0.9)] hover:bg-white text-[#18191a] font-semibold text-[16px] rounded-pill tracking-[0.3px] flex items-center justify-center gap-2 transition-all shadow-button-native"
               >
                 <FileText className="w-5 h-5" />
-                开始第 {getBatchNumber(pendingQuestionnaireBatchKey)}/3 批问卷
+	                开始第 {getBatchNumber(pendingQuestionnaireBatchKey)}/2 部分问卷
               </button>
             ) : isComplete ? (
               <button
@@ -1359,11 +1186,15 @@ export default function InterviewPage() {
 
       {/* Generating Phase */}
       {phase === "generating" && (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <Loader2 className="w-8 h-8 text-raycast-blue animate-spin mb-4" />
-          <p className="text-light-gray text-[16px]">个性化生成问卷中...</p>
-          <p className="text-dim-gray text-[13px] mt-3 leading-relaxed">预计 15–30s，请稍候</p>
-        </div>
+        <QuestionnaireGenerating
+          estimatedDuration={30000}
+          isReady={isQuestionnaireReady}
+          onComplete={() => {
+            setPhase("chat");
+            setGeneratingBatchKey(null);
+            setIsQuestionnaireReady(false);
+          }}
+        />
       )}
 
       {/* Questionnaire Phase */}
@@ -1381,20 +1212,84 @@ export default function InterviewPage() {
 
       {/* Complete Phase */}
       {phase === "complete" && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="text-center">
-            <div className="w-16 h-16 rounded-full bg-raycast-green/20 flex items-center justify-center mx-auto mb-4">
-              <span className="text-raycast-green text-2xl">✓</span>
-            </div>
-            <h2 className="text-[20px] font-medium text-near-white mb-2">问卷完成！</h2>
-            <p className="text-dim-gray text-[14px] mb-8">感谢你的耐心回答</p>
-            <button
-              onClick={goToReport}
-              className="w-full max-w-xs h-[52px] bg-[hsla(0,0%,100%,0.9)] hover:bg-white text-[#18191a] font-semibold text-[16px] rounded-pill tracking-[0.3px] flex items-center justify-center gap-2 transition-all shadow-button-native mx-auto"
+        <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[rgba(95,201,146,0.05)] rounded-full blur-[100px] pointer-events-none"
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.3, 0.6, 0.3],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+          <div className="text-center relative z-10">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 200,
+                damping: 15,
+                delay: 0.2,
+              }}
+              className="w-20 h-20 rounded-full bg-raycast-green/20 flex items-center justify-center mx-auto mb-6 relative"
             >
-              <FileText className="w-5 h-5" />
-              生成我的 AI-MBTI 报告
-            </button>
+              <motion.div
+                className="absolute inset-0 rounded-full border-2 border-raycast-green"
+                initial={{ scale: 1, opacity: 0.8 }}
+                animate={{ scale: 1.5, opacity: 0 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "easeOut" }}
+              />
+              <motion.span
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 200,
+                  damping: 12,
+                  delay: 0.4,
+                }}
+                className="text-raycast-green text-3xl"
+              >
+                ✓
+              </motion.span>
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="text-[24px] font-semibold text-near-white mb-3"
+            >
+              问卷完成！
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              className="text-dim-gray text-[15px] mb-10"
+            >
+              感谢你的耐心回答
+            </motion.p>
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={goToReport}
+              className="w-full max-w-xs h-[52px] bg-[hsla(0,0%,100%,0.9)] hover:bg-white text-[#18191a] font-semibold text-[16px] rounded-pill tracking-[0.3px] flex items-center justify-center gap-2 transition-all shadow-button-native mx-auto relative overflow-hidden group"
+            >
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                animate={{ x: ["-100%", "200%"] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              />
+              <FileText className="w-5 h-5 relative z-10" />
+              <span className="relative z-10">生成我的 AI-MBTI 报告</span>
+            </motion.button>
           </div>
         </div>
       )}
