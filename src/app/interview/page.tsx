@@ -1236,7 +1236,7 @@ export default function InterviewPage() {
       {/* Generating Phase */}
       {phase === "generating" && (
         <QuestionnaireGenerating
-          estimatedDuration={30000}
+          estimatedDuration={60000}
           isReady={isQuestionnaireReady}
           onComplete={() => {
             setPhase("chat");

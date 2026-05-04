@@ -15,6 +15,7 @@ const STAGES = [
   { text: "定制专属问卷...", duration: 10000 },
   { text: "即将完成...", duration: 10000 },
 ];
+const ESTIMATED_WAIT_LABEL = "预计 30–60s，请稍候";
 
 function TypewriterText({ stages }: { stages: typeof STAGES }) {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
@@ -313,7 +314,7 @@ function EnergyCore() {
 }
 
 export function QuestionnaireGenerating({
-  estimatedDuration = 30000,
+  estimatedDuration = 60000,
   isReady = false,
   onComplete,
 }: QuestionnaireGeneratingProps) {
@@ -350,7 +351,7 @@ export function QuestionnaireGenerating({
           <div className="w-8 h-8 rounded-full bg-raycast-blue animate-pulse" />
         </div>
         <p className="text-light-gray text-[18px] font-medium mb-2">个性化生成问卷中...</p>
-        <p className="text-dim-gray text-[13px]">预计 15–30s，请稍候</p>
+        <p className="text-dim-gray text-[13px]">{ESTIMATED_WAIT_LABEL}</p>
       </div>
     );
   }
@@ -390,7 +391,7 @@ export function QuestionnaireGenerating({
           transition={{ delay: 1 }}
           className="text-dim-gray text-[13px] leading-relaxed text-center"
         >
-          {isCompleting ? "正在完成..." : "预计 15–30s，请稍候"}
+          {isCompleting ? "正在完成..." : ESTIMATED_WAIT_LABEL}
         </motion.p>
       </div>
     </div>
