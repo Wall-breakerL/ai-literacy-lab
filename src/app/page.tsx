@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, MessageCircle, FileText, Zap } from "lucide-react";
+import { ArrowRight, Sparkles, MessageCircle, FileText, Zap, Github } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const PARTICLES_COUNT = 25;
@@ -202,18 +202,30 @@ export default function LandingPage() {
           transition={{ duration: 0.6, delay: 1.2 }}
           className="flex flex-col items-center gap-4"
         >
-          <button
-            type="button"
-            onClick={() => router.push("/interview")}
-            className="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green text-white font-semibold text-lg shadow-glow-rainbow hover:shadow-glow-pulse transition-all overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
-            <div className="relative flex items-center gap-3">
-              <Sparkles className="w-6 h-6 animate-pulse" />
-              开始 AI-MBTI 测评
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </button>
+          <div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => router.push("/interview")}
+              className="group relative w-full max-w-[280px] overflow-hidden rounded-2xl bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green px-8 py-4 text-lg font-semibold text-white shadow-glow-rainbow transition-all hover:shadow-glow-pulse sm:w-auto"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+              <div className="relative flex items-center justify-center gap-3">
+                <Sparkles className="w-6 h-6 animate-pulse" />
+                开始 AI-MBTI 测评
+                <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+              </div>
+            </button>
+
+            <a
+              href="https://github.com/Wall-breakerL/human-ai-performance-lab"
+              target="_blank"
+              rel="noreferrer"
+              className="group flex w-full max-w-[280px] items-center justify-center gap-3 rounded-2xl border border-white/10 bg-surface-100/60 px-8 py-4 text-lg font-semibold text-slate-200 shadow-card-ring transition-all hover:border-white/20 hover:bg-surface-100 hover:text-white sm:w-auto"
+            >
+              <Github className="h-5 w-5 text-slate-400 transition-colors group-hover:text-white" />
+              GitHub 仓库
+            </a>
+          </div>
 
           <p className="text-slate-500 text-xs tracking-wide">
             完全匿名 · 约 5-10 分钟 · 即刻获得报告
