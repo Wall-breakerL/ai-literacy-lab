@@ -35,11 +35,11 @@ export default function LandingPage() {
 
           <button
             type="button"
-            onClick={() => router.push("/feedback-debug")}
+            onClick={() => router.push("/mock-report")}
             className="mt-3 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-[12px] bg-card-surface hover:bg-surface-200 text-light-gray hover:text-near-white font-semibold text-[14px] tracking-[0.2px] px-4 py-2 transition-all border border-[rgba(255,255,255,0.08)]"
           >
             <MessageCircle className="w-4 h-4 text-raycast-blue shrink-0" />
-            调试反馈对话
+            查看模拟报告
           </button>
 
           <p className="mt-5 text-center text-dim-gray text-[12px] tracking-[0.4px]">

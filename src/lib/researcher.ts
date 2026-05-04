@@ -66,37 +66,47 @@ const GOAL_TYPES: GoalType[] = [
 
 export type MidDialogueOpeningSkippedQuestion = Pick<QuestionnaireAnswer, "dimension" | "scenario" | "question">;
 
-export const RESEARCHER_TOOL_SYSTEM = `你是一位 AI-MBTI 研究员，负责把访谈对话沉淀成结构化状态，并在合适轮次生成专属问卷。
+export const RESEARCHER_TOOL_SYSTEM = `<role>
+你是一位 AI-MBTI 研究员，负责把轻量访谈沉淀成结构化状态，并在合适轮次生成专属问卷。
+</role>
 
-## 工作边界
+<dual_responsibility>
+## 双重职责
 
-- 聊天背景阶段：只收集职业、AI 使用经历、当前目标，不判断用户四维倾向，不生成问卷。
-- Phase 6 主动问卷生成阶段：按两部分生成专属问卷，共 24 题；hybrid_batch1 8 题、hybrid_batch2 16 题。
-- 聊天背景阶段你必须先直接对用户输出一句自然中文回复，然后调用工具更新结构化状态。不要再交给第二个 Agent 代写。
-- Phase 6 批次生成阶段必须只调用 generate_questionnaire_batch 工具生成问卷，正文可以为空。
-- generate_questionnaire 是旧版单次问卷兼容工具，不属于当前 Phase 6 主动流程。
-- 你必须通过提供的工具返回结构化结果，不要在正文里输出 JSON、Markdown 或额外说明。
-- 每轮如果用户说了任何能体现 Relation/Workflow/Epistemic/RepairScope 倾向的具体行为，必须以用户原话 quote 形式落到 newEvidence，至少 1 条；不要只放 summary。
+1. 对话者：用户可见回复要像真人访谈官，短、自然、直接对用户说话。前两轮只轻量了解职业或身份、AI 使用方式和必要目标。
+2. 分析者：结构化工具调用负责记录 role、recentUse、goal、scenarioGuidance、newEvidence 和问卷题目。工具字段可以使用内部术语，用户可见回复不解释这些术语。
+</dual_responsibility>
 
+<phase_boundaries>
+## 阶段边界
+
+- 聊天背景阶段：先输出一句用户可见回复，再调用 update_session_state；只收集背景，不判断四维倾向，不生成问卷。
+- Phase 6 主动问卷阶段：按两部分生成共 24 题；hybrid_batch1 是第一部分 8 题，hybrid_batch2 是第二部分 16 题。
+- Phase 6 批次生成阶段：只调用 generate_questionnaire_batch 工具；用户提示写入 userFacingMessage，正文可以为空。
+- generate_questionnaire 是旧版单次问卷兼容工具，不属于当前主动两段式流程。
+- 每轮如果用户说了任何能体现 Relation / Workflow / Epistemic / RepairScope 倾向的具体行为，把用户原话片段写入 newEvidence.quote；如果只是背景信息，也至少写 1 条背景 quote。
+</phase_boundaries>
+
+<conversation_rhythm>
 ## Phase 6 初始访谈节奏
 
-- 第 0 轮访谈官开场只问职业或身份，语气轻松开放，例如“先聊聊你是做什么的吧？”，不要同时问 AI 使用方式或目标。
-- 用户回答职业/身份后的下一轮：必须从用户回答中提取 role，并自然追问“你平时用 AI 主要做什么？可以说说你最常用的场景。”或同义开放式问题。
-- 用户回答 AI 使用方式后的下一轮：必须从用户回答中提取 recentUse；如果用户顺带说了目标，也写入 goal，否则 goalStatus="missing" 且 goal="更有效地使用 AI"。
-- 不要把职业/身份回答误写成 recentUse；不要把“更有效地使用 AI”当作具体场景。
-- 初始访谈保持轻量，不要在前两轮追问四维度、协作类型或测评倾向。
+- 开场只问职业或身份，例如“先聊聊你是做什么的吧？”。
+- 用户回答职业或身份后，自然承接，再问平时用 AI 主要做什么。
+- 用户回答 AI 使用方式后，简短承接并进入问卷生成；如果用户顺带说了目标，也写入 goal。
+- 前两轮保持轻量，不深挖四维度、协作类型或测评倾向。
+</conversation_rhythm>
 
-## AI-MBTI 四维度
+<scoring_model_for_internal_use>
+## AI-MBTI 四维度（供结构化分析和出题使用，不向用户解释）
 
 Relation: Instrumental 工具型 ↔ Collaborative 伙伴型
 Workflow: Framed 框架型 ↔ Exploratory 探索型
 Epistemic: Auditing 审计型 ↔ Trusting 信任型
 RepairScope: Global 全局重评 ↔ Local 局部调整
 
-## 计分方向
-
-- reverse=false 表示用户越认同，越靠近该维度高端倾向：Collaborative / Exploratory / Trusting / Local。
-- reverse=true 表示用户越认同，越靠近该维度低端倾向：Instrumental / Framed / Auditing / Global。`;
+reverse=false：用户越认同，越靠近 Collaborative / Exploratory / Trusting / Local。
+reverse=true：用户越认同，越靠近 Instrumental / Framed / Auditing / Global。
+</scoring_model_for_internal_use>`;
 
 const targetContextSchema = {
   type: "object",
@@ -361,36 +371,54 @@ export function buildQuestionnaireBatchPrompt({
     : "（暂无）";
   const guidance = formatScenarioGuidanceForPrompt(scenarioGuidance ?? sessionState.scenarioGuidance);
   const retry = retryReason ? `\n\n【上一次输出问题】\n${retryReason}\n请重新生成，必须修正这些问题。` : "";
+  const isFirstBatch = batchMode === "hybrid_batch1";
+  const batchLabel = isFirstBatch ? "第一部分问卷（8题）" : "第二部分问卷（16题）";
+  const questionCount = isFirstBatch ? 8 : 16;
+  const habitCount = isFirstBatch ? 4 : 8;
+  const scenarioCount = questionCount - habitCount;
+  const perDimensionCount = isFirstBatch ? 2 : 4;
+  const forwardPerDimension = isFirstBatch ? 2 : 2;
+  const reversePerDimension = isFirstBatch ? 0 : 2;
 
-  return `【Phase 6 问卷批次生成】
+  return `<task>
+你现在要生成${batchLabel}。必须调用 generate_questionnaire_batch 工具，把题目写入 nextQuestions，把给用户看的过渡语写入 userFacingMessage。
+</task>
+
+<batch_contract>
 batchMode: ${batchMode}
+总题数：${questionCount} 题
+习惯题：${habitCount} 道 scenario="习惯"
+场景题：${scenarioCount} 道结合用户背景、AI 使用方式或场景反馈的题
+维度分布：Relation / Workflow / Epistemic / RepairScope 各 ${perDimensionCount} 题
+正反向分布：每个维度 ${forwardPerDimension} 道 reverse=false、${reversePerDimension} 道 reverse=true
+${isFirstBatch ? "" : "总卷合约：两部分合计后每个维度 6 题，其中 4 道 reverse=false、2 道 reverse=true；总计 12 道习惯题 + 12 道场景题。"}
+</batch_contract>
 
+<direction_contract>
+reverse=false：认同度高 -> 更倾向 Collaborative / Exploratory / Trusting / Local。
+reverse=true：认同度高 -> 更倾向 Instrumental / Framed / Auditing / Global。
+</direction_contract>
+
+<user_context>
 ${summarizeSessionStateForPrompt(sessionState)}
+</user_context>
 
-【已有题目，必须避免重复或近似改写】
+<existing_questions>
+这些题目不能重复，也不能做近似改写：
 ${existingText}
+</existing_questions>
 
-【场景反馈】
+<scenario_guidance>
 ${guidance}
+</scenario_guidance>
 
-	【本轮唯一任务】
-	必须调用 generate_questionnaire_batch 工具。不要输出 JSON 文本。
-	当前 Phase 6 主动问卷由两部分组成：hybrid_batch1 (8题) / hybrid_batch2 (16题)；完成后共 24 题。
-
-	硬性要求：
-	1. hybrid_batch1 必须刚好 8 题；hybrid_batch2 必须刚好 16 题。
-	2. hybrid_batch1 必须包含 4 道 scenario=「习惯」的习惯题、4 道具体或半具体场景题。
-	3. hybrid_batch2 必须包含 8 道 scenario=「习惯」的习惯题、8 道具体或半具体场景题。
-	4. hybrid_batch1: Relation / Workflow / Epistemic / RepairScope 各 2 题。
-	5. hybrid_batch2: Relation / Workflow / Epistemic / RepairScope 各 4 题。
-	6. hybrid_batch1 每个维度必须刚好 1 道 reverse=false、1 道 reverse=true。
-	7. hybrid_batch2 每个维度必须刚好 2 道 reverse=false、2 道 reverse=true。
-	8. hybrid_batch2 必须结合已有题目做互补；两部分合计后，每个维度必须 6 题，其中 3 道 reverse=false、3 道 reverse=true。
-	9. 所有场景题必须绑定 targetContext、refinedTargetContext 或 scenarioGuidance；不能只有泛泛的「日常使用 AI」；若 granularity=abstract，降低具象职业细节，但仍要能让用户代入。
-	10. 题干必须是第一人称倾向陈述，不要问句，不要重复已有题目的措辞或同义改写。
-	11. reverse=false 代表认同该题时更靠近高端：Collaborative / Exploratory / Trusting / Local。
-	12. reverse=true 代表认同时更靠近低端：Instrumental / Framed / Auditing / Global。
-	13. userFacingMessage 是问卷生成完成后显示给用户的自然过渡话术，必须像直接对用户说话；说明这一部分题已经准备好，提示用户点击按钮进入作答；不要出现 JSON、维度解释、计分规则或内部分析。${retry}`;
+<question_design>
+- 习惯题描述通用 AI 使用倾向，任何职业都能理解，scenario 必须精确写成 "习惯"。
+- 场景题要绑定 targetContext、refinedTargetContext 或 scenarioGuidance；如果 granularity=abstract，可以降低职业细节，但仍要让用户能代入。
+- 题干使用第一人称倾向陈述句，不写问句。
+- 题干避免和已有题目语义重复，第二部分尤其要和第一部分互补。
+- userFacingMessage 用 1 句自然中文告诉用户这一部分题已经准备好，并提示点击按钮进入作答；不要解释维度、计分或内部分析。
+</question_design>${retry}`;
 }
 
 export function buildMidDialoguePrompt({
@@ -406,29 +434,39 @@ export function buildMidDialoguePrompt({
     .map((m) => `${m.role === "assistant" ? "访谈官" : "用户"}：${m.content}`)
     .join("\n");
 
-  return `【Phase 6 中途对话解析】
+  return `<task>
+Phase 6 中途对话解析。先给用户一句话自然承接，再调用 update_mid_dialogue 工具记录反馈。
+</task>
+
+<dialog_state>
 dialogKey: ${dialogKey}
-
 ${summarizeSessionStateForPrompt(sessionState)}
+</dialog_state>
 
-【对话记录】
+<dialog_history>
 ${history || "（暂无）"}
+</dialog_history>
 
-	【本轮唯一任务】
-	先自然回应用户，再调用 update_mid_dialogue 工具。不要输出 JSON 文本。
-	自然回应必须直接对用户说，例如“好的，我会按这个场景调整第二部分题目。”不要用“用户已确认”这类第三人称总结。
-	自然回应应优先承接用户的具体场景或感受；避免“适合吗 / 对吗 / 是不是”这类封闭式问法。
-	正文才是用户会看到的回复；directive.hint 是内部提示，不要把“用更具体的日常行为场景引导用户描述”这类指令式文字当成正文。
-	如果你决定 shouldGenerateNextBatch=true 或 directive.action="finish_mid_dialog"，仍然要先输出一句给用户看的自然过渡话；不要只调用工具。
+<user_visible_reply>
+一句话自然承接用户的反馈，直接对用户说话。可以参考：
+- 用户认可或说继续：好的，那我们继续第二部分。
+- 用户给出新场景：明白了，我会按你说的代码评审场景调整第二部分题目。
+- 用户说太具体或没经历：了解，我会把第二部分题目调得更通用一些。
+- 用户说都行或随便：好，那我按当前场景继续。
+</user_visible_reply>
 
-	结构化规则：
-	1. 用户认可或说继续：scenarioGuidance.status="confirmed"，directive.action="finish_mid_dialog"，shouldGenerateNextBatch=true。
-	2. 用户说场景不适合，并给出真实方向：status="refined"，directive.action="finish_mid_dialog"，更新 targetContext 和 includeTopics/avoidTopics，shouldGenerateNextBatch=true。
-	3. 用户说场景太具体：status="abstract_scenarios"，directive.action="finish_mid_dialog"，granularity="abstract"，shouldGenerateNextBatch=true。
-	4. 用户说题目不懂、没经历过、没想好或对这个方向不感兴趣：根据原话设置 includeTopics/avoidTopics，directive.action="finish_mid_dialog"，shouldGenerateNextBatch=true。
-	5. 用户回复低信息、都行、随便、不清楚：不要继续追问，按当前场景继续生成第二部分，directive.action="finish_mid_dialog"，status="confirmed"，shouldGenerateNextBatch=true。
-	6. 除非用户明确不想继续，否则这一轮中途对话后必须 shouldGenerateNextBatch=true，不再追加第二轮追问。
-	7. 用户明确不想继续：directive.action="exit_requested"，status="exit_requested"，shouldGenerateNextBatch=false。`;
+<structured_feedback_rules>
+- 用户认可或说继续：scenarioGuidance.status="confirmed"，directive.action="finish_mid_dialog"，shouldGenerateNextBatch=true。
+- 用户说场景不适合，并给出真实方向：status="refined"，directive.action="finish_mid_dialog"，更新 targetContext 和 includeTopics / avoidTopics，shouldGenerateNextBatch=true。
+- 用户说场景太具体：status="abstract_scenarios"，directive.action="finish_mid_dialog"，granularity="abstract"，shouldGenerateNextBatch=true。
+- 用户说题目不懂、没经历过、没想好或对这个方向不感兴趣：根据原话设置 includeTopics / avoidTopics，directive.action="finish_mid_dialog"，shouldGenerateNextBatch=true。
+- 用户回复低信息、都行、随便、不清楚：按当前场景继续，directive.action="finish_mid_dialog"，status="confirmed"，shouldGenerateNextBatch=true。
+- shouldGenerateNextBatch 几乎总是 true；只有用户明确不想继续时才写 false，并设置 directive.action="exit_requested"、status="exit_requested"。
+</structured_feedback_rules>
+
+<flow_rule>
+这轮中途对话只处理一次用户反馈。除非用户明确退出，结构化记录后直接进入第二部分问卷。
+</flow_rule>`;
 }
 
 export function buildMidDialogueTransitionRepairPrompt({
@@ -574,52 +612,59 @@ ${history || "（尚无用户发言，请仍基于可得的访谈官开场等信
 8. 不要编造用户明显没有经历过的场景；目标缺失时，围绕 recentUse 出题。`;
   }
 
-  return `【当前对话轮数】${roundCount}（聊天背景阶段，轮数 < ${QUESTIONNAIRE_ENTRY_ROUND}）
-【用户已回答轮数】${userReplyCount}
+  return `<task>
+聊天背景阶段。先用一句自然中文回复用户，再调用 update_session_state 工具更新结构化状态；此阶段不生成问卷。
+</task>
 
-【对话记录】
+<turn_state>
+当前对话轮数：${roundCount}（聊天背景阶段，轮数 < ${QUESTIONNAIRE_ENTRY_ROUND}）
+用户已回答轮数：${userReplyCount}
+</turn_state>
+
+<dialog_history>
 ${history || "（尚无）"}
+</dialog_history>
 
-${sessionState ? `${summarizeSessionStateForPrompt(sessionState)}\n` : ""}
+${sessionState ? `<session_state>\n${summarizeSessionStateForPrompt(sessionState)}\n</session_state>\n` : ""}
 
-【本轮唯一任务】
-先用一句自然中文回复用户，再调用 update_session_state 工具。不要输出 JSON 文本，不要生成问卷。
-
-【当前轮次任务】
+<conversation_step>
 ${buildInitialInterviewRoundInstruction(userReplyCount)}
+</conversation_step>
 
-要求：
-1. 只收集职业、AI 使用经历与当前目标，不要判断四维倾向。
-2. 更新 analysis.background_summary，概括用户职业、常用工具、典型场景、当前目标。
-3. 输出 targetContext：role、recentUse、goal、goalStatus、goalType。
-4. role 必须优先来自用户对“职业或身份”的回答；如果没说清楚，保留已有值或“用户”，不要编造。
-5. recentUse 必须优先来自用户对“平时用 AI 主要做什么”的回答；如果还没回答，保留已有值或“使用 AI 完成日常任务”，不要编造。
-6. 如果目标缺失，goalStatus 写 "missing"，goal 写 "更有效地使用 AI"。
-7. directive.action 只能用 probe_new 或 probe_deep；hint 给访谈官一句中文提示（≤40 字）。
-8. nextQuestions 必须为空数组。
-9. newEvidence 必须至少 1 条，quote 必须使用用户原话片段；如果只是背景信息，evidence_kind 仍写 "quote"。`;
+<structured_output_rules>
+- analysis.background_summary 概括用户职业、常用工具、典型场景和当前目标。
+- targetContext 必须包含 role、recentUse、goal、goalStatus、goalType。
+- role 优先来自用户对职业或身份的回答；如果没说清楚，保留已有值或写“用户”。
+- recentUse 优先来自用户对 AI 使用方式的回答；如果还没回答，recentUse 先保留已有值或写“使用 AI 完成日常任务”。
+- 如果目标缺失，goalStatus 写 "missing"，goal 写 "更有效地使用 AI"。
+- directive.action 只能用 probe_new 或 probe_deep；hint 给访谈官一句中文提示，最多 40 字。
+- nextQuestions 必须为空数组。
+- newEvidence 至少 1 条，quote 使用用户原话片段；即使只是背景信息，evidence_kind 也写 "quote"。
+</structured_output_rules>`;
 }
 
 function buildInitialInterviewRoundInstruction(userReplyCount: number): string {
   if (userReplyCount <= 1) {
-    return `用户刚回答第一轮职业/身份问题。
-- 必须把用户职业、身份、年级、岗位或当前状态写入 targetContext.role。
-- 如果用户没有主动说 AI 使用方式，不要把职业内容写进 recentUse。
-- 自然回复必须追问 AI 使用方式，使用开放式表达，例如：“你平时用 AI 主要做什么？可以说说你最常用的场景。”
-- 这一轮不要追问测评维度，不要一次性追加很多问题。`;
+    return `用户刚回答职业或身份。
+- 自然承接用户的职业或身份，再问他平时用 AI 主要做什么。
+- 把用户说的职业、身份、年级、岗位或当前状态写入 targetContext.role。
+- 如果用户还没说 AI 使用方式，recentUse 先保留已有值或写“使用 AI 完成日常任务”，不要把职业内容写成 recentUse。
+- 用户可见回复可以类似：“明白了。那你平时用 AI 主要做什么？可以说说最常用的场景。”
+- 这一轮只问 AI 使用方式，不追加测评维度、协作类型或多个问题。`;
   }
-  return `用户已经回答过职业/身份，现在刚回答 AI 使用方式。
-- 必须把用户平时用 AI 做的任务、工具或最近场景写入 targetContext.recentUse。
+  return `用户已经回答过职业或身份，现在刚回答 AI 使用方式。
+- 把用户平时用 AI 做的任务、工具或最近场景写入 targetContext.recentUse。
 - 如果用户顺带说了目标，把它写入 targetContext.goal；否则目标保持 missing。
-- 自然回复只需简短承接，不再继续追问职业或 AI 使用方式；接下来系统会进入个性化问卷生成。
-- 不要把“更有效地使用 AI”当作具体 recentUse。`;
+- 用户可见回复只需简短承接，例如：“明白了，那我们进入几道选择题，会更准确地了解你的协作风格。”
+- 不再追问职业、AI 使用方式或额外目标；接下来系统会进入个性化问卷生成。
+- “更有效地使用 AI”只是兜底目标，不是具体 recentUse。`;
 }
 
 export function agentBOutputFromToolUses(toolUses: ClaudeToolUse[], roundCount: number): AgentBOutput | null {
   const expectedName = roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? GENERATE_QUESTIONNAIRE_TOOL.name : UPDATE_SESSION_STATE_TOOL.name;
   const toolUse = toolUses.find((item) => item.name === expectedName);
-  if (!toolUse || !toolUse.input || typeof toolUse.input !== "object") return null;
-  const input = toolUse.input as Record<string, unknown>;
+  const input = parseToolInputRecord(toolUse?.input);
+  if (!input) return null;
 
   const analysis = parseAnalysis(input.analysis);
   const targetContext = parseTargetContext(input.targetContext);
@@ -659,12 +704,12 @@ export function questionnaireBatchOutputFromToolUses(
   textBlocks: string[] = []
 ): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === GENERATE_QUESTIONNAIRE_BATCH_TOOL.name);
-  const textInput = toolUse?.input && typeof toolUse.input === "object"
+  const parsedToolInput = parseToolInputRecord(toolUse?.input);
+  const textInput = parsedToolInput
     ? undefined
     : parseQuestionnaireBatchTextInput(textBlocks);
-  const rawInput = toolUse?.input && typeof toolUse.input === "object" ? toolUse.input : textInput;
-  if (!rawInput || typeof rawInput !== "object") return null;
-  const input = rawInput as Record<string, unknown>;
+  const input = parsedToolInput ?? textInput;
+  if (!input) return null;
   return {
     analysis: parseAnalysis(input.analysis),
     directive: { action: "start_questionnaire" },
@@ -681,10 +726,25 @@ function parseQuestionnaireBatchTextInput(textBlocks: string[]): Record<string, 
   if (!text) return null;
   const parsed = parseJsonLikeText(text);
   if (Array.isArray(parsed)) return { nextQuestions: parsed };
-  if (!parsed || typeof parsed !== "object") return null;
-  const record = parsed as Record<string, unknown>;
-  if (record.input && typeof record.input === "object") return record.input as Record<string, unknown>;
-  if (record.arguments && typeof record.arguments === "object") return record.arguments as Record<string, unknown>;
+  return asToolInputRecord(parsed);
+}
+
+function parseToolInputRecord(input: unknown): Record<string, unknown> | null {
+  const direct = asToolInputRecord(input);
+  if (direct) return direct;
+  if (typeof input !== "string") return null;
+  return asToolInputRecord(parseJsonLikeText(input));
+}
+
+function asToolInputRecord(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const record = input as Record<string, unknown>;
+  if (record.input && typeof record.input === "object" && !Array.isArray(record.input)) {
+    return record.input as Record<string, unknown>;
+  }
+  if (record.arguments && typeof record.arguments === "object" && !Array.isArray(record.arguments)) {
+    return record.arguments as Record<string, unknown>;
+  }
   return record;
 }
 
@@ -703,8 +763,9 @@ function parseJsonLikeText(text: string): unknown {
   if (firstArrayStart >= 0 && lastArrayEnd > firstArrayStart) {
     candidates.push(text.slice(firstArrayStart, lastArrayEnd + 1));
   }
+  candidates.push(...qwenToolInputRepairCandidates(text));
 
-  for (const candidate of candidates) {
+  for (const candidate of Array.from(new Set(candidates))) {
     try {
       return JSON.parse(candidate);
     } catch {
@@ -714,10 +775,25 @@ function parseJsonLikeText(text: string): unknown {
   return null;
 }
 
+function qwenToolInputRepairCandidates(text: string): string[] {
+  const repaired = text.replace(
+    /}\s*\n\s*\{(?=\s*"(?:directive|batchMode|batch_mode|existingQuestions|existing_questions|targetContext|target_context|nextQuestions|next_questions|newEvidence|new_evidence|scenarioGuidance|scenario_guidance|shouldGenerateNextBatch|userFacingMessage|questions)"\s*:)/g,
+    "},"
+  );
+  if (repaired === text) return [];
+  const candidates = [repaired];
+  let trimmed = repaired;
+  for (let i = 0; i < 2 && trimmed.endsWith("}"); i++) {
+    trimmed = trimmed.slice(0, -1).trimEnd();
+    candidates.push(trimmed);
+  }
+  return candidates;
+}
+
 export function midDialogueOutputFromToolUses(toolUses: ClaudeToolUse[], turn: number): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === UPDATE_MID_DIALOGUE_TOOL.name);
-  if (!toolUse || !toolUse.input || typeof toolUse.input !== "object") return null;
-  const input = toolUse.input as Record<string, unknown>;
+  const input = parseToolInputRecord(toolUse?.input);
+  if (!input) return null;
   return {
     analysis: parseAnalysis(input.analysis),
     directive: parseDirective(input.directive),

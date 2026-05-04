@@ -14,9 +14,15 @@ import { questionnaireReadyMessageForBatchKey, questionnaireReadyMessageForBatch
 import { flattenBatchAnswers, getBatchKeyForPhase, getNextBatchKey } from "@/lib/sessionState";
 import { completePortableArtifacts, normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
 import {
+  buildMidDialoguePrompt,
+  buildQuestionnaireBatchPrompt,
+  buildResearcherToolPrompt,
+  agentBOutputFromToolUses,
+  questionnaireBatchOutputFromToolUses,
   normalizeMidDialogueOutput,
   normalizeMidDialogueTransitionRepairText,
   normalizeMidDialogueVisibleText,
+  RESEARCHER_TOOL_SYSTEM,
 } from "@/lib/researcher";
 import { resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
@@ -92,7 +98,7 @@ function countHabitQuestions(questions: QuestionnaireQuestion[]): number {
 function assertHybridBatchShape(
   questions: QuestionnaireQuestion[],
   label: string,
-  expected: { count: number; habits: number; perDimension: number }
+  expected: { count: number; habits: number; perDimension: number; reversePerDimension: number }
 ) {
   assert(questions.length === expected.count, `${label} 应为 ${expected.count} 题`);
   assert(countHabitQuestions(questions) === expected.habits, `${label} 应包含 ${expected.habits} 道习惯题`);
@@ -103,6 +109,10 @@ function assertHybridBatchShape(
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert(items.length === expected.perDimension, `${label} 每维应有 ${expected.perDimension} 题：${dimension}`);
+    assert(
+      items.filter((question) => question.reverse).length === expected.reversePerDimension,
+      `${label} 每维应有 ${expected.reversePerDimension} 道反向题：${dimension}`
+    );
   }
 }
 
@@ -112,7 +122,7 @@ function assertHybridTotalBalance(questions: QuestionnaireQuestion[]) {
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert(items.length === 6, `总卷每维应有 6 题：${dimension}`);
-    assert(items.filter((question) => question.reverse).length === 3, `总卷每维应有 3 道反向题：${dimension}`);
+    assert(items.filter((question) => question.reverse).length === 2, `总卷每维应有 2 道反向题：${dimension}`);
   }
 }
 
@@ -269,8 +279,8 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(getNextBatchKey("batch2") === undefined, "batch2 后无下一批");
       const msg1 = questionnaireReadyMessageForBatchKey("batch1");
       const msg2 = questionnaireReadyMessageForBatchKey("batch2");
-      assert(msg1.includes("点击按钮"), "就绪文案应提示点击按钮进入作答");
-      assert(msg2.includes("点击按钮"), "第二部分就绪文案应提示点击按钮");
+      assert(msg1.includes("第一部分问卷") && msg1.includes("点击按钮"), "第一部分问卷就绪应追加自然提示");
+      assert(msg2.includes("第二部分问卷") && msg2.includes("点击按钮"), "第二部分问卷就绪应追加自然提示");
       assert(
         questionnaireReadyMessageForBatchMode("hybrid_batch1") === msg1 &&
           questionnaireReadyMessageForBatchMode("hybrid_batch2") === msg2,
@@ -298,11 +308,13 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         count: 8,
         habits: 4,
         perDimension: 2,
+        reversePerDimension: 0,
       });
       assertHybridBatchShape(second, "hybrid_batch2 fallback", {
         count: 16,
         habits: 8,
         perDimension: 4,
+        reversePerDimension: 2,
       });
       assert(validateQuestionnaireBatch(first, "hybrid_batch1"), "hybrid_batch1 fallback 应合法");
       assert(validateQuestionnaireBatch(second, "hybrid_batch2"), "hybrid_batch2 fallback 应合法");
@@ -336,6 +348,93 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         }]
       );
       assert(similar && similar.similarity >= 0.72, "高度相似题干应被检测出来");
+    }),
+    test("AI-MBTI", "Phase 6 prompt 优化保留问卷硬合约", () => {
+      const firstPrompt = buildQuestionnaireBatchPrompt({
+        sessionState: sessionState({ phase: "questionnaire_batch1" }),
+        batchMode: "hybrid_batch1",
+        existingQuestions: [],
+      });
+      const secondPrompt = buildQuestionnaireBatchPrompt({
+        sessionState: sessionState({ phase: "questionnaire_batch2" }),
+        batchMode: "hybrid_batch2",
+        existingQuestions: FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1,
+      });
+
+      assert(firstPrompt.includes("第一部分问卷（8题）"), "第一部分 prompt 应使用自然批次名称");
+      assert(firstPrompt.includes("4 道 scenario=\"习惯\""), "第一部分 prompt 应保留习惯题精确数量");
+      assert(firstPrompt.includes("Relation / Workflow / Epistemic / RepairScope 各 2 题"), "第一部分 prompt 应保留每维题数");
+      assert(firstPrompt.includes("每个维度 2 道 reverse=false、0 道 reverse=true"), "第一部分 prompt 应保留全正向合约");
+      assert(secondPrompt.includes("第二部分问卷（16题）"), "第二部分 prompt 应使用自然批次名称");
+      assert(secondPrompt.includes("8 道 scenario=\"习惯\""), "第二部分 prompt 应保留习惯题精确数量");
+      assert(secondPrompt.includes("两部分合计后每个维度 6 题，其中 4 道 reverse=false、2 道 reverse=true"), "第二部分 prompt 应保留总卷方向合约");
+    }),
+    test("AI-MBTI", "Phase 6 batch validator 强制新正反向结构", () => {
+      const invalidFirst = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question, index) => (
+        index === 1 ? { ...question, reverse: true } : question
+      ));
+      const invalidSecond = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question, index) => (
+        index === 0 ? { ...question, reverse: false } : question
+      ));
+
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 全正向应合法");
+      assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 出现反向题应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 每维 2 正 2 反应合法");
+      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 正反向失衡应非法");
+    }),
+    test("AI-MBTI", "Phase 6 prompt 优化分离自然对话与结构化输出", () => {
+      assert(RESEARCHER_TOOL_SYSTEM.includes("双重职责"), "system prompt 应明确对话者与分析者两种职责");
+      assert(RESEARCHER_TOOL_SYSTEM.includes("用户可见回复"), "system prompt 应标出用户可见回复边界");
+      assert(RESEARCHER_TOOL_SYSTEM.includes("结构化工具调用"), "system prompt 应标出结构化工具边界");
+
+      const interviewPrompt = buildResearcherToolPrompt([
+        { role: "assistant", content: "嗨，欢迎！先聊聊你是做什么的吧？" },
+        { role: "user", content: "我是大三学生，最近在准备项目作品集。" },
+      ], 1, sessionState({ phase: "interview" }));
+      assert(interviewPrompt.includes("自然承接用户的职业或身份"), "初始访谈 prompt 应强调自然承接");
+      assert(interviewPrompt.includes("recentUse 先保留已有值"), "初始访谈 prompt 应防止把职业写入 recentUse");
+
+      const midPrompt = buildMidDialoguePrompt({
+        messages: [{ role: "user", content: "第二部分更想围绕代码评审，不要泛泛写作。" }],
+        sessionState: sessionState({ phase: "mid_dialog1" }),
+        dialogKey: "dialog1",
+      });
+      assert(midPrompt.includes("一句话自然承接"), "中途对话 prompt 应把用户可见回复收敛成一句自然承接");
+      assert(midPrompt.includes("几乎总是 true"), "中途对话 prompt 应保留一轮后进入第二部分的节奏");
+    }),
+    test("AI-MBTI", "Qwen 字符串 tool 参数可恢复为访谈状态", () => {
+      const malformedInput = `{"analysis":{"reasoning":"用户提供了职业身份。","background_summary":"用户是学生。"}
+{"directive":{"action":"probe_new","hint":"追问 AI 使用场景"},"targetContext":{"role":"学生","recentUse":"使用 AI 完成日常任务","goal":"更有效地使用 AI","goalStatus":"missing","goalType":"learning"},"nextQuestions":[],"newEvidence":[{"quote":"学生","signal":"用户身份是学生","evidence_kind":"quote"}]}}`;
+      const output = agentBOutputFromToolUses([
+        {
+          id: "call_qwen_tool_args",
+          name: "update_session_state",
+          input: malformedInput,
+        },
+      ], 1);
+
+      assert(output, "应从 Qwen 字符串 tool 参数中恢复结构化输出");
+      assert(output.targetContext, "应恢复 targetContext");
+      assert(output.targetContext.role === "学生", `role 应恢复为学生，实际 ${output.targetContext.role}`);
+      assert(output.directive.action === "probe_new", `directive.action 应恢复，实际 ${output.directive.action}`);
+      assert(output.newEvidence, "应恢复 newEvidence");
+      assert(output.newEvidence[0]?.quote === "学生", "newEvidence quote 应保留用户原话");
+    }),
+    test("AI-MBTI", "Qwen 字符串 tool 参数可恢复为第二批问卷", () => {
+      const malformedInput = `{"analysis":{"reasoning":"生成第二批问卷。","background_summary":"学生使用 AI 写代码。"}
+{"batchMode":"hybrid_batch2","targetContext":{"role":"学生","recentUse":"写代码","goal":"更有效地使用 AI","goalStatus":"missing","goalType":"coding_system"},"userFacingMessage":"第二部分问卷已准备好。","nextQuestions":[{"dimension":"Relation","scenario":"习惯","question":"我通常只把 AI 当成执行代码任务的工具。","reverse":true}],"newEvidence":[]}}`;
+      const output = questionnaireBatchOutputFromToolUses([
+        {
+          id: "call_qwen_batch_args",
+          name: "generate_questionnaire_batch",
+          input: malformedInput,
+        },
+      ]);
+
+      assert(output, "应从 Qwen 字符串 tool 参数中恢复第二批问卷输出");
+      assert(output.nextQuestions?.length === 1, `应恢复 nextQuestions，实际 ${output.nextQuestions?.length ?? 0}`);
+      assert(output.nextQuestions[0]?.dimension === "Relation", "应保留题目的维度");
+      assert(output.userFacingMessage === "第二部分问卷已准备好。", "应恢复 userFacingMessage");
     }),
     test("AI-MBTI", "Phase 6 中途对话不泄漏内部提示", () => {
       assert(

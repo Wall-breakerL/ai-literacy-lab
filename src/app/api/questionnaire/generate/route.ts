@@ -10,7 +10,6 @@ import {
 import { getFallbackQuestionnaireBatch } from "@/lib/fallbackQuestionnaire";
 import { questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
 import {
-  findSimilarQuestionText,
   validateQuestionnaireBatch,
   validateQuestionnaireTotal,
 } from "@/lib/questionnaireValidation";
@@ -50,7 +49,6 @@ const MID_DIALOGUE_STATUSES: MidDialogueStatus[] = [
   "exit_requested",
 ];
 const BATCH_KEYS: QuestionnaireBatchKey[] = ["batch1", "batch2"];
-const SIMILARITY_THRESHOLD = 0.72;
 
 const MODE_TO_BATCH_KEY: Record<QuestionnaireBatchMode, QuestionnaireBatchKey> = {
   hybrid_batch1: "batch1",
@@ -398,19 +396,15 @@ function validateBatchForRoute(
 ): string | undefined {
   if (!validateQuestionnaireBatch(questions, batchMode)) {
     const expected = batchMode === "hybrid_batch1"
-      ? "8 题、四维各 2 题、4 道习惯题 + 4 道场景题"
-      : "16 题、四维各 4 题、8 道习惯题 + 8 道场景题";
+      ? "8 题、四维各 2 题、每维 2 正 0 反、4 道习惯题 + 4 道场景题"
+      : "16 题、四维各 4 题、每维 2 正 2 反、8 道习惯题 + 8 道场景题";
     return `${batchMode} 必须是 ${expected}，并满足该部分的场景和正反向规则。实际输出：${describeQuestionnaireBatchShape(questions)}。`;
   }
   if (batchMode === "hybrid_batch2" && existingQuestions.length >= 8) {
     const total = [...existingQuestions, ...questions];
     if (!validateQuestionnaireTotal(total)) {
-      return "两部分合计必须是 24 题；每维 6 题、3 正向 + 3 反向，并且总计 12 道习惯题 + 12 道场景题。";
+      return "两部分合计必须是 24 题；每维 6 题、4 正向 + 2 反向，并且总计 12 道习惯题 + 12 道场景题。";
     }
-  }
-  const similar = findSimilarQuestionText(questions, existingQuestions, SIMILARITY_THRESHOLD);
-  if (similar) {
-    return `题干过于相似（${Math.round(similar.similarity * 100)}%）：「${similar.question}」≈「${similar.existingQuestion}」`;
   }
   return undefined;
 }

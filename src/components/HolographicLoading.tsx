@@ -274,13 +274,17 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const [shouldExit, setShouldExit] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const completionStartedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
 
   const currentPhase = PHASES[phaseIndex];
-  const prefersReducedMotion = typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
+
+  useEffect(() => {
+    setMounted(true);
+    setPrefersReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, []);
 
   useEffect(() => {
     onCompleteRef.current = onComplete;
@@ -371,7 +375,7 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
           className="fixed inset-0 bg-void z-50 flex flex-col items-center justify-center overflow-hidden"
         >
           {/* Matrix rain background */}
-          {!prefersReducedMotion ? <MatrixRain /> : null}
+          {mounted && !prefersReducedMotion ? <MatrixRain /> : null}
 
           {/* Ambient glow */}
           <motion.div
@@ -389,14 +393,14 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
           />
 
           {/* Data stream particles */}
-          {!prefersReducedMotion ? <DataStream /> : null}
+          {mounted && !prefersReducedMotion ? <DataStream /> : null}
 
           {/* Main content */}
           <div className="relative z-10 flex flex-col items-center">
             {/* Circular progress with cube */}
             <div className="relative mb-8">
               <CircularProgress progress={progress} phase={currentPhase} />
-              {!prefersReducedMotion ? <ScanLines /> : null}
+              {mounted && !prefersReducedMotion ? <ScanLines /> : null}
             </div>
 
             {/* Progress percentage */}

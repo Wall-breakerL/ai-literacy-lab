@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FeedbackContext, FinalReport, Message, QuestionnaireAnswer, SessionState, TargetContext } from "@/lib/types";
+import { FinalReport, Message, QuestionnaireAnswer, SessionState, TargetContext } from "@/lib/types";
 import { DimensionCard } from "@/components/DimensionCard";
-import { FeedbackDialogue } from "@/components/FeedbackDialogue";
 import { MarkdownText } from "@/components/MarkdownText";
-import { PersonalityAvatar } from "@/components/PersonalityAvatar";
-import { ParticleBackground } from "@/components/ParticleBackground";
 import { HolographicLoading } from "@/components/HolographicLoading";
+import { ReportStoryExperience } from "@/components/ReportStoryExperience";
 import { normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
-import { flattenBatchAnswers, isSessionState } from "@/lib/sessionState";
-import { motion } from "framer-motion";
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
-import { ArrowLeft, ClipboardList, Fingerprint, Check, Copy } from "lucide-react";
+import { scoreAnswer } from "@/lib/reportScoring";
+import { isSessionState } from "@/lib/sessionState";
+import { ArrowLeft } from "lucide-react";
 import {
   isRetryableApiFailure,
   sleepAbortable,
@@ -50,16 +47,47 @@ type ReportPageModel = FinalReport & {
 
 type DimensionItem = FinalReport["dimensions"][number];
 
-const TOC_ITEMS = [
-  { id: "style-overview", label: "风格速览" },
-  { id: "profile", label: "我的画像" },
-  { id: "summary", label: "画像简介" },
-  { id: "dimensions", label: "四维解析" },
-  { id: "prompts", label: "Prompt 模板" },
-  { id: "manifesto", label: "我的协作宣言" },
-  { id: "signature", label: "协作签名" },
-  { id: "feedback", label: "反馈" },
-];
+const BATCH_LABELS = {
+  batch1: "第一轮测试",
+  batch2: "第二轮测试",
+  batch3: "第三轮测试",
+  all: "完整测试",
+} as const;
+
+type AnswerBatchKey = keyof typeof BATCH_LABELS;
+
+interface AnswerScoreDetail {
+  answer: QuestionnaireAnswer;
+  batchKey: AnswerBatchKey;
+  batchLabel: string;
+  indexInBatch: number;
+  contribution: number | null;
+  rawPercent: number | null;
+}
+
+interface AnswerBatchDetail {
+  key: AnswerBatchKey;
+  label: string;
+  answers: AnswerScoreDetail[];
+}
+
+interface DimensionScoreDetail {
+  dimension: DimensionItem["dimension"];
+  label: string;
+  tendencyLabel: string;
+  score: number;
+  answeredCount: number;
+  skippedCount: number;
+  contributions: number[];
+}
+
+interface ScoreAudit {
+  batches: AnswerBatchDetail[];
+  dimensions: DimensionScoreDetail[];
+  totalQuestions: number;
+  answeredQuestions: number;
+  skippedQuestions: number;
+}
 
 function firstText(...values: Array<string | undefined | null>) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim() ?? "";
@@ -77,8 +105,93 @@ function compactText(text?: string, maxLength = 140) {
   return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength)}...` : cleaned;
 }
 
-function scrollToSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+function rawScorePercent(score: number | null): number | null {
+  if (score == null || !Number.isFinite(score)) return null;
+  const raw = Math.min(6, Math.max(1, Math.round(score)));
+  return ((raw - 1) / 5) * 100;
+}
+
+function formatScore(value: number | null) {
+  if (value == null) return "不计分";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function dimensionAverageFormula(dimension: DimensionScoreDetail) {
+  if (!dimension.contributions.length) return "无有效题，使用默认分 50";
+  const sum = dimension.contributions.reduce((total, score) => total + score, 0);
+  const average = sum / dimension.contributions.length;
+  return `round((${dimension.contributions.map((score) => formatScore(score)).join(" + ")}) / ${dimension.contributions.length}) = round(${formatScore(average)}) = ${dimension.score}`;
+}
+
+function resolveAnswerBatchEntries(
+  questionnaireAnswers: QuestionnaireAnswer[],
+  sessionState?: SessionState,
+): Array<[AnswerBatchKey, QuestionnaireAnswer[]]> {
+  const batchAnswers = sessionState?.batchAnswers;
+  if (batchAnswers?.batch1?.length || batchAnswers?.batch2?.length || batchAnswers?.batch3?.length) {
+    return (["batch1", "batch2", "batch3"] as const)
+      .map((key) => [key, batchAnswers?.[key] ?? []] as [AnswerBatchKey, QuestionnaireAnswer[]])
+      .filter(([, answers]) => answers.length > 0);
+  }
+
+  if (questionnaireAnswers.length > 8) {
+    return [
+      ["batch1", questionnaireAnswers.slice(0, 8)],
+      ["batch2", questionnaireAnswers.slice(8)],
+    ];
+  }
+
+  return questionnaireAnswers.length ? [["all", questionnaireAnswers]] : [];
+}
+
+function buildScoreAudit(args: {
+  report: FinalReport;
+  questionnaireAnswers: QuestionnaireAnswer[];
+  sessionState?: SessionState;
+}): ScoreAudit | null {
+  const { report, questionnaireAnswers, sessionState } = args;
+  const batchEntries = resolveAnswerBatchEntries(questionnaireAnswers, sessionState);
+  if (!batchEntries.length) return null;
+
+  const batches = batchEntries.map(([key, answers]) => ({
+    key,
+    label: BATCH_LABELS[key],
+    answers: answers.map((answer, index) => ({
+      answer,
+      batchKey: key,
+      batchLabel: BATCH_LABELS[key],
+      indexInBatch: index + 1,
+      contribution: scoreAnswer(answer),
+      rawPercent: rawScorePercent(answer.score),
+    })),
+  }));
+  const flatDetails = batches.flatMap((batch) => batch.answers);
+
+  const dimensions = report.dimensions.map((dimension) => {
+    const answers = flatDetails.filter((item) => item.answer.dimension === dimension.dimension);
+    const contributions = answers
+      .map((item) => item.contribution)
+      .filter((score): score is number => typeof score === "number");
+    return {
+      dimension: dimension.dimension,
+      label: dimension.label,
+      tendencyLabel: dimension.tendencyLabel,
+      score: dimension.score,
+      answeredCount: contributions.length,
+      skippedCount: answers.length - contributions.length,
+      contributions,
+    };
+  });
+
+  const totalQuestions = flatDetails.length;
+  const skippedQuestions = flatDetails.filter((item) => item.contribution == null).length;
+  return {
+    batches,
+    dimensions,
+    totalQuestions,
+    answeredQuestions: totalQuestions - skippedQuestions,
+    skippedQuestions,
+  };
 }
 
 function timeoutSignal(ms: number): AbortSignal {
@@ -163,53 +276,14 @@ function buildSignature(report: ReportPageModel) {
   return detail ? { headline, detail } : null;
 }
 
-function buildFeedbackContext(args: {
-  report: FinalReport;
-  messages: Message[];
-  identity: string;
-  questionnaireAnswers: QuestionnaireAnswer[];
-  sessionState?: SessionState;
-  targetContext?: TargetContext;
-}): FeedbackContext {
-  const { report, messages, identity, questionnaireAnswers, sessionState, targetContext } = args;
-  void messages;
-  const answerSource = questionnaireAnswers.length
-    ? questionnaireAnswers
-    : sessionState?.answers?.length
-      ? sessionState.answers
-      : flattenBatchAnswers(sessionState?.batchAnswers);
-  const totalQuestions = answerSource.length || sessionState?.questionnaire?.length || 24;
-  const skippedQuestions = answerSource.filter((answer) => answer.skipped || answer.score === null).length;
-  const answeredQuestions = Math.max(0, totalQuestions - skippedQuestions);
-  const effectiveTargetContext = report.targetContext ?? targetContext;
-
-  return {
-    sessionId: sessionState?.sessionId ?? `report-${Date.now()}`,
-    identity,
-    personalityCode: report.personality?.code,
-    personalityName: report.personality?.name,
-    role: effectiveTargetContext?.role || "用户",
-    recentUse: effectiveTargetContext?.recentUse || "使用 AI 完成日常任务",
-    goal: effectiveTargetContext?.goal || "更有效地使用 AI",
-    totalQuestions,
-    answeredQuestions,
-    skipRate: totalQuestions > 0 ? skippedQuestions / totalQuestions : 0,
-    reportSummary: compactText(report.summary, 500),
-    reportTags: report.tags,
-    collaborationManifesto: report.collaborationManifesto,
-    promptTemplateTitles: report.promptTemplates?.map((template) => template.title),
-  };
-}
-
 export default function ReportPage() {
   const router = useRouter();
   const [report, setReport] = useState<FinalReport | null>(null);
-  const [feedbackContext, setFeedbackContext] = useState<FeedbackContext | null>(null);
+  const [scoreAudit, setScoreAudit] = useState<ScoreAudit | null>(null);
   const [loading, setLoading] = useState(true);
   const [reportReady, setReportReady] = useState(false);
   const [error, setError] = useState("");
   const [waitHint, setWaitHint] = useState<string | null>(null);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
@@ -346,16 +420,7 @@ export default function ReportPage() {
 
           if (cancelled) return;
           setReport(data);
-          setFeedbackContext(
-            buildFeedbackContext({
-              report: data,
-              messages,
-              identity: identityStr,
-              questionnaireAnswers,
-              sessionState,
-              targetContext,
-            }),
-          );
+          setScoreAudit(buildScoreAudit({ report: data, questionnaireAnswers, sessionState }));
           setReportReady(true);
           return;
         } catch (err) {
@@ -419,421 +484,173 @@ export default function ReportPage() {
     );
   }
 
-  // Map scores for radar chart
-  const DIMENSION_LETTERS: Record<
-    "Relation" | "Workflow" | "Epistemic" | "RepairScope",
-    { low: string; high: string }
-  > = {
-    Relation: { low: "I", high: "C" },
-    Workflow: { low: "F", high: "E" },
-    Epistemic: { low: "A", high: "T" },
-    RepairScope: { low: "G", high: "L" },
-  };
-
-  const radarData = report.dimensions.map((d) => ({
-    subject: d.score >= 50 ? DIMENSION_LETTERS[d.dimension].high : DIMENSION_LETTERS[d.dimension].low,
-    score: d.score,
-    fullMark: 100,
-  }));
-  const dimensionSnapshot = report.dimensions.map((d) => ({
-    dimension: d.dimension,
-    label: d.label,
-    letter: d.score >= 50 ? DIMENSION_LETTERS[d.dimension].high : DIMENSION_LETTERS[d.dimension].low,
-    tendencyLabel: d.tendencyLabel,
-    score: Math.round(d.score),
-  }));
   const strongest = report.dimensions.reduce((prev, cur) =>
     Math.abs(cur.score - 50) > Math.abs(prev.score - 50) ? cur : prev
   );
-  const strongestLetter =
-    strongest.score >= 50
-      ? DIMENSION_LETTERS[strongest.dimension].high
-      : DIMENSION_LETTERS[strongest.dimension].low;
   const uiReport = report as ReportPageModel;
-  const personality = uiReport.personality;
   const styleOverview = buildStyleOverview(uiReport, strongest);
   const manifestoText = buildManifestoText(uiReport);
   const signature = buildSignature(uiReport);
-  const promptTemplates = uiReport.promptTemplates ?? [];
 
-  const copyToClipboard = async (text: string, index: number) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
+  const fullReport = (
+    <div className="space-y-6">
+      <section className="space-y-4">
+        <h2 className="text-[20px] font-semibold text-white">深度维度解析</h2>
+        {report.dimensions.map((dim, i) => (
+          <DimensionCard key={dim.dimension} report={dim} index={i} />
+        ))}
+      </section>
 
-  return (
-    <div className="min-h-screen bg-void py-12 px-4 sm:px-6 relative">
-      <ParticleBackground variant="subtle" />
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: showReport ? 1 : 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="max-w-3xl mx-auto space-y-12 relative z-10"
-      >
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
-        >
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2 text-dim-gray hover:text-light-gray transition-colors text-[14px]"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回测试首页
-          </button>
-          <div className="text-[14px] font-semibold tracking-[0.4px] text-dim-gray uppercase">
-            你的 AI 协作画像
-          </div>
-        </motion.div>
-
-        {/* Style Overview */}
-        <motion.section
-          id="style-overview"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="scroll-mt-6 rounded-[20px] border border-[rgba(255,255,255,0.06)] bg-gradient-to-br from-raycast-red/15 via-surface-100 to-raycast-yellow/10 p-6 shadow-card-ring sm:p-8"
-        >
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.4px] text-raycast-yellow">
-                Your AI Collaboration Style
-              </p>
-              <h2 className="break-words text-[22px] font-semibold leading-tight tracking-[0.2px] text-near-white">
-                风格速览
-              </h2>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {styleOverview.map((item) => (
-              <article
-                key={item.label}
-                className="min-w-0 rounded-[12px] border border-[rgba(255,255,255,0.07)] bg-[#07080a]/35 p-4"
-              >
-                <p className="mb-2 text-[12px] font-semibold tracking-[0.2px] text-dim-gray">
-                  {item.label}
-                </p>
-                <p className="break-words text-[14px] leading-relaxed text-light-gray">{item.value}</p>
-              </article>
-            ))}
-          </div>
-        </motion.section>
-
-        {/* TOC */}
-        <motion.nav
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
-          aria-label="报告章节导航"
-        >
-          <div className="flex w-max min-w-full gap-2 pb-1">
-            {TOC_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => scrollToSection(item.id)}
-                className="h-9 shrink-0 rounded-pill border border-[rgba(255,255,255,0.08)] bg-surface-100 px-3 text-[13px] font-semibold text-light-gray transition-all hover:border-raycast-blue hover:text-near-white hover:scale-105"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </motion.nav>
-
-        {/* Profile Section */}
-        <motion.div
-          id="profile"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="scroll-mt-6 bg-surface-100 p-6 sm:p-8 rounded-[20px] shadow-card-ring border border-[rgba(255,255,255,0.06)] relative overflow-hidden"
-        >
-          {/* Ambient Glow */}
-          <motion.div
-            className="absolute top-0 right-0 w-[300px] h-[300px] bg-[rgba(85,179,255,0.05)] rounded-full blur-[60px] pointer-events-none"
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.05, 0.08, 0.05],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-
-          <div className="relative z-10 grid gap-6 md:grid-cols-[168px_minmax(0,1fr)_220px] md:items-center">
-            <div className="flex justify-center md:justify-start">
-              <PersonalityAvatar profile={report.personality} />
-            </div>
-
-            <div className="min-w-0 space-y-4">
-              {personality ? (
-                <div className="min-w-0">
-                  <p className="mb-2 text-[12px] font-semibold tracking-[0.4px] text-raycast-blue uppercase">
-                    {personality.code}
-                  </p>
-                  <h1 className="break-words text-[28px] font-semibold text-near-white tracking-[0.2px] leading-tight">
-                    {personality.name}
-                  </h1>
-                  <p className="mt-2 break-words text-[14px] text-light-gray leading-relaxed">
-                    {personality.tagline}
-                  </p>
-                </div>
-              ) : null}
-              <div className="text-[13px] text-light-gray">
-                主导字母：<span className="text-near-white font-semibold">{strongestLetter}</span>
-                {" · "}
-                约{Math.round(strongest.score)}分（{strongest.label}）
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {report.tags.map((tag, i) => (
-                  <motion.span
-                    key={i}
-                    whileHover={{ rotate: 2, scale: 1.05 }}
-                    className="px-3 py-1 bg-card-surface border border-[rgba(255,255,255,0.08)] rounded-pill text-[12px] font-semibold text-light-gray hover:border-raycast-blue hover:text-near-white transition-all cursor-default"
-                  >
-                    {tag}
-                  </motion.span>
-                ))}
-              </div>
-            </div>
-
-            {/* Radar Chart */}
-            <div className="mx-auto h-[220px] w-full max-w-[220px] relative">
-              <div
-                className="absolute inset-0 rounded-full opacity-20 pointer-events-none"
-                style={{
-                  background: "conic-gradient(from 0deg, transparent 0deg, rgba(85, 179, 255, 0.3) 90deg, transparent 180deg)",
-                  animation: "scan 4s linear infinite",
-                }}
-              />
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                  <defs>
-                    <filter id="glow">
-                      <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-                      <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
-                  <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                  <PolarAngleAxis
-                    dataKey="subject"
-                    tick={{ fill: "#9c9c9d", fontSize: 12, fontWeight: 500 }}
-                  />
-                  <Radar
-                    name="AI-MBTI"
-                    dataKey="score"
-                    stroke="#55b3ff"
-                    fill="#55b3ff"
-                    fillOpacity={0.2}
-                    strokeWidth={2}
-                    filter="url(#glow)"
-                    isAnimationActive={true}
-                    animationDuration={1000}
-                    animationBegin={200}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="relative z-10 mt-6 grid gap-3 sm:grid-cols-2">
-            {dimensionSnapshot.map((item) => (
-              <div
-                key={item.dimension}
-                className="min-w-0 rounded-[12px] border border-[rgba(255,255,255,0.07)] bg-card-surface p-4"
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words text-[12px] font-semibold tracking-[0.2px] text-dim-gray">
-                      {item.label}
-                    </p>
-                    <p className="mt-1 break-words text-[15px] font-semibold text-near-white">
-                      {item.letter} · {item.tendencyLabel}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[18px] font-semibold text-raycast-blue">
-                    {item.score}
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-dark-border">
-                  <div
-                    className="h-full rounded-full bg-raycast-blue"
-                    style={{ width: `${item.score}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Summary Section */}
-        <motion.section
-          id="summary"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18 }}
-          className="scroll-mt-6 rounded-[20px] border border-[rgba(255,255,255,0.06)] bg-surface-100 p-6 shadow-card-ring sm:p-8"
-        >
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.4px] text-dim-gray">
-            画像简介
-          </p>
-          <MarkdownText content={report.summary} variant="summary" />
-        </motion.section>
-
-        {/* Dimension Details */}
-        <div id="dimensions" className="scroll-mt-6 space-y-4">
-          <motion.h3
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-[20px] font-medium text-near-white tracking-[0.2px] mb-6"
-          >
-            深度维度解析
-          </motion.h3>
-
-          {report.dimensions.map((dim, i) => (
-            <DimensionCard key={dim.dimension} report={dim} index={i} />
-          ))}
+      <section className="space-y-6 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+        <div>
+          <p className="mb-2 text-[12px] font-semibold uppercase text-slate-400">下一次可以怎么用</p>
+          {uiReport.overallAdvice ? (
+            <MarkdownText content={uiReport.overallAdvice} variant="body" />
+          ) : (
+            <p className="text-[14px] leading-relaxed text-light-gray">
+              下次开始任务前，先让 AI 复述目标、列出关键假设和需要你确认的信息，再进入正式输出。
+            </p>
+          )}
         </div>
 
-        {/* Overall Advice */}
-        {Boolean(uiReport.overallAdvice || uiReport.recommendations?.length || promptTemplates.length) && (
-          <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="bg-surface-100 p-6 sm:p-8 rounded-[20px] shadow-card-ring border border-[rgba(255,255,255,0.06)] space-y-6"
-          >
+        {uiReport.recommendations?.length ? (
+          <div className="grid gap-3">
+            {uiReport.recommendations.map((item, index) => (
+              <div
+                key={`${item.title}-${index}`}
+                className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4"
+              >
+                <p className="mb-2 text-[15px] font-semibold text-near-white">{item.title}</p>
+                <MarkdownText content={item.detail} variant="compact" />
+              </div>
+            ))}
+          </div>
+          ) : null}
+        </section>
+
+      {scoreAudit ? (
+        <section className="space-y-5 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[12px] font-semibold tracking-[0.4px] text-dim-gray uppercase mb-2">
-                下一次可以怎么用
-              </p>
-              <MarkdownText content={report.overallAdvice} variant="body" />
+              <p className="mb-2 text-[12px] font-semibold uppercase text-raycast-blue">答题与计分明细</p>
+              <h2 className="text-[20px] font-semibold text-white">两轮测试完整得分</h2>
             </div>
+            <p className="text-[13px] text-slate-400">
+              共 {scoreAudit.totalQuestions} 题，有效 {scoreAudit.answeredQuestions} 题，跳过{" "}
+              {scoreAudit.skippedQuestions} 题
+            </p>
+          </div>
 
-            {uiReport.recommendations?.length ? (
-              <div className="grid gap-3">
-                {uiReport.recommendations.map((item, index) => (
-                  <div
-                    key={`${item.title}-${index}`}
-                    className="border border-[rgba(255,255,255,0.06)] rounded-[12px] p-4 bg-card-surface"
-                  >
-                    <p className="text-[15px] font-semibold text-near-white mb-2">{item.title}</p>
-                    <MarkdownText content={item.detail} variant="compact" />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {promptTemplates.length ? (
-              <div id="prompts" className="scroll-mt-6 space-y-3">
-                <p className="flex items-center gap-2 text-[12px] font-semibold tracking-[0.4px] text-raycast-blue uppercase">
-                  <ClipboardList className="h-4 w-4" />
-                  Prompt 模板
+          <div className="grid gap-3 md:grid-cols-2">
+            {scoreAudit.dimensions.map((dimension) => (
+              <div key={dimension.dimension} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[14px] font-semibold text-near-white">{dimension.label}</p>
+                  <p className="text-[18px] font-semibold text-raycast-yellow">{dimension.score}</p>
+                </div>
+                <p className="mt-2 text-[12px] leading-relaxed text-slate-400">
+                  有效题贡献值：
+                  {dimension.contributions.length ? dimension.contributions.map((score) => formatScore(score)).join(" + ") : "无"}
                 </p>
-                {promptTemplates.map((template, index) => (
-                  <div
-                    key={`${template.title}-${index}`}
-                    className="min-w-0 rounded-[12px] border border-[rgba(85,179,255,0.14)] bg-[rgba(85,179,255,0.04)] p-4 relative group"
-                  >
-                    <div className="mb-3 min-w-0 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="break-words text-[14px] font-semibold text-near-white">{template.title}</p>
-                        <p className="mt-1 break-words text-[12px] text-dim-gray">{template.useCase}</p>
-                      </div>
-                      <motion.button
-                        type="button"
-                        onClick={() => copyToClipboard(template.prompt, index)}
-                        className="shrink-0 p-2 rounded-lg bg-surface-100 border border-[rgba(255,255,255,0.08)] text-light-gray hover:text-near-white hover:border-raycast-blue transition-all"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        {copiedIndex === index ? (
-                          <Check className="w-4 h-4 text-raycast-green" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </motion.button>
-                    </div>
-                    <pre className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-light-gray font-mono tracking-[0.1px]">
-                      {template.prompt}
-                    </pre>
-                    {copiedIndex === index && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 rounded-[12px] pointer-events-none border-2 border-raycast-green shadow-[0_0_20px_rgba(95,201,146,0.4)]"
-                      />
-                    )}
-                  </div>
-                ))}
+                <p className="mt-1 text-[12px] leading-relaxed text-slate-400">
+                  计算：{dimensionAverageFormula(dimension)}，判定为「{dimension.tendencyLabel}」
+                  {dimension.skippedCount ? `；${dimension.skippedCount} 题跳过，未参与平均` : ""}
+                </p>
               </div>
-            ) : null}
-          </motion.section>
-        )}
+            ))}
+          </div>
 
-        {/* Collaboration Manifesto */}
-        <motion.section
-          id="manifesto"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="scroll-mt-6 rounded-[20px] border border-[rgba(255,255,255,0.06)] bg-surface-100 p-6 shadow-card-ring sm:p-8"
+          <div className="space-y-4">
+            {scoreAudit.batches.map((batch) => (
+              <details
+                key={batch.key}
+                className="group rounded-[8px] border border-white/10 bg-[#0f172a] p-4 open:border-raycast-blue/30"
+                open
+              >
+                <summary className="cursor-pointer list-none text-[15px] font-semibold text-near-white">
+                  {batch.label} · {batch.answers.length} 题
+                </summary>
+                <div className="mt-4 space-y-3">
+                  {batch.answers.map((item) => {
+                    const answer = item.answer;
+                    const skipped = item.contribution == null;
+                    return (
+                      <div
+                        key={`${batch.key}-${item.indexInBatch}-${answer.dimension}-${answer.question}`}
+                        className="rounded-[8px] border border-white/10 bg-black/15 p-4"
+                      >
+                        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-400">
+                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                              第 {item.indexInBatch} 题
+                            </span>
+                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                              {report.dimensions.find((dim) => dim.dimension === answer.dimension)?.label ?? answer.dimension}
+                            </span>
+                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                              {answer.reverse ? "反向题" : "正向题"}
+                            </span>
+                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                              {answer.scenario || "习惯"}
+                            </span>
+                          </div>
+                          <p className="text-[13px] text-light-gray">
+                            原始选择：{answer.score ?? "跳过"} · 计分贡献：
+                            <span className={skipped ? "text-slate-400" : "text-raycast-yellow"}>
+                              {formatScore(item.contribution)}
+                            </span>
+                          </p>
+                        </div>
+                        <p className="break-words text-[14px] leading-relaxed text-light-gray">{answer.question}</p>
+                        <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+                          {skipped
+                            ? "这题选择了不了解 / 不适用，因此不进入维度平均。"
+                            : answer.reverse
+                              ? `反向题：先把 ${answer.score} 分换算为 ${formatScore(item.rawPercent)}，再用 100 - ${formatScore(item.rawPercent)} = ${formatScore(item.contribution)}。`
+                              : `正向题：${answer.score} 分直接换算为 ${formatScore(item.contribution)}。`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            ))}
+          </div>
+
+          <div className="rounded-[8px] border border-[rgba(85,179,255,0.16)] bg-[rgba(85,179,255,0.05)] p-4 text-[13px] leading-relaxed text-light-gray">
+            <p className="font-semibold text-near-white">最终计算方式</p>
+            <p className="mt-2">
+              原始选择为 1-6 分。正向题贡献值 = (选择分 - 1) / 5 * 100；反向题贡献值 = 100 - 正向换算值。
+              每个维度只平均该维度的有效题贡献值，并对平均值四舍五入；跳过 / 不适用题不参与平均。
+            </p>
+            <p className="mt-2">
+              维度分数大于等于 50 时进入右侧倾向：伙伴型、探索型、信任型、局部调整型；低于 50 时进入左侧倾向：
+              工具型、框架型、审计型、全局重评型。
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="flex justify-start">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="inline-flex items-center gap-2 rounded-[8px] border border-white/10 bg-[#1e293b] px-4 py-2 text-[14px] font-semibold text-light-gray transition-all hover:border-raycast-blue hover:text-near-white"
         >
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <p className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.4px] text-raycast-yellow">
-                <Fingerprint className="h-4 w-4" />
-                我的 AI 协作宣言
-              </p>
-              <p className="break-words text-[13px] leading-relaxed text-dim-gray">
-                适合作为 ChatGPT / Claude / Cursor 的长期协作偏好配置。
-              </p>
-            </div>
-          </div>
-          <div className="rounded-[12px] border border-[rgba(255,255,255,0.07)] bg-card-surface p-4">
-            <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.75] text-light-gray">
-              {manifestoText}
-            </p>
-          </div>
-        </motion.section>
-
-        {/* Collaboration Signature */}
-        {signature ? (
-          <motion.section
-            id="signature"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
-            className="scroll-mt-6 rounded-[20px] border border-[rgba(255,255,255,0.06)] bg-gradient-to-br from-raycast-red/15 via-surface-100 to-raycast-yellow/10 p-6 shadow-card-ring sm:p-8"
-          >
-            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.4px] text-raycast-yellow">
-              Your Collaboration Signature
-            </p>
-            <h2 className="mb-3 break-words text-[22px] font-semibold leading-tight tracking-[0.2px] text-near-white">
-              {signature.headline}
-            </h2>
-            <p className="break-words text-[14px] leading-relaxed text-light-gray">{signature.detail}</p>
-          </motion.section>
-        ) : null}
-
-        {feedbackContext ? <FeedbackDialogue context={feedbackContext} /> : null}
-      </motion.div>
+          <ArrowLeft className="h-4 w-4" />
+          返回首页
+        </button>
+      </div>
     </div>
+  );
+
+  return (
+    <ReportStoryExperience
+      report={uiReport}
+      insights={styleOverview}
+      manifestoText={manifestoText}
+      signature={signature}
+      fullReport={fullReport}
+    />
   );
 }

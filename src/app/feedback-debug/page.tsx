@@ -9,7 +9,7 @@ const MOCK_FEEDBACK_CONTEXT: FeedbackContext = {
   sessionId: "feedback-debug-session",
   identity: "调试用户",
   personalityCode: "IFAL",
-  personalityName: "细节修补师",
+  personalityName: "建筑师",
   role: "产品 / 研究混合角色",
   recentUse: "用 AI 拆解产品方案、生成访谈提纲和审阅报告",
   goal: "让 AI 输出更贴近真实工作场景的建议",

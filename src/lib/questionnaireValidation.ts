@@ -56,13 +56,15 @@ export function validateQuestionnaireBatch(
   if (!Array.isArray(questions)) return false;
   if (mode !== "hybrid_batch1" && mode !== "hybrid_batch2") return false;
 
-  // hybrid_batch1: 8 题（四维各 2 题）
-  // hybrid_batch2: 16 题（四维各 4 题）
+  // hybrid_batch1: 8 题（四维各 2 题，全部正向）
+  // hybrid_batch2: 16 题（四维各 4 题，每维 2 正 + 2 反）
   const expectedCount = mode === "hybrid_batch1" ? 8 : 16;
   const expectedPerDimension = mode === "hybrid_batch1" ? 2 : 4;
+  const expectedReversePerDimension = mode === "hybrid_batch1" ? 0 : 2;
 
   if (questions.length !== expectedCount) return false;
   if (!validateQuestionShapeAndDirection(questions, expectedPerDimension)) return false;
+  if (!validateReverseDistribution(questions, expectedReversePerDimension)) return false;
 
   const habitCount = countHabitQuestions(questions);
   const expectedHabits = mode === "hybrid_batch1" ? 4 : 8;
@@ -75,6 +77,7 @@ export function validateQuestionnaireTotal(
   if (!Array.isArray(questions)) return false;
   if (questions.length !== 24) return false;
   if (!validateQuestionShapeAndDirection(questions, 6)) return false;
+  if (!validateReverseDistribution(questions, 2)) return false;
   return countHabitQuestions(questions) === 12;
 }
 
@@ -162,6 +165,16 @@ function validateQuestionShapeAndDirection(
   return DIMENSIONS.every((dimension) => {
     const count = counts.get(dimension) ?? 0;
     return count === expectedPerDimension;
+  });
+}
+
+function validateReverseDistribution(
+  questions: QuestionnaireQuestion[],
+  expectedReversePerDimension: number
+): boolean {
+  return DIMENSIONS.every((dimension) => {
+    const items = questions.filter((question) => question.dimension === dimension);
+    return items.filter((question) => question.reverse).length === expectedReversePerDimension;
   });
 }
 

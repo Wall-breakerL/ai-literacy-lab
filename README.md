@@ -159,8 +159,8 @@ npm run check:llm-tools
   "summary": "你是一位高效的工具型使用者，习惯先定框架再行动",
   "personality": {
     "code": "IFAL",
-    "name": "细节修补师",
-    "tagline": "喜欢清楚地下指令，也擅长把可用部分慢慢打磨好。"
+    "name": "建筑师",
+    "tagline": "精心设计，严谨落地"
   },
   "tags": ["框架先行", "审计型", "局部调整"],
   "overallAdvice": "围绕你的目标，下一次可以先让 AI 反问你 3 个关键问题，再开始生成结果。",

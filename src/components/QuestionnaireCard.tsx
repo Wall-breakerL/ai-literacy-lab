@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { QuestionnaireQuestion } from "@/lib/types";
 import { buildQuestionStem } from "@/lib/questionText";
 
@@ -9,7 +10,9 @@ interface QuestionnaireCardProps {
   question: QuestionnaireQuestion;
   index: number;
   total: number;
-  onAnswer: (score: number | null) => void;
+  initialScore?: number | null;
+  onPrevious: (score?: number | null) => void;
+  onNext: (score: number | null) => void;
 }
 
 const SCALE_LABELS = ["肯定不会", "一般不会", "偶尔会", "经常会", "通常会", "肯定会"];
@@ -18,46 +21,28 @@ export function QuestionnaireCard({
   question,
   index,
   total,
-  onAnswer,
+  initialScore,
+  onPrevious,
+  onNext,
 }: QuestionnaireCardProps) {
   const [selectedScore, setSelectedScore] = useState<number | "skip" | null>(null);
-  /** 同步锁住整题，避免同一次渲染周期内双触达（连点） */
-  const lockedRef = useRef(false);
-  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    lockedRef.current = false;
-    setSelectedScore(null);
-  }, [question.question, question.scenario, index]);
-
-  useEffect(() => {
-    return () => {
-      if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
-    };
-  }, []);
+    setSelectedScore(initialScore === undefined ? null : initialScore === null ? "skip" : initialScore);
+  }, [initialScore, question.question, question.scenario, index]);
 
   const questionStem = buildQuestionStem(question);
+  const hasSelection = selectedScore !== null;
+  const isFirst = index === 0;
+  const isLast = index + 1 === total;
+  const selectedAnswer = selectedScore === "skip" ? null : selectedScore;
 
   const handleSelect = (score: number) => {
-    if (lockedRef.current) return;
-    lockedRef.current = true;
     setSelectedScore(score);
-    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
-    commitTimerRef.current = setTimeout(() => {
-      commitTimerRef.current = null;
-      onAnswer(score);
-    }, 200);
   };
 
   const handleSkip = () => {
-    if (lockedRef.current) return;
-    lockedRef.current = true;
     setSelectedScore("skip");
-    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
-    commitTimerRef.current = setTimeout(() => {
-      commitTimerRef.current = null;
-      onAnswer(null);
-    }, 200);
   };
 
   return (
@@ -144,14 +129,12 @@ export function QuestionnaireCard({
               <motion.button
                 key={score}
                 type="button"
-                disabled={selectedScore !== null}
                 onClick={() => handleSelect(score)}
-                whileHover={{ scale: selectedScore === null ? 1.1 : 1, y: selectedScore === null ? -4 : 0 }}
+                whileHover={{ scale: 1.08, y: -3 }}
                 whileTap={{ scale: 0.95 }}
                 className={`
                   w-12 h-12 rounded-full border flex items-center justify-center
                   text-[14px] font-semibold transition-all duration-200 relative
-                  disabled:opacity-40 disabled:pointer-events-none
                   ${
                     selectedScore === score
                       ? "bg-raycast-blue text-void border-raycast-blue shadow-[0_0_20px_rgba(85,179,255,0.6)]"
@@ -194,11 +177,9 @@ export function QuestionnaireCard({
           </div>
           <button
             type="button"
-            disabled={selectedScore !== null}
             onClick={handleSkip}
             className={`
               mt-5 w-full h-11 rounded-[10px] border text-[13px] font-semibold transition-all duration-200
-              disabled:opacity-40 disabled:pointer-events-none
               ${
                 selectedScore === "skip"
                   ? "bg-card-surface text-near-white border-raycast-yellow"
@@ -211,6 +192,36 @@ export function QuestionnaireCard({
           <p className="text-[11px] text-dim-gray/80 leading-relaxed">
             选择这一项时，本题不会计入分数。
           </p>
+
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => onPrevious(hasSelection ? selectedAnswer : undefined)}
+              disabled={isFirst}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-transparent text-[14px] font-semibold text-light-gray transition-all hover:border-[rgba(255,255,255,0.18)] hover:text-near-white disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[rgba(255,255,255,0.08)] disabled:hover:text-light-gray"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              上一题
+            </button>
+            <button
+              type="button"
+              onClick={() => hasSelection && onNext(selectedAnswer)}
+              disabled={!hasSelection}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-white/10 bg-[hsla(0,0%,100%,0.9)] text-[14px] font-semibold text-[#18191a] shadow-button-native transition-all hover:bg-white disabled:cursor-not-allowed disabled:bg-surface-100 disabled:text-dim-gray disabled:shadow-none"
+            >
+              {isLast ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  提交问卷
+                </>
+              ) : (
+                <>
+                  下一题
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>

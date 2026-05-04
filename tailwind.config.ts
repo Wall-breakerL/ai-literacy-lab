@@ -25,6 +25,21 @@ const config: Config = {
       fontFamily: {
         sans: ["Inter", "Inter Fallback", "system-ui", "sans-serif"],
         mono: ["GeistMono", "ui-monospace", "SFMono-Regular", "monospace"],
+        brush: [
+          "Ma Shan Zheng",
+          "ZCOOL XiaoWei",
+          "Noto Serif SC",
+          "STKaiti",
+          "KaiTi",
+          "serif",
+        ],
+        "serif-cn": [
+          "Noto Serif SC",
+          "ZCOOL XiaoWei",
+          "Songti SC",
+          "STSong",
+          "serif",
+        ],
       },
       letterSpacing: {
         "raycast-body": "0.2px",

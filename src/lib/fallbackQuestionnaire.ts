@@ -114,7 +114,7 @@ export const FALLBACK_QUESTIONNAIRE: QuestionnaireQuestion[] = [
 
 export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, QuestionnaireQuestion[]> = {
   hybrid_batch1: [
-    // Relation ×2 (1习惯 + 1场景)
+    // Relation ×2 (all forward)
     {
       dimension: "Relation",
       scenario: "习惯",
@@ -124,10 +124,10 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Relation",
       scenario: "需要快速完成当前任务时",
-      question: "我更希望 AI 按我的指令直接产出，不需要参与判断或提出额外想法。",
-      reverse: true,
+      question: "即使需要快速完成任务，我也希望 AI 能补充判断或提醒我可能忽略的取舍。",
+      reverse: false,
     },
-    // Workflow ×2 (1习惯 + 1场景)
+    // Workflow ×2 (all forward)
     {
       dimension: "Workflow",
       scenario: "习惯",
@@ -137,10 +137,10 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Workflow",
       scenario: "当前任务需要稳定交付时",
-      question: "我会先定好结构、约束和验收标准，再让 AI 填充具体内容。",
-      reverse: true,
+      question: "即使任务需要稳定交付，我也愿意先让 AI 试几个切入方向，再从中收敛。",
+      reverse: false,
     },
-    // Epistemic ×2 (1习惯 + 1场景)
+    // Epistemic ×2 (all forward)
     {
       dimension: "Epistemic",
       scenario: "习惯",
@@ -150,10 +150,10 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Epistemic",
       scenario: "当前任务涉及重要判断时",
-      question: "我会要求 AI 说明依据，并自己复核关键结论是否可靠。",
-      reverse: true,
+      question: "如果 AI 对重要判断的说明足够清楚，我会先采纳它，再在推进中校正。",
+      reverse: false,
     },
-    // RepairScope ×2 (1习惯 + 1场景)
+    // RepairScope ×2 (all forward)
     {
       dimension: "RepairScope",
       scenario: "习惯",
@@ -163,8 +163,8 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "RepairScope",
       scenario: "当前任务越改越乱时",
-      question: "我习惯在输出方向偏掉时清空重来，而不是继续局部修补。",
-      reverse: true,
+      question: "即使当前任务越改越乱，我也会先找还能保留的部分，再让 AI 局部修正。",
+      reverse: false,
     },
   ],
   hybrid_batch2: [

@@ -41,9 +41,9 @@ FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代
 
 每部分结构固定：
 
-- `hybrid_batch1` 中 Relation / Workflow / Epistemic / RepairScope 各 2 题，每维 1 正向 + 1 反向。
+- `hybrid_batch1` 中 Relation / Workflow / Epistemic / RepairScope 各 2 题，每维 2 正向 + 0 反向。
 - `hybrid_batch2` 中 Relation / Workflow / Epistemic / RepairScope 各 4 题，每维 2 正向 + 2 反向。
-- 两部分合计后，每个维度 6 题，其中 3 道正向、3 道反向。
+- 两部分合计后，每个维度 6 题，其中 4 道正向、2 道反向。
 - `reverse=false` 代表认同越强越靠近高端：Collaborative / Exploratory / Trusting / Local。
 - `reverse=true` 代表认同越强越靠近低端：Instrumental / Framed / Auditing / Global。
 

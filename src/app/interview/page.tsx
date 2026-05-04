@@ -471,7 +471,7 @@ export default function InterviewPage() {
   const sessionStateRef = useRef(sessionState);
   const midDialogStartIndexRef = useRef<number | null>(null);
   const questionnaireEnterDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** 防止同一題 onAnswer 被触发多次（连点 / 旧闭包） */
+  /** 防止同一题提交动作被触发多次（连点 / 旧闭包） */
   const questionnaireAnswerLockRef = useRef(false);
 
   messagesRef.current = messages;
@@ -904,26 +904,23 @@ export default function InterviewPage() {
     [commitSessionState, generateQuestionnaireBatch, persistLocalDebugRun]
   );
 
-  const handleQuestionnaireAnswer = useCallback(async (score: number | null) => {
-    if (questionnaireAnswerLockRef.current) return;
+  const buildQuestionnaireAnswer = useCallback((question: QuestionnaireQuestion, score: number | null): QuestionnaireAnswer => ({
+    dimension: question.dimension,
+    score,
+    question: question.question,
+    scenario: question.scenario,
+    reverse: question.reverse,
+    skipped: score == null,
+    skipReason: score == null ? "unsure_or_not_applicable" : undefined,
+  }), []);
+
+  const saveQuestionnaireAnswerAt = useCallback((idx: number, score: number | null) => {
     const qs = questionsRef.current;
-    const idx = currentQuestionIndexRef.current;
-    if (idx < 0 || idx >= qs.length) return;
-
-    questionnaireAnswerLockRef.current = true;
-
+    if (idx < 0 || idx >= qs.length) return null;
     const currentQuestion = qs[idx];
-    const newAnswer: QuestionnaireAnswer = {
-      dimension: currentQuestion.dimension,
-      score,
-      question: currentQuestion.question,
-      scenario: currentQuestion.scenario,
-      reverse: currentQuestion.reverse,
-      skipped: score == null,
-      skipReason: score == null ? "unsure_or_not_applicable" : undefined,
-    };
-    const newAnswers = [...answersRef.current, newAnswer];
-    const nextIndex = idx + 1;
+    const newAnswer = buildQuestionnaireAnswer(currentQuestion, score);
+    const newAnswers = [...answersRef.current];
+    newAnswers[idx] = newAnswer;
     const currentState = sessionStateRef.current;
     const activeBatchKey = getBatchKeyForPhase(currentState.phase) ?? "batch1";
     const nextBatchAnswers = {
@@ -932,6 +929,58 @@ export default function InterviewPage() {
     };
     const flattenedAnswers = flattenBatchAnswers(nextBatchAnswers);
     setAnswers(newAnswers);
+    return {
+      activeBatchKey,
+      currentState,
+      flattenedAnswers,
+      newAnswers,
+      nextBatchAnswers,
+    };
+  }, [buildQuestionnaireAnswer]);
+
+  const handleQuestionnairePrevious = useCallback((score?: number | null) => {
+    const idx = currentQuestionIndexRef.current;
+    if (idx <= 0) return;
+
+    let saveResult: ReturnType<typeof saveQuestionnaireAnswerAt> = null;
+    if (score !== undefined) {
+      saveResult = saveQuestionnaireAnswerAt(idx, score);
+    }
+
+    if (saveResult) {
+      commitSessionState(
+        applySessionStatePatch(
+          saveResult.currentState,
+          {
+            batchAnswers: saveResult.nextBatchAnswers,
+            answers: saveResult.flattenedAnswers,
+            phase: saveResult.currentState.phase,
+          },
+          { turn: saveResult.currentState.turn, phase: saveResult.currentState.phase }
+        )
+      );
+    }
+
+    const previousIndex = idx - 1;
+    setCurrentQuestionIndex(previousIndex);
+    setQuestionnaireProgress({ current: previousIndex + 1, total: questionsRef.current.length });
+  }, [commitSessionState, saveQuestionnaireAnswerAt]);
+
+  const handleQuestionnaireNext = useCallback(async (score: number | null) => {
+    if (questionnaireAnswerLockRef.current) return;
+    const qs = questionsRef.current;
+    const idx = currentQuestionIndexRef.current;
+    if (idx < 0 || idx >= qs.length) return;
+
+    questionnaireAnswerLockRef.current = true;
+
+    const saveResult = saveQuestionnaireAnswerAt(idx, score);
+    if (!saveResult) {
+      questionnaireAnswerLockRef.current = false;
+      return;
+    }
+    const { activeBatchKey, currentState, flattenedAnswers, newAnswers, nextBatchAnswers } = saveResult;
+    const nextIndex = idx + 1;
 
     if (nextIndex >= qs.length) {
       const nextMidDialogPhase = getMidDialogPhaseAfterBatch(activeBatchKey);
@@ -1027,7 +1076,7 @@ export default function InterviewPage() {
     queueMicrotask(() => {
       questionnaireAnswerLockRef.current = false;
     });
-  }, [commitSessionState, persistReportPayload, router]);
+  }, [commitSessionState, persistReportPayload, router, saveQuestionnaireAnswerAt]);
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1205,7 +1254,15 @@ export default function InterviewPage() {
             question={questions[currentQuestionIndex]}
             index={currentQuestionIndex}
             total={questions.length}
-            onAnswer={handleQuestionnaireAnswer}
+            initialScore={
+              answers[currentQuestionIndex]
+                ? answers[currentQuestionIndex].skipped || answers[currentQuestionIndex].score == null
+                  ? null
+                  : answers[currentQuestionIndex].score
+                : undefined
+            }
+            onPrevious={handleQuestionnairePrevious}
+            onNext={handleQuestionnaireNext}
           />
         </div>
       )}
