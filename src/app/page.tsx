@@ -229,6 +229,9 @@ export default function LandingPage() {
           <p className="text-slate-500 text-xs tracking-wide">
             完全匿名 · 约 5-10 分钟 · 即刻获得报告
           </p>
+          <p className="max-w-[520px] text-center text-xs leading-relaxed text-slate-500">
+            程序内置浏览器跳转可能不稳定，建议复制当前地址到外部浏览器打开后再进行测评。
+          </p>
         </motion.div>
       </motion.div>
 

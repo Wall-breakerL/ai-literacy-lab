@@ -443,6 +443,10 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
             ))}
           </div>
 
+          <p className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-[13px] leading-relaxed text-slate-400">
+            AI 有时候也会犯迷糊，生成的问卷难免偶尔有点瑕疵。如果哪道题不像你的真实场景，直接吐槽就好。
+          </p>
+
           <textarea
             value={feedbackText}
             onChange={(event) => setFeedbackText(limitFeedbackText(event.target.value))}
