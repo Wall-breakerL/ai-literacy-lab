@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       let openingMessage = INTERVIEW_OPENING_MESSAGE;
       let openingModel = RESEARCHER_MODEL;
       try {
-        openingMessage = await createOpusOpeningMessage(baseSessionState);
+        openingMessage = await createModelOpeningMessage(baseSessionState);
       } catch {
         openingModel = "deterministic";
       }
@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
   return new Response(stream, { headers: SSE_HEADERS });
 }
 
-async function createOpusOpeningMessage(baseSessionState: SessionState): Promise<string> {
+async function createModelOpeningMessage(baseSessionState: SessionState): Promise<string> {
   const result = await createClaudeMessageWithTools({
     model: RESEARCHER_MODEL,
     system: buildResearcherSystemPrompt(baseSessionState),

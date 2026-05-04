@@ -15,7 +15,7 @@ export const LLM_PROVIDER = normalizeProvider(process.env.LLM_PROVIDER);
 export const RESEARCHER_MODEL =
   process.env.CLAUDE_RESEARCHER_MODEL?.trim() ||
   process.env.CLAUDE_AGENT_B_MODEL?.trim() ||
-  "claude-opus-4-6";
+  "qwen3.6-plus";
 export const RESEARCHER_FALLBACK_MODEL =
   process.env.CLAUDE_RESEARCHER_FALLBACK_MODEL?.trim() ||
   process.env.CLAUDE_AGENT_B_MODEL?.trim() ||

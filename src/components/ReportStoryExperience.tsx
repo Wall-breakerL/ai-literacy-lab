@@ -1,10 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, Share2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
-import type { Dimension, DimensionReport, FinalReport, PromptTemplate } from "@/lib/types";
+import { getPersonalityTraits } from "@/lib/personalityProfiles";
+import { getFallbackPromptTemplate } from "@/lib/reportDisplayContext";
+import type { Dimension, DimensionReport, FinalReport, PersonalityProfile, PromptTemplate } from "@/lib/types";
 
 type ReportPageModel = FinalReport & {
   styleOverview?: {
@@ -111,12 +113,7 @@ function compactText(text?: string, maxLength = 92) {
 }
 
 function getPromptTemplate(report: ReportPageModel): PromptTemplate {
-  return report.promptTemplates?.[0] ?? {
-    title: "任务启动模板",
-    useCase: "下次开始复杂任务时使用",
-    prompt:
-      "我需要完成一个任务。请先复述我的目标，再列出你准备采用的步骤、关键假设和需要我确认的信息。先给出可用版本，再等待我反馈。",
-  };
+  return report.promptTemplates?.[0] ?? getFallbackPromptTemplate(report.targetContext);
 }
 
 function getSpectrumAccent(dimension: DimensionReport) {
@@ -215,17 +212,115 @@ function TagBadge({ label, color }: { label: string; color: string }) {
   );
 }
 
-function SlideShell({ children }: { children: ReactNode }) {
+function SlideShell({
+  children,
+  primary = "#55b3ff",
+  secondary = "#0f172a",
+}: {
+  children: ReactNode;
+  primary?: string;
+  secondary?: string;
+}) {
   return (
     <motion.div
       initial={{ x: 36, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: -36, opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className="min-h-[560px] rounded-[8px] border border-slate-200 bg-white p-6 text-slate-950 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:p-8"
+      className="min-h-[560px] rounded-[8px] p-6 sm:p-8"
+      style={{
+        backgroundColor: secondary,
+        border: `1px solid ${primary}28`,
+        color: "#f1f5f9",
+        boxShadow: `0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px ${primary}18`,
+      }}
     >
       {children}
     </motion.div>
+  );
+}
+
+function PersonaSlide({ profile }: { profile?: PersonalityProfile }) {
+  const code = profile?.code ?? "CEAL";
+  const name = profile?.name ?? "你的 AI 协作画像";
+  const accent = profile?.colors?.accent ?? "#f97316";
+  const primary = profile?.colors?.primary ?? "#55b3ff";
+  const traits = getPersonalityTraits(code);
+
+  return (
+    <div className="relative overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-10 select-none text-[180px] font-black leading-none tracking-[-0.04em] sm:text-[220px]"
+        style={{
+          color: primary,
+          opacity: 0.07,
+          fontFamily: "'Bebas Neue', 'Impact', system-ui, sans-serif",
+        }}
+      >
+        {code}
+      </div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-16 bottom-8 h-44 w-44 rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
+      />
+
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <p className="text-[12px] font-semibold text-slate-400">PERSONA</p>
+          <span
+            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.18em]"
+            style={{ color: primary, backgroundColor: `${primary}14`, border: `1px solid ${primary}33` }}
+          >
+            {code}
+          </span>
+        </div>
+
+        <div className="mt-5">
+          <h2 className="text-[26px] font-semibold text-white">{name}</h2>
+          <p className="mt-3 text-[15px] leading-relaxed text-slate-300">{traits.essence}</p>
+        </div>
+
+        <div
+          className="mt-7 h-px w-full"
+          style={{ background: `linear-gradient(90deg, ${primary}55, transparent)` }}
+        />
+
+        <div className="mt-7 grid gap-3">
+          {traits.traits.map((trait, index) => (
+            <motion.div
+              key={trait}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.08, duration: 0.3 }}
+              className="flex items-start gap-3 rounded-[10px] p-3.5"
+              style={{ borderLeft: `3px solid ${accent}`, border: `1px solid rgba(255,255,255,0.07)`, borderLeftWidth: 3, borderLeftColor: accent, backgroundColor: "rgba(255,255,255,0.04)" }}
+            >
+              <span
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                style={{ background: `linear-gradient(135deg, ${primary}, ${accent})` }}
+              >
+                {index + 1}
+              </span>
+              <p className="text-[14px] leading-[1.55] text-slate-200">{trait}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="mt-8 rounded-[10px] p-5" style={{ background: `linear-gradient(135deg, ${primary}10, ${accent}10)` }}>
+          <p className="text-[12px] font-semibold tracking-[0.18em] text-slate-400">GOLDEN LINE</p>
+          <p
+            className="mt-2 text-[16px] font-medium leading-[1.55] text-white"
+            style={{ fontFamily: "'Songti SC', 'Noto Serif SC', 'Source Han Serif', serif" }}
+          >
+            <span className="mr-1 text-[24px] align-[-2px]" style={{ color: accent }}>&ldquo;</span>
+            {traits.goldenLine}
+            <span className="ml-1 text-[24px] align-[-2px]" style={{ color: accent }}>&rdquo;</span>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -240,8 +335,7 @@ export function ReportStoryExperience({
   const [showPoster, setShowPoster] = useState(false);
   const [showFullReport, setShowFullReport] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
-  const [shareHint, setShareHint] = useState("");
-  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
 
   const strongest = useMemo(() => strongestDimension(report.dimensions), [report.dimensions]);
@@ -252,11 +346,11 @@ export function ReportStoryExperience({
   const corePattern = insights[0]?.value ?? compactText(report.summary, 120);
   const fitScenario = insights[1]?.value ?? report.targetContext?.recentUse ?? "复杂任务推进";
   const nextAction = insights[2]?.value ?? "下次先让 AI 复述目标，再列出关键假设。";
-  const actionItems = [
-    "复制协作宣言到 ChatGPT / Claude",
-    "收藏最适合你的 Prompt 模板",
-    "下次先让 AI 复述目标",
-  ];
+
+  // 人格主题色
+  const pPrimary = report.personality?.colors?.primary ?? "#55b3ff";
+  const pSecondary = report.personality?.colors?.secondary ?? "#0f172a";
+  const pAccent = report.personality?.colors?.accent ?? "#ffbc33";
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -264,7 +358,7 @@ export function ReportStoryExperience({
       if (event.key === "ArrowLeft") setSlideIndex((value) => Math.max(0, value - 1));
       if (event.key === "ArrowRight") {
         setSlideIndex((value) => {
-          if (value >= 3) {
+          if (value >= 4) {
             setShowPoster(true);
             return value;
           }
@@ -277,7 +371,7 @@ export function ReportStoryExperience({
   }, [showPoster]);
 
   const goNext = () => {
-    if (slideIndex >= 3) {
+    if (slideIndex >= 4) {
       setShowPoster(true);
       return;
     }
@@ -290,17 +384,6 @@ export function ReportStoryExperience({
     window.setTimeout(() => setCopiedPrompt(false), 1500);
   };
 
-  const sharePoster = async () => {
-    const text = `我的 AI-MBTI 协作画像：${report.personality?.code ?? "AI-MBTI"} · ${report.personality?.name ?? "AI 协作画像"}`;
-    if (navigator.share) {
-      await navigator.share({ title: "AI-MBTI 协作画像", text }).catch(() => undefined);
-      return;
-    }
-    await navigator.clipboard.writeText(text);
-    setShareHint("已复制分享文案，也可以长按海报区域保存截图。");
-    window.setTimeout(() => setShareHint(""), 2200);
-  };
-
   const handlePointerUp = (x: number) => {
     if (touchStartX.current == null || showPoster) return;
     const delta = x - touchStartX.current;
@@ -311,17 +394,17 @@ export function ReportStoryExperience({
   };
 
   const slides = [
-    <SlideShell key="who">
+    <SlideShell key="who" primary={pPrimary} secondary={pSecondary}>
       <div className="flex min-h-[496px] flex-col items-center justify-center text-center">
         <PersonalityAvatar profile={report.personality} size={168} />
-        <p className="mt-8 text-[13px] font-semibold text-slate-500">
+        <p className="mt-8 text-[13px] font-semibold text-slate-400">
           {report.personality?.code ?? "AI-MBTI"}
         </p>
-        <h1 className="mt-2 text-[22px] font-semibold text-slate-950">
+        <h1 className="mt-2 text-[22px] font-semibold text-white">
           {report.personality?.name ?? "你的 AI 协作画像"}
         </h1>
-        <p className="mt-3 max-w-md text-[14px] leading-relaxed text-slate-500">
-          “{report.personality?.tagline ?? compactText(report.summary, 88)}”
+        <p className="mt-3 max-w-md text-[14px] leading-relaxed text-slate-300">
+          &ldquo;{report.personality?.tagline ?? compactText(report.summary, 88)}&rdquo;
         </p>
         <div className="mt-6 flex max-w-md flex-wrap justify-center gap-2">
           {tags.map((tag) => (
@@ -330,11 +413,11 @@ export function ReportStoryExperience({
         </div>
       </div>
     </SlideShell>,
-    <SlideShell key="what">
+    <SlideShell key="what" primary={pPrimary} secondary={pSecondary}>
       <div className="space-y-8">
         <div>
           <p className="text-[12px] font-semibold text-slate-400">WHAT</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-slate-950">你的 AI 协作倾向</h2>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">你的 AI 协作倾向</h2>
         </div>
         <div className="space-y-8">
           {report.dimensions.map((dimension, index) => (
@@ -343,11 +426,14 @@ export function ReportStoryExperience({
         </div>
       </div>
     </SlideShell>,
-    <SlideShell key="why">
+    <SlideShell key="persona" primary={pPrimary} secondary={pSecondary}>
+      <PersonaSlide profile={report.personality} />
+    </SlideShell>,
+    <SlideShell key="why" primary={pPrimary} secondary={pSecondary}>
       <div>
         <p className="text-[12px] font-semibold text-slate-400">WHY</p>
-        <h2 className="mt-2 text-[24px] font-semibold text-slate-950">关于你的 3 个发现</h2>
-        <div className="mt-8 divide-y divide-slate-100">
+        <h2 className="mt-2 text-[24px] font-semibold text-white">关于你，3 个值得记住的发现</h2>
+        <div className="mt-8 divide-y divide-white/10">
           {insights.map((insight, index) => (
             <div key={insight.label} className="grid gap-4 py-6 first:pt-0 sm:grid-cols-[32px_1fr]">
               <div
@@ -359,73 +445,72 @@ export function ReportStoryExperience({
                 {index + 1}
               </div>
               <div>
-                <h3 className="text-[14px] font-semibold text-slate-950">{insight.label}</h3>
-                <p className="mt-2 text-[13px] leading-[1.6] text-slate-600">{insight.value}</p>
+                <h3 className="text-[14px] font-semibold text-white">{insight.label}</h3>
+                <p className="mt-2 text-[13px] leading-[1.6] text-slate-300">{insight.value}</p>
               </div>
             </div>
           ))}
         </div>
       </div>
     </SlideShell>,
-    <SlideShell key="how">
+    <SlideShell key="how" primary={pPrimary} secondary={pSecondary}>
       <div className="space-y-7">
         <div>
           <p className="text-[12px] font-semibold text-slate-400">HOW</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-slate-950">下次使用 AI 可以这样做</h2>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">下次使用 AI 可以这样做</h2>
         </div>
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-[14px] font-semibold text-slate-950">Prompt 模板</p>
+            <p className="text-[14px] font-semibold text-white">Prompt 模板</p>
             <button
               type="button"
               onClick={copyPrompt}
-              className="flex h-9 items-center gap-2 rounded-[8px] border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 hover:border-slate-300"
+              className="flex h-9 items-center gap-2 rounded-[8px] border border-white/10 px-3 text-[13px] font-semibold text-slate-200 hover:border-white/20"
             >
-              {copiedPrompt ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              {copiedPrompt ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
               {copiedPrompt ? "已复制" : "复制"}
             </button>
           </div>
           <div
-            className="rounded-[8px] border border-slate-200 bg-slate-50 p-4"
-            style={{ borderLeft: `3px solid ${strongestAccent}` }}
+            className="rounded-[8px] p-4"
+            style={{ background: "rgba(255,255,255,0.05)", borderLeft: `3px solid ${strongestAccent}`, border: `1px solid rgba(255,255,255,0.08)`, borderLeftWidth: 3, borderLeftColor: strongestAccent }}
           >
-            <p className="text-[14px] font-semibold text-slate-950">{promptTemplate.title}</p>
-            <p className="mt-1 text-[12px] text-slate-500">{promptTemplate.useCase}</p>
-            <p className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-[1.65] text-slate-700">
-              “{promptTemplate.prompt}”
+            <p className="text-[14px] font-semibold text-white">{promptTemplate.title}</p>
+            <p className="mt-1 text-[12px] text-slate-400">{promptTemplate.useCase}</p>
+            <p className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-[1.65] text-slate-200">
+              &ldquo;{promptTemplate.prompt}&rdquo;
             </p>
           </div>
         </section>
         <section>
-          <p className="mb-2 text-[14px] font-semibold text-slate-950">我的协作宣言</p>
-          <p className="rounded-[8px] bg-slate-50 p-4 text-[13px] leading-[1.65] text-slate-700">
+          <p className="mb-2 text-[14px] font-semibold text-white">适合你的工作流</p>
+          <p className="whitespace-pre-wrap rounded-[8px] p-4 text-[13px] leading-[1.65] text-slate-200" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
             {manifestoText}
           </p>
         </section>
-        <section>
-          <p className="mb-3 text-[14px] font-semibold text-slate-950">快速行动清单</p>
-          <div className="space-y-2">
-            {actionItems.map((item, index) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setChecked((value) => ({ ...value, [index]: !value[index] }))}
-                className="flex w-full items-center gap-3 rounded-[8px] border border-slate-200 p-3 text-left text-[13px] text-slate-700"
+        <div className="grid gap-2">
+          {["试用 Prompt 模板", "试用工作流"].map((item, index) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={Boolean(checkedActions[index])}
+              onClick={() => setCheckedActions((value) => ({ ...value, [index]: !value[index] }))}
+              className="flex h-11 items-center gap-3 rounded-[8px] px-3 text-left text-[13px] font-semibold text-slate-200 transition-all"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors"
+                style={{
+                  borderColor: checkedActions[index] ? strongestAccent : "rgba(255,255,255,0.2)",
+                  backgroundColor: checkedActions[index] ? strongestAccent : "transparent",
+                }}
               >
-                <span
-                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded border"
-                  style={{
-                    borderColor: checked[index] ? strongestAccent : "#cbd5e1",
-                    backgroundColor: checked[index] ? strongestAccent : "transparent",
-                  }}
-                >
-                  {checked[index] ? <Check className="h-3 w-3 text-white" /> : null}
-                </span>
-                <span className={checked[index] ? "text-slate-400 line-through" : ""}>{item}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+                {checkedActions[index] ? <Check className="h-3.5 w-3.5 text-white" /> : null}
+              </span>
+              <span className={checkedActions[index] ? "text-slate-500 line-through" : ""}>{item}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </SlideShell>,
   ];
@@ -446,28 +531,33 @@ export function ReportStoryExperience({
                 type="button"
                 onClick={() => setSlideIndex((value) => Math.max(0, value - 1))}
                 disabled={slideIndex === 0}
-                className="flex h-10 items-center gap-2 rounded-full border border-slate-300 px-4 text-[13px] font-semibold text-slate-700 disabled:invisible"
+                className="flex h-10 items-center gap-2 rounded-full border border-white/20 px-4 text-[13px] font-semibold text-white/70 hover:text-white disabled:invisible"
               >
                 <ArrowLeft className="h-4 w-4" />
                 上一页
               </button>
               <div className="flex items-center gap-2">
-                {[0, 1, 2, 3].map((index) => (
+                {[0, 1, 2, 3, 4].map((index) => (
                   <button
                     key={index}
                     type="button"
                     aria-label={`第 ${index + 1} 页`}
                     onClick={() => setSlideIndex(index)}
-                    className={`h-2 rounded-full transition-all ${slideIndex === index ? "w-7 bg-slate-950" : "w-2 bg-slate-300"}`}
+                    className="h-2 rounded-full transition-all"
+                    style={{
+                      width: slideIndex === index ? 28 : 8,
+                      backgroundColor: slideIndex === index ? pPrimary : "rgba(255,255,255,0.25)",
+                    }}
                   />
                 ))}
               </div>
               <button
                 type="button"
                 onClick={goNext}
-                className="flex h-10 items-center gap-2 rounded-full bg-slate-950 px-4 text-[13px] font-semibold text-white"
+                className="flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-white"
+                style={{ backgroundColor: pPrimary }}
               >
-                {slideIndex === 3 ? "查看海报" : "下一页"}
+                {slideIndex === 4 ? "查看海报" : "下一页"}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -478,25 +568,14 @@ export function ReportStoryExperience({
               report={report}
               tags={tags}
             />
-            <div className="mt-5 space-y-3 text-center">
-              <button
-                type="button"
-                onClick={sharePoster}
-                className="mx-auto flex h-10 items-center gap-2 rounded-full bg-slate-950 px-5 text-[13px] font-semibold text-white"
-              >
-                <Share2 className="h-4 w-4" />
-                分享 / 保存提示
-              </button>
-              <p className="text-[12px] leading-relaxed text-slate-500">
-                {shareHint || "移动端可长按海报区域截图保存。"}
-              </p>
+            <div className="mt-5 flex justify-center">
               <button
                 type="button"
                 onClick={() => setShowFullReport((value) => !value)}
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-600"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[16px] font-semibold text-slate-950 shadow-[0_4px_24px_rgba(255,255,255,0.18)] transition-all hover:bg-slate-100 hover:shadow-[0_4px_32px_rgba(255,255,255,0.28)]"
               >
                 查看完整维度解读
-                <ChevronDown className={`h-4 w-4 transition-transform ${showFullReport ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${showFullReport ? "rotate-180" : ""}`} />
               </button>
             </div>
           </section>
@@ -518,6 +597,7 @@ function PosterPreview({
   const code = report.personality?.code ?? "AI-MBTI";
   const name = report.personality?.name ?? "AI 协作画像";
   const tagline = report.personality?.tagline;
+  const goldenLine = getPersonalityTraits(report.personality?.code ?? "CEAL").goldenLine;
 
   return (
     <article
@@ -543,10 +623,10 @@ function PosterPreview({
       <div className="pointer-events-none absolute bottom-10 left-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
       <div className="pointer-events-none absolute bottom-10 right-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
 
-      <div className="relative p-6">
+      <div className="relative p-6 pb-8">
         {/* 顶部：头像 + 印章 + 人格名 */}
         <div className="flex items-start gap-4">
-          <PersonalityAvatar profile={report.personality} size={104} />
+          <PersonalityAvatar profile={report.personality} size={116} />
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex rotate-[-2deg] items-center justify-center rounded-[3px] bg-gradient-to-br from-[#c0392b] to-[#8b1e1e] px-2.5 py-[3px] font-serif-cn text-[12px] font-bold tracking-[0.18em] text-white shadow-[0_2px_10px_rgba(192,57,43,0.45),inset_0_0_0_1px_rgba(255,255,255,0.12)] [text-shadow:0_1px_0_rgba(0,0,0,0.25)]">
@@ -566,7 +646,7 @@ function PosterPreview({
 
         {/* tagline:书法体引文 */}
         {tagline ? (
-          <div className="relative mt-6 px-2">
+          <div className="relative mt-7 px-2">
             <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-0 flex items-center gap-3">
               <div className="h-px flex-1 bg-gradient-to-r from-transparent to-amber-200/30" />
               <div className="h-1 w-1 rotate-45 bg-amber-200/45" />
@@ -579,41 +659,42 @@ function PosterPreview({
         ) : null}
 
         {/* 古典分隔 */}
-        <div className="my-7 flex items-center gap-3">
+        <div className="my-8 flex items-center gap-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-white/10" />
           <div className="h-1.5 w-1.5 rotate-45 bg-amber-200/55" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/20 to-white/10" />
         </div>
 
         {/* 光谱 */}
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           {report.dimensions.map((dimension, index) => (
             <SpectrumBar key={dimension.dimension} dimension={dimension} showScore compact index={index} />
           ))}
         </div>
 
         {/* 标签 */}
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-7 flex flex-wrap gap-2">
           {tags.map((tag) => (
             <TagBadge key={tag.label} label={tag.label} color={tag.color} />
           ))}
         </div>
 
         {/* 底部分隔 */}
-        <div className="mt-7 flex items-center gap-3">
+        <div className="mt-9 flex items-center gap-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-white/[0.08]" />
           <div className="h-1 w-1 rotate-45 bg-amber-200/40" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/15 to-white/[0.08]" />
         </div>
 
-        <div className="mt-5 flex items-end justify-between gap-4">
-          <div className="space-y-1 font-serif-cn text-[11px] tracking-wide text-white/55">
-            <p className="text-white/70">AI-MBTI · 协作画像</p>
-            <p className="text-white/40">截图保存 · 完整报告见链接</p>
-          </div>
-          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-[6px] border border-amber-200/25 bg-white/[0.03] font-serif-cn text-[10px] text-white/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-            QR
-          </div>
+        <div className="mt-6 rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3.5">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-amber-100/55">Golden Line</p>
+          <p className="mt-2 font-serif-cn text-[14px] leading-relaxed text-amber-50/90">
+            「{goldenLine}」
+          </p>
+        </div>
+
+        <div className="mt-4">
+          <p className="font-serif-cn text-[11px] tracking-wide text-white/65">AI-MBTI · 协作画像</p>
         </div>
       </div>
     </article>

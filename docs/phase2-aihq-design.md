@@ -157,8 +157,8 @@ Repair：XX / 20
 
 ### Agent 分工
 
-- **Agent A（Claude Haiku）**：按固定顺序提问，收集并记录用户原始回答
-- **Agent B（Claude Sonnet）**：接收原始回答 + 探针清单，判断探针触发情况，生成结构化评分，生成报告
+- **Agent A（qwen3.6-plus）**：按固定顺序提问，收集并记录用户原始回答
+- **Agent B（qwen3.6-plus）**：接收原始回答 + 探针清单，判断探针触发情况，生成结构化评分，生成报告
 
 ### 访谈顺序与时长
 
@@ -215,6 +215,6 @@ Repair：XX / 20
 
 ### 模型配置
 
-- Agent A：`CLAUDE_AGENT_A_MODEL`（对话访谈，默认 Haiku）
-- Agent B：`CLAUDE_AGENT_B_MODEL`（评分 + 报告生成，默认 Sonnet）
+- Agent A：`CLAUDE_AGENT_A_MODEL`（对话访谈，默认 qwen3.6-plus）
+- Agent B：`CLAUDE_AGENT_B_MODEL`（评分 + 报告生成，默认 qwen3.6-plus）
 - Phase 1 报告生成同步使用 `CLAUDE_AGENT_B_MODEL`

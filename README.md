@@ -43,7 +43,7 @@
 - **框架**：Next.js 14 + TypeScript
 - **样式**：Tailwind CSS + Framer Motion
 - **图表**：Recharts
-- **AI**：Claude（Anthropic Messages API 或 OpenAI-compatible gateway）
+- **AI**：qwen3.6-plus（通过 OpenAI-compatible gateway；保留 Anthropic Messages API 兼容路径）
 - **设计系统**：Raycast 风格暗色主题
 
 ## 快速开始
@@ -97,14 +97,14 @@ ANTHROPIC_API_KEY=your_api_key
 ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
 ANTHROPIC_VERSION=2023-06-01
 
-CLAUDE_RESEARCHER_MODEL=claude-opus-4-6
-CLAUDE_RESEARCHER_FALLBACK_MODEL=claude-opus-4-6
+CLAUDE_RESEARCHER_MODEL=qwen3.6-plus
+CLAUDE_RESEARCHER_FALLBACK_MODEL=qwen3.6-plus
 CLAUDE_RESEARCHER_MAX_TOKENS=8192
 ENABLE_PROMPT_CACHE=1
 
 # Legacy / archived paths only:
-CLAUDE_AGENT_A_MODEL=claude-opus-4-6
-CLAUDE_AGENT_B_MODEL=claude-opus-4-6
+CLAUDE_AGENT_A_MODEL=qwen3.6-plus
+CLAUDE_AGENT_B_MODEL=qwen3.6-plus
 ```
 
 `CLAUDE_AGENT_A_MODEL` / `CLAUDE_AGENT_B_MODEL` 仍可作为 legacy fallback 或归档 AI-HQ 路径配置，但 AI-MBTI 主流程不再依赖 Agent A/B 分工。

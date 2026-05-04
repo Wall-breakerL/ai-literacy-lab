@@ -425,4 +425,4 @@ export default function HQInterviewPage() {
   );
 }
 
-const AGENT_STREAM_MODEL_FALLBACK = "claude-opus-4-6";
+const AGENT_STREAM_MODEL_FALLBACK = "qwen3.6-plus";

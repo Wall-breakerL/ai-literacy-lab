@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveStructuredFeedback } from "@/lib/feedbackStorage";
+import { saveLocalFeedback, type LocalFeedbackRecord } from "@/lib/feedbackStorage";
 import type {
-  FeedbackDialogueMessage,
   FeedbackPriority,
   FeedbackSentiment,
   FeedbackType,
-  StructuredFeedback,
 } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -20,16 +18,17 @@ const FEEDBACK_TYPES: FeedbackType[] = [
 ];
 const SENTIMENTS: FeedbackSentiment[] = ["positive", "mixed", "negative"];
 const PRIORITIES: FeedbackPriority[] = ["low", "medium", "high"];
+const FEEDBACK_TEXT_LIMIT = 60;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const feedback = parseStructuredFeedback(extractFeedbackDraft(body));
+  const feedback = parseLocalFeedback(extractFeedbackDraft(body));
   if (!feedback) {
     return NextResponse.json({ error: "bad_request", detail: "缺少有效结构化反馈。" }, { status: 400 });
   }
 
   try {
-    const result = await saveStructuredFeedback(feedback);
+    const result = await saveLocalFeedback(feedback);
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error("Feedback save error:", error);
@@ -46,53 +45,56 @@ function extractFeedbackDraft(value: unknown): unknown {
   return "draft" in record ? record.draft : value;
 }
 
-function parseStructuredFeedback(value: unknown): StructuredFeedback | null {
+function parseLocalFeedback(value: unknown): LocalFeedbackRecord | null {
   if (!value || typeof value !== "object") return null;
-  const input = value as Partial<StructuredFeedback>;
+  const input = value as Record<string, unknown>;
   const sessionId = cleanString(input.sessionId, 120);
-  const summary = cleanString(input.summary, 1000);
-  if (!sessionId || !summary) return null;
+  const feedback = cleanString(input.feedback ?? inferLegacyFeedback(input), FEEDBACK_TEXT_LIMIT);
+  if (!sessionId || !feedback) return null;
+  const context = readRecord(input.context);
+  const questionnaire = readRecord(input.questionnaire);
   return {
     sessionId,
-    personalityCode: cleanString(input.personalityCode, 40) || "unknown",
-    role: cleanString(input.role, 200) || "用户",
-    recentUse: cleanString(input.recentUse, 300) || "使用 AI 完成日常任务",
-    goal: cleanString(input.goal, 300) || "更有效地使用 AI",
-    totalQuestions: normalizeCount(input.totalQuestions),
-    answeredQuestions: normalizeCount(input.answeredQuestions),
-    skipRate: normalizeRate(input.skipRate),
-    summary,
-    usefulParts: parseStringArray(input.usefulParts, 8, 500),
-    inaccurateParts: parseStringArray(input.inaccurateParts, 8, 500),
-    questionIssues: parseStringArray(input.questionIssues, 8, 500),
-    reportIssues: parseStringArray(input.reportIssues, 8, 500),
-    improvementSuggestions: parseStringArray(input.improvementSuggestions, 8, 500),
+    createdAt: normalizeIsoDate(input.createdAt),
+    source: "report",
+    feedback,
     sentiment: parseEnum(input.sentiment, SENTIMENTS, "mixed"),
     priority: parseEnum(input.priority, PRIORITIES, "medium"),
-    feedbackTypes: parseEnumArray(input.feedbackTypes, FEEDBACK_TYPES, ["report_issue"]),
-    rawDialogue: parseDialogue(input.rawDialogue),
-    createdAt: normalizeIsoDate(input.createdAt),
+    types: parseEnumArray(input.types ?? input.feedbackTypes, FEEDBACK_TYPES, ["report_issue"]),
+    personalityCode: cleanString(input.personalityCode, 40) || "unknown",
+    context: {
+      role: cleanString(context.role ?? input.role, 120) || "用户",
+      recentUse: cleanString(context.recentUse ?? input.recentUse, 160) || "使用 AI 完成日常任务",
+      goal: cleanString(context.goal ?? input.goal, 160) || "更有效地使用 AI",
+    },
+    questionnaire: {
+      total: normalizeCount(questionnaire.total ?? input.totalQuestions),
+      answered: normalizeCount(questionnaire.answered ?? input.answeredQuestions),
+      skipRate: normalizeRate(questionnaire.skipRate ?? input.skipRate),
+    },
   };
 }
 
-function parseDialogue(value: unknown): FeedbackDialogueMessage[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const message = item as Partial<FeedbackDialogueMessage>;
-    if (message.role !== "user" && message.role !== "assistant") return [];
-    const content = cleanString(message.content, 2000);
-    if (!content) return [];
-    return [{ role: message.role, content }];
-  }).slice(-8);
+function inferLegacyFeedback(input: Record<string, unknown>) {
+  const candidates = [
+    firstString(input.reportIssues),
+    firstString(input.questionIssues),
+    firstString(input.improvementSuggestions),
+    firstString(input.inaccurateParts),
+    firstString(input.usefulParts),
+    input.summary,
+  ];
+  const text = candidates.find((item) => typeof item === "string" && item.trim());
+  if (typeof text !== "string") return "";
+  return text.replace(/^满意度：[^。]*。用户反馈：/, "");
 }
 
-function parseStringArray(value: unknown, maxItems: number, maxLength: number): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => cleanString(item, maxLength))
-    .filter(Boolean)
-    .slice(0, maxItems);
+function firstString(value: unknown) {
+  return Array.isArray(value) ? value.find((item) => typeof item === "string") : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function parseEnumArray<T extends string>(value: unknown, allowed: readonly T[], fallback: T[]): T[] {
@@ -106,7 +108,8 @@ function parseEnum<T extends string>(value: unknown, allowed: readonly T[], fall
 }
 
 function cleanString(value: unknown, maxLength: number): string {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, maxLength) : "";
+  if (typeof value !== "string") return "";
+  return Array.from(value.replace(/\s+/g, " ").trim()).slice(0, maxLength).join("");
 }
 
 function normalizeCount(value: unknown): number {

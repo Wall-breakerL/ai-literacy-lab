@@ -6,6 +6,12 @@ import type {
   ReportStyleOverview,
   TargetContext,
 } from "@/lib/types";
+import {
+  getPersonalityNextAction,
+  hasAwkwardReportContextText,
+  normalizeReportTaskLabel,
+} from "@/lib/reportDisplayContext";
+import { getPersonalityWorkflow } from "@/lib/personalityProfiles";
 
 export type PortableArtifactDraft = {
   styleOverview?: Partial<ReportStyleOverview>;
@@ -24,20 +30,18 @@ export function completePortableArtifacts(
   collaborationSignature: CollaborationSignature;
 } {
   const signatureDetail = normalizeSignatureDetailText(draft.collaborationSignature?.detail);
+  const fallbackStyleOverview = buildStyleOverviewFallback(targetContext, dimensions, personality);
   return {
     styleOverview: isValidStyleOverview(draft.styleOverview)
       ? {
           corePattern: draft.styleOverview.corePattern!.trim(),
-          strengthArea: draft.styleOverview.strengthArea!.trim(),
-          growthDirection: draft.styleOverview.growthDirection!.trim(),
+          strengthArea: hasAwkwardReportContextText(draft.styleOverview.strengthArea)
+            ? fallbackStyleOverview.strengthArea
+            : draft.styleOverview.strengthArea!.trim(),
+          growthDirection: getPersonalityNextAction(personality.code),
         }
-      : buildStyleOverviewFallback(targetContext, dimensions),
-    collaborationManifesto: isValidManifesto(
-      draft.collaborationManifesto,
-      targetContext
-    )
-      ? draft.collaborationManifesto!.trim()
-      : buildManifestoFallback(targetContext, dimensions),
+      : fallbackStyleOverview,
+    collaborationManifesto: buildManifestoFallback(personality.code),
     collaborationSignature: {
       headline: personality.signatureHeadline,
       detail: isValidSignatureDetail(signatureDetail)
@@ -49,26 +53,22 @@ export function completePortableArtifacts(
 
 function buildStyleOverviewFallback(
   targetContext: TargetContext,
-  dimensions: DimensionReport[]
+  dimensions: DimensionReport[],
+  personality: PersonalityProfile
 ): ReportStyleOverview {
   const sorted = sortBySignal(dimensions);
   const primary = sorted[0] ?? dimensions[0];
   const secondary = sorted[1] ?? dimensions[1] ?? primary;
+  const taskLabel = normalizeReportTaskLabel(targetContext.recentUse);
   return {
-    corePattern: `你的核心协作模式偏向「${primary.tendencyLabel}」与「${secondary.tendencyLabel}」的组合：先用自己稳定的判断框住方向，再让 AI 补足推进速度和表达细节。`,
-    strengthArea: `在「${targetContext.recentUse}」这类任务里，这种风格适合处理目标相对清楚、需要兼顾效率与质量的场景，尤其适合把想法整理成可继续加工的版本。`,
-    growthDirection: `下次围绕「${targetContext.goal}」使用 AI 时，可以先让 AI 复述目标、列出 3 个关键假设，并标注哪些部分需要你确认后再继续。`,
+    corePattern: `「${primary.tendencyLabel}×${secondary.tendencyLabel}」是你的底色：你不急着让 AI 接管全场，而是先把方向夹紧、再放它进场冲一段，节奏在你手里。`,
+    strengthArea: `在${taskLabel}这类任务里，你最适合先把方向压成一句话，再让 AI 接着跑细节，省去反复返工。`,
+    growthDirection: getPersonalityNextAction(personality.code),
   };
 }
 
-function buildManifestoFallback(
-  targetContext: TargetContext,
-  dimensions: DimensionReport[]
-): string {
-  const [first, second] = sortBySignal(dimensions);
-  const firstPreference = preferenceText(first);
-  const secondPreference = preferenceText(second);
-  return `我是一名${targetContext.role}，主要用 AI 做${targetContext.recentUse}，当前目标是${targetContext.goal}。${firstPreference}；${secondPreference}。请你在开始前先复述目标、列出简短计划，并在不确定处标注需要核实。生成结果时先给可用版本，再按我的反馈局部调整或重组方向。`;
+function buildManifestoFallback(personalityCode: string): string {
+  return getPersonalityWorkflow(personalityCode);
 }
 
 function buildSignatureDetailFallback(dimensions: DimensionReport[]): string {

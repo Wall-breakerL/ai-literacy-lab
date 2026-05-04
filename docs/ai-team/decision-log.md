@@ -133,14 +133,14 @@
 状态：Accepted
 
 背景：
-- 第二家镜像站 `https://api.getgoapi.com/v1` 的 Claude Sonnet/Opus 4 系列可用。
-- 定点测试显示 `claude-sonnet-4-6` 与 `claude-opus-4-7` 在 temperature 为 0、0.3、0.7 时均返回 400。
+- 第二家镜像站 `https://api.getgoapi.com/v1` 的 `qwen3.6-plus` 可用。
+- 定点测试显示 `qwen3.6-plus` 在 temperature 为 0、0.3、0.7 时返回 400。
 - 上游错误提示为 thinking/adaptive 模式下 temperature 只能为 1。
 
 决定：
 - 新增 `OPENAI_COMPATIBLE_FORCE_TEMPERATURE` 配置项。
 - 当该配置存在时，OpenAI-compatible provider 会覆盖业务层传入的 temperature。
-- 本地当前先将 Agent A/B 都设为 `claude-sonnet-4-6`，并对 GetGoAPI 强制 `temperature=1`。
+- 本地当前先将 Agent A/B 都设为 `qwen3.6-plus`，并对 GetGoAPI 强制 `temperature=1`。
 
 原因：
 - 业务层仍需要表达 A/B 的默认温度意图，但镜像站兼容层有自己的接口约束。
@@ -182,13 +182,13 @@
 状态：Accepted
 
 背景：
-- 用户希望判断 Sonnet 4-6 回复速度是否可优化，并希望对话框具备类似 Claude/GPT 的逐字句涌出效果。
+- 用户希望判断 qwen3.6-plus 回复速度是否可优化，并希望对话框具备类似主流 AI 助手的逐字句涌出效果。
 - 新镜像 `https://gw.claudeapi.com/v1` 支持 OpenAI-compatible `/chat/completions` 与 Anthropic `/messages`。
-- 实测 `claude-sonnet-4-6` 支持 temperature 0、0.3、0.7、1，且 5 次短请求平均约 1.5 秒。
+- 实测 `qwen3.6-plus` 支持 temperature 0、0.3、0.7、1，且 5 次短请求平均约 1.5 秒。
 - 该镜像支持 `stream: true`，返回 `text/event-stream`。
 
 决定：
-- 本地 `.env.local` 切到 `https://gw.claudeapi.com/v1`，Agent A/B 均使用 `claude-sonnet-4-6`。
+- 本地 `.env.local` 切到 `https://gw.claudeapi.com/v1`，Agent A/B 均使用 `qwen3.6-plus`。
 - 清空 `OPENAI_COMPATIBLE_FORCE_TEMPERATURE`，恢复业务层温度设置。
 - 新增统一 stream transport：`createClaudeMessageStream`。
 - 新增 `/api/chat/stream` 与 `/api/hq-chat/stream`，前端优先使用 stream，失败时回退原 JSON API。

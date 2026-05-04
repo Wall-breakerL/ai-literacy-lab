@@ -269,6 +269,26 @@ function DataStream() {
   );
 }
 
+function getPhaseIndicatorProgress({
+  progress,
+  indicatorIndex,
+  phaseIndex,
+  isCompleting,
+}: {
+  progress: number;
+  indicatorIndex: number;
+  phaseIndex: number;
+  isCompleting: boolean;
+}) {
+  if (isCompleting || progress >= 100 || indicatorIndex < phaseIndex) return 100;
+  if (indicatorIndex > phaseIndex) return 0;
+
+  const phaseSize = 100 / PHASES.length;
+  const phaseStart = indicatorIndex * phaseSize;
+  const normalized = ((progress - phaseStart) / phaseSize) * 100;
+  return Math.max(0, Math.min(100, normalized));
+}
+
 export function HolographicLoading({ onComplete, reportReady }: HolographicLoadingProps) {
   const [progress, setProgress] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -471,14 +491,14 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
                   <motion.div
                     className="h-full rounded-full"
                     style={{ background: phase.color }}
-                    initial={{ width: "0%" }}
+                    initial={false}
                     animate={{
-                      width:
-                        isCompleting || progress >= 100 || i < phaseIndex
-                          ? "100%"
-                          : i === phaseIndex
-                            ? `${Math.min(100, (progress % 20) * 5)}%`
-                            : "0%",
+                      width: `${getPhaseIndicatorProgress({
+                        progress,
+                        indicatorIndex: i,
+                        phaseIndex,
+                        isCompleting,
+                      })}%`,
                     }}
                     transition={{ duration: 0.5, ease: "easeOut" }}
                   />

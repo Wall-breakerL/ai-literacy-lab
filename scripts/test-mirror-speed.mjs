@@ -3,12 +3,12 @@
  * 测试 Claude API 镜像的速度和稳定性
  *
  * Usage: node scripts/test-mirror-speed.mjs <base_url> <api_key> [model]
- * Example: node scripts/test-mirror-speed.mjs https://hk.n1n.ai sk-xxx claude-3-5-sonnet-20241022
+ * Example: node scripts/test-mirror-speed.mjs https://hk.n1n.ai sk-xxx qwen3.6-plus
  */
 
 const baseURL = process.argv[2];
 const apiKey = process.argv[3];
-const model = process.argv[4] || 'claude-3-5-sonnet-20241022';
+const model = process.argv[4] || 'qwen3.6-plus';
 
 if (!baseURL || !apiKey) {
   console.error('❌ 用法: node scripts/test-mirror-speed.mjs <base_url> <api_key> [model]');

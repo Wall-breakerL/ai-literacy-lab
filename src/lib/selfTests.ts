@@ -13,6 +13,7 @@ import {
 import { questionnaireReadyMessageForBatchKey, questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
 import { flattenBatchAnswers, getBatchKeyForPhase, getNextBatchKey } from "@/lib/sessionState";
 import { completePortableArtifacts, normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
+import { getFallbackPromptTemplate, getPersonalityNextAction, normalizeReportTaskLabel } from "@/lib/reportDisplayContext";
 import {
   buildMidDialoguePrompt,
   buildQuestionnaireBatchPrompt,
@@ -538,15 +539,62 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         },
         scored
       );
-      const manifestoLength = Array.from(artifacts.collaborationManifesto).filter((char) => !/\s/.test(char)).length;
       assert(artifacts.styleOverview.corePattern.length > 0, "styleOverview.corePattern 缺失");
       assert(artifacts.styleOverview.strengthArea.length > 0, "styleOverview.strengthArea 缺失");
       assert(artifacts.styleOverview.growthDirection.includes("AI"), "growthDirection 应包含可执行 AI 动作");
-      assert(manifestoLength >= 100 && manifestoLength <= 220, `manifesto 长度异常：${manifestoLength}`);
-      assert(artifacts.collaborationManifesto.includes("医生"), "manifesto 应包含 role");
-      assert(artifacts.collaborationManifesto.includes("科研写作"), "manifesto 应包含 recentUse");
+      assert(artifacts.collaborationManifesto.includes("1."), "工作流应使用固定步骤");
+      assert(artifacts.collaborationManifesto.includes("先和 AI 对齐目标"), "工作流应包含目标对齐步骤");
+      assert(!artifacts.collaborationManifesto.includes("我是一名"), "工作流不应写成身份宣言");
       assert(artifacts.collaborationSignature.headline === profile.signatureHeadline, "signature headline 应来自固定 profile");
       assert(artifacts.collaborationSignature.detail.includes("从本次回答看"), "signature detail 应限定证据来源");
+    }),
+    test("AI-MBTI", "报告展示上下文清洗占位目标和口语场景", () => {
+      assert(normalizeReportTaskLabel("主要用ai写代码") === "AI 辅助写代码", "recentUse 应清洗成自然任务名");
+      const nextAction = getPersonalityNextAction("CETL");
+      assert(nextAction.includes("下次"), "16 型固定小动作应是下一次可执行动作");
+      assert(!nextAction.includes("更有效地使用 AI"), "16 型固定小动作不应使用占位目标");
+
+      const artifacts = completePortableArtifacts(
+        {},
+        getPersonalityProfile("CETL"),
+        {
+          role: "学生",
+          recentUse: "主要用ai写代码",
+          goal: "更有效地使用 AI",
+          goalStatus: "missing",
+          goalType: "coding_system",
+        },
+        scoreQuestionnaireAnswers([
+          answer("Relation", 6),
+          answer("Workflow", 6),
+          answer("Epistemic", 6),
+          answer("RepairScope", 6),
+        ])
+      );
+      const styleText = `${artifacts.styleOverview.strengthArea}\n${artifacts.styleOverview.growthDirection}`;
+      assert(styleText.includes("AI 辅助写代码"), "场景发现应使用清洗后的任务名");
+      assert(!styleText.includes("主要用ai写代码"), "场景发现不应展示原始口语 recentUse");
+      assert(!styleText.includes("围绕「更有效地使用 AI」"), "下一步小动作不应围绕占位目标");
+      assert(!styleText.includes("使用 AI」使用 AI"), "下一步小动作不应出现 AI 套娃表达");
+      assert(artifacts.collaborationManifesto.includes("先和 AI 对齐目标"), "工作流应使用固定 fallback");
+      assert(!artifacts.collaborationManifesto.includes("主要用 AI 做主要用ai写代码"), "工作流不应拼接口语场景");
+      assert(!artifacts.collaborationManifesto.includes("当前目标是更有效地使用 AI"), "工作流不应展示占位目标");
+    }),
+    test("AI-MBTI", "How 页兜底 prompt 模板使用自然协作节奏", () => {
+      const template = getFallbackPromptTemplate({
+        role: "学生",
+        recentUse: "主要用ai写代码",
+        goal: "更有效地使用 AI",
+        goalStatus: "missing",
+        goalType: "coding_system",
+      });
+      const fullText = `${template.title}\n${template.useCase}\n${template.prompt}`;
+      assert(template.prompt.startsWith("我在做 AI 辅助写代码"), "兜底模板应使用清洗后的具体任务");
+      assert(/你先|我挑|再展开/.test(template.prompt), "兜底模板应有自然的协作节奏");
+      assert(!fullText.includes("主要用ai写代码"), "兜底模板不应展示原始口语 recentUse");
+      assert(!fullText.includes("更有效地使用 AI"), "兜底模板不应展示占位目标");
+      assert(!fullText.includes("[一句话目标]"), "兜底模板不应依赖占位符");
+      assert(!fullText.includes("开始前请你先做三件事"), "兜底模板不应退回三件事清单");
     }),
     test("AI-MBTI", "Phase 5 signature detail 不显示 JSON 包装", () => {
       const wrapped = "{\"detail\":\"从本次回答看，你会把 AI 当作一起搭结构的伙伴，同时保留自己核实细节和局部修正的节奏。\"}";

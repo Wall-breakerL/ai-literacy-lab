@@ -12,6 +12,7 @@ import {
   type ClaudeToolUse,
 } from "@/lib/claude";
 import { getPersonalityCode, getPersonalityProfile } from "@/lib/personalityProfiles";
+import { getDisplayGoalLabel, getFallbackPromptTemplate, getReportTaskLabel } from "@/lib/reportDisplayContext";
 import { completePortableArtifacts } from "@/lib/reportPortableArtifacts";
 import {
   mergeScoredDimensions,
@@ -365,6 +366,9 @@ function buildFallbackReport(
     normalizedTargetContext,
     scoredDimensions
   );
+  const goalLabel = getDisplayGoalLabel(normalizedTargetContext);
+  const taskLabel = getReportTaskLabel(normalizedTargetContext);
+
   return {
     summary: `你的 AI 协作画像已经生成：整体更接近「${personality.name}」。这份结果基于问卷分数、访谈目标和用户原话证据计算。`,
     tags: scoredDimensions
@@ -377,24 +381,18 @@ function buildFallbackReport(
     styleOverview: portableArtifacts.styleOverview,
     collaborationManifesto: portableArtifacts.collaborationManifesto,
     collaborationSignature: portableArtifacts.collaborationSignature,
-    overallAdvice: `围绕「${normalizedTargetContext.goal}」，可以先保留你当前最稳定的协作方式，再刻意补一个小动作：在让 AI 执行前，先让它反问你影响结果质量的关键问题。`,
+    overallAdvice: `下次处理「${goalLabel ?? taskLabel}」时，可以先保留你当前最稳定的协作方式，再刻意补一个小动作：在让 AI 执行前，先让它标出关键假设和不确定点。`,
     recommendations: [
       {
         title: "先让 AI 帮你澄清任务边界",
-        detail: `下次处理「${normalizedTargetContext.recentUse}」这类任务时，先让 AI 问 3 个问题，再开始生成结果。`,
+        detail: `下次处理「${taskLabel}」这类任务时，先让 AI 给出 2-3 个推进方向和各自风险，再选一个继续展开。`,
       },
       {
         title: "把结果拆成一小段一小段验证",
         detail: "不要等完整结果出来后再判断好坏，先验证方向、结构或关键事实，再继续推进。",
       },
     ],
-    promptTemplates: [
-      {
-        title: "开始前反问模板",
-        useCase: "任务刚开始、目标还没有完全展开时",
-        prompt: `我想完成这个目标：${normalizedTargetContext.goal}。在开始执行前，请先问我 3 个会影响结果质量的关键问题，不要直接给最终答案。`,
-      },
-    ],
+    promptTemplates: [getFallbackPromptTemplate(normalizedTargetContext)],
     dimensions: scoredDimensions.map((dimension) => ({
       ...dimension,
       analysis: `该维度得分为 ${dimension.score}，当前更接近「${dimension.tendencyLabel}」。`,
@@ -416,9 +414,14 @@ function withSessionQuoteEvidence(
       .slice(-4)
       .sort((a, b) => (a.signal === b.signal ? 0 : a.signal === "strong" ? -1 : 1))
       .map((item) => item.quote);
-    return quotes.length > 0
-      ? { ...dimension, evidence: Array.from(new Set(quotes)).slice(0, 3) }
-      : dimension;
+    if (quotes.length === 0) return dimension;
+    const mergedEvidence = Array.from(
+      new Set([
+        ...dimension.evidence,
+        ...quotes,
+      ])
+    ).slice(0, 3);
+    return mergedEvidence.length > 0 ? { ...dimension, evidence: mergedEvidence } : dimension;
   });
 }
 
@@ -497,16 +500,19 @@ function completeAdviceBundle(
   recommendations: ReportRecommendation[];
   promptTemplates: PromptTemplate[];
 } {
+  const goalLabel = getDisplayGoalLabel(targetContext);
+  const taskLabel = getReportTaskLabel(targetContext);
+
   return {
     overallAdvice:
       report.overallAdvice ??
-      `围绕「${targetContext.goal}」，下一次可以先让 AI 复述目标、列出关键假设和需要你确认的风险点，再开始生成结果。`,
+      `下次处理「${goalLabel ?? taskLabel}」时，可以先让 AI 复述目标、列出关键假设和需要你确认的风险点，再开始生成结果。`,
     recommendations: report.recommendations?.length
       ? report.recommendations
       : [
           {
             title: "先让 AI 澄清任务边界",
-            detail: `处理「${targetContext.recentUse}」这类任务时，先让 AI 反问 3 个会影响结果质量的问题，再开始执行。`,
+            detail: `处理「${taskLabel}」这类任务时，先让 AI 给出 2-3 个推进方向和各自风险，再选一个继续展开。`,
           },
           {
             title: "把输出拆成可检查的小步",
@@ -515,13 +521,7 @@ function completeAdviceBundle(
         ],
     promptTemplates: report.promptTemplates?.length
       ? report.promptTemplates
-      : [
-          {
-            title: "开始前反问模板",
-            useCase: "任务刚开始、目标还没有完全展开时",
-            prompt: `我想完成这个目标：${targetContext.goal}。在开始执行前，请先问我 3 个会影响结果质量的关键问题，并标注哪些信息会改变你的方案。`,
-          },
-        ],
+      : [getFallbackPromptTemplate(targetContext)],
   };
 }
 

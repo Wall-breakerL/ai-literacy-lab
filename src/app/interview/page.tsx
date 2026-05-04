@@ -1216,14 +1216,14 @@ export default function InterviewPage() {
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   disabled={isPreparingQuestionnaireGeneration}
-                  placeholder="输入你的回答... (Shift + Enter 换行)"
+                  placeholder="输入你的回答..."
                   className="w-full bg-surface-100 border border-[rgba(255,255,255,0.08)] rounded-[12px] px-4 py-4 pr-14 text-[16px] text-near-white placeholder:text-dim-gray focus:outline-none focus:border-raycast-blue focus:ring-1 focus:ring-[rgba(85,179,255,0.15)] resize-none shadow-card-ring min-h-[60px] max-h-[200px] transition-all"
                   rows={1}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isTyping || isPreparingQuestionnaireGeneration}
-                  className="absolute right-3 bottom-3 p-2 bg-[#1b1c1e] text-near-white rounded-[8px] border border-[rgba(255,255,255,0.06)] hover:bg-[#252829] disabled:opacity-50 disabled:hover:bg-[#1b1c1e] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-[#1b1c1e] text-near-white rounded-[8px] border border-[rgba(255,255,255,0.06)] hover:bg-[#252829] disabled:opacity-50 disabled:hover:bg-[#1b1c1e] transition-colors"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -1355,4 +1355,4 @@ export default function InterviewPage() {
 }
 
 /** 流式占位、错误提示或与旧版 API 兼容时；问卷/中场开场以服务端返回的 `model` 为准 */
-const AGENT_STREAM_MODEL_FALLBACK = "claude-opus-4-6";
+const AGENT_STREAM_MODEL_FALLBACK = "qwen3.6-plus";

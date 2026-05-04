@@ -103,8 +103,8 @@ const apiKey =
     : process.env.ANTHROPIC_API_KEY?.trim() ?? "";
 const version = process.env.ANTHROPIC_VERSION?.trim() || "2023-06-01";
 const models = [
-  ["Researcher", process.env.CLAUDE_RESEARCHER_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || "claude-opus-4-6"],
-  ["Researcher fallback", process.env.CLAUDE_RESEARCHER_FALLBACK_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || process.env.CLAUDE_RESEARCHER_MODEL?.trim() || "claude-opus-4-6"],
+  ["Researcher", process.env.CLAUDE_RESEARCHER_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || "qwen3.6-plus"],
+  ["Researcher fallback", process.env.CLAUDE_RESEARCHER_FALLBACK_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || process.env.CLAUDE_RESEARCHER_MODEL?.trim() || "qwen3.6-plus"],
 ];
 const forcedTemperature = parseOptionalNumber(process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE);
 const strictModelsCheck = process.env.STRICT_MODELS_CHECK === "1";

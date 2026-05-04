@@ -145,7 +145,7 @@ const apiKey =
     ? (process.env.OPENAI_COMPATIBLE_API_KEY || process.env.OPENAI_API_KEY || "").trim()
     : process.env.ANTHROPIC_API_KEY?.trim() ?? "";
 const version = process.env.ANTHROPIC_VERSION?.trim() || "2023-06-01";
-const model = process.env.CLAUDE_RESEARCHER_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || "claude-opus-4-6";
+const model = process.env.CLAUDE_RESEARCHER_MODEL?.trim() || process.env.CLAUDE_AGENT_B_MODEL?.trim() || "qwen3.6-plus";
 const forcedTemperature = parseOptionalNumber(process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE);
 
 console.log("LLM tool-call check");

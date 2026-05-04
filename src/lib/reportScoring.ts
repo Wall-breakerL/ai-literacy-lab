@@ -2,6 +2,15 @@ import { flattenBatchAnswers } from "@/lib/sessionState";
 import type { Dimension, DimensionReport, QuestionnaireAnswer, SessionState } from "@/lib/types";
 
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
+
+const SCALE_LABELS: Record<number, string> = {
+  1: "肯定不会",
+  2: "一般不会",
+  3: "偶尔会",
+  4: "经常会",
+  5: "通常会",
+  6: "肯定会",
+};
 const LIKERT_MIN = 1;
 const LIKERT_MAX = 6;
 
@@ -102,7 +111,10 @@ export function scoreQuestionnaireAnswers(answers: QuestionnaireAnswer[]): Dimen
       tendency: high ? meta.highTendency : meta.lowTendency,
       tendencyLabel: high ? meta.highLabel : meta.lowLabel,
       score,
-      evidence: answered.slice(0, 2).map((answer) => answer.question),
+      evidence: answered.slice(0, 2).map((answer) => {
+        const scoreLabel = answer.score != null ? (SCALE_LABELS[answer.score] ?? `${answer.score} 分`) : null;
+        return scoreLabel ? `${answer.question}（选：${scoreLabel}）` : answer.question;
+      }),
       analysis: "",
       advice: "",
       answeredCount: answered.length,
