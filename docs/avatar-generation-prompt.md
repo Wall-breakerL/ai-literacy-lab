@@ -25,7 +25,7 @@ Recommended output:
 - Frontend asset: final selected PNG copied to the public asset directory
 - Save paths:
   - selected source: `avatars/avatar-choices/{{code}}.png`
-  - frontend asset: `public/avatars/ai-mbti/{{code}}.png`
+  - frontend asset: `public/avatars/avatar-choices/{{code}}.png`
 
 ## Master Prompt
 

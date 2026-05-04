@@ -200,58 +200,6 @@ export type FeedbackType =
   | "prompt_template"
   | "flow_issue"
   | "positive_signal";
-export type FeedbackDialogueAction = "ask_followup" | "ready_to_save";
-
-export interface FeedbackDialogueMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-export interface FeedbackContext {
-  sessionId: string;
-  identity?: string;
-  personalityCode?: string;
-  personalityName?: string;
-  role: string;
-  recentUse: string;
-  goal: string;
-  totalQuestions: number;
-  answeredQuestions: number;
-  skipRate: number;
-  reportSummary?: string;
-  reportTags?: string[];
-  collaborationManifesto?: string;
-  promptTemplateTitles?: string[];
-}
-
-export interface StructuredFeedback {
-  sessionId: string;
-  personalityCode: string;
-  role: string;
-  recentUse: string;
-  goal: string;
-  totalQuestions: number;
-  answeredQuestions: number;
-  skipRate: number;
-  summary: string;
-  usefulParts: string[];
-  inaccurateParts: string[];
-  questionIssues: string[];
-  reportIssues: string[];
-  improvementSuggestions: string[];
-  sentiment: FeedbackSentiment;
-  priority: FeedbackPriority;
-  feedbackTypes: FeedbackType[];
-  rawDialogue: FeedbackDialogueMessage[];
-  createdAt?: string;
-}
-
-export interface FeedbackChatResponse {
-  action: FeedbackDialogueAction;
-  assistantMessage: string;
-  draft?: StructuredFeedback;
-  model?: string;
-}
 
 export interface FinalReport {
   summary: string;
@@ -283,42 +231,4 @@ export interface QuestionnaireAnswer {
   reverse?: boolean;
   skipped?: boolean;
   skipReason?: "unsure_or_not_applicable";
-}
-
-// Phase 2 AI-HQ types
-export type HQDimension = "route" | "frame" | "workflow" | "repair";
-export type HQLevel = "L1" | "L2" | "L3";
-
-export interface HQDimensionScore {
-  score: number;
-  max: number;
-  probes: boolean[];
-}
-
-export interface HQScores {
-  route: HQDimensionScore;
-  frame: HQDimensionScore;
-  workflow: HQDimensionScore;
-  repair: HQDimensionScore;
-  total: number;
-  level: HQLevel;
-}
-
-export interface HQReport {
-  scores: HQScores;
-  overall: string;
-  dimensions: {
-    dimension: HQDimension;
-    label: string;
-    score: number;
-    max: number;
-    evidence: string[];
-    analysis: string;
-    advice?: string;
-  }[];
-  recommendations: string[];
-  promptTemplates: {
-    title: string;
-    prompt: string;
-  }[];
 }

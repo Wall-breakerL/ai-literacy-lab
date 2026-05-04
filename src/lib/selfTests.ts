@@ -27,22 +27,13 @@ import {
 } from "@/lib/researcher";
 import { resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
-import { getHQRoundState, HQ_ROUNDS } from "@/lib/hqAgents";
-import {
-  buildHQReportFromDraft,
-  HQ_PROBE_DEFINITIONS,
-  scoreHQProbeResults,
-  validateHQReportDraft,
-  type HQProbeResult,
-  type HQReportDraft,
-} from "@/lib/hqScoring";
-import type { AgentBOutput, Dimension, HQDimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
+import type { AgentBOutput, Dimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
   name: string;
   status: "pass" | "fail";
   detail: string;
-  group: "AI-MBTI" | "AI-HQ";
+  group: "AI-MBTI";
 }
 
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
@@ -144,42 +135,6 @@ function sessionState(overrides: Partial<SessionState>): SessionState {
     openProbes: [],
     ...overrides,
   };
-}
-
-function hqProbeResults(hits: Partial<Record<HQDimension, boolean[]>>): Record<HQDimension, HQProbeResult[]> {
-  return Object.fromEntries(
-    HQ_PROBE_DEFINITIONS.map((definition) => [
-      definition.dimension,
-      definition.probes.map((probe, index) => ({
-        hit: hits[definition.dimension]?.[index] ?? false,
-        evidence: hits[definition.dimension]?.[index] ? `${probe.id} evidence` : "",
-      })),
-    ])
-  ) as Record<HQDimension, HQProbeResult[]>;
-}
-
-function hqDraft(hits: Partial<Record<HQDimension, boolean[]>>): HQReportDraft {
-  return {
-    probeResults: hqProbeResults(hits),
-    overall: "《AI-HQ 报告》测试总体分析。",
-    dimensions: HQ_PROBE_DEFINITIONS.map((definition) => ({
-      dimension: definition.dimension,
-      analysis: `${definition.label}分析`,
-      advice: `${definition.label}建议`,
-    })),
-    recommendations: ["先写清目标、约束和验收标准。", "把复杂任务拆成可检查的小步骤。"],
-    promptTemplates: [
-      { title: "任务契约模板", prompt: "请先确认目标、背景、约束和验收标准。" },
-      { title: "修复模板", prompt: "请定位偏差、解释原因，并只重写有问题的部分。" },
-    ],
-  };
-}
-
-function userMessages(count: number): Message[] {
-  return Array.from({ length: count }, (_, index) => ({
-    role: "user" as const,
-    content: `用户回答 ${index + 1}`,
-  }));
 }
 
 export function runAiMbtiSelfTests(): SelfTestResult[] {
@@ -651,70 +606,8 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
   ];
 }
 
-export function runAiHqSelfTests(): SelfTestResult[] {
-  return [
-    test("AI-HQ", "固定 5 段推进", () => {
-      for (let count = 0; count < HQ_ROUNDS.length; count++) {
-        const state = getHQRoundState(userMessages(count));
-        assert(!state.isComplete, `${count} 条用户回答时不应完成`);
-        assert(state.round?.id === HQ_ROUNDS[count].id, `${count} 条用户回答时阶段错误`);
-      }
-      assert(getHQRoundState(userMessages(5)).isComplete, "5 条用户回答后应完成");
-    }),
-    test("AI-HQ", "probe 权重计分", () => {
-      const scores = scoreHQProbeResults(
-        hqProbeResults({
-          route: [true, false, true],
-          frame: [true, true, false, false, true, false, false, true],
-          workflow: [true, false, true, false],
-          repair: [true, true, false],
-        })
-      );
-      assert(scores.route.score === 20, `route 应为 20，实际 ${scores.route.score}`);
-      assert(scores.frame.score === 20, `frame 应为 20，实际 ${scores.frame.score}`);
-      assert(scores.workflow.score === 14, `workflow 应为 14，实际 ${scores.workflow.score}`);
-      assert(scores.repair.score === 15, `repair 应为 15，实际 ${scores.repair.score}`);
-    }),
-    test("AI-HQ", "等级门槛会降级", () => {
-      const scores = scoreHQProbeResults(
-        hqProbeResults({
-          route: [true, true, true],
-          frame: [true, true, true, true, true, true, true, true],
-          workflow: [true, true, true, true],
-          repair: [false, false, false],
-        })
-      );
-      assert(scores.total === 80, `总分应为 80，实际 ${scores.total}`);
-      assert(scores.level === "L1", `repair 不达 L2 门槛时应降级为 L1，实际 ${scores.level}`);
-    }),
-    test("AI-HQ", "B 输出校验", () => {
-      assert(validateHQReportDraft(hqDraft({ route: [true, true, true] })), "合法 draft 应通过");
-      const invalid = hqDraft({});
-      invalid.probeResults.frame = invalid.probeResults.frame.slice(0, 2);
-      assert(!validateHQReportDraft(invalid), "probe 长度错误应失败");
-    }),
-    test("AI-HQ", "报告合并由服务端计分", () => {
-      const report = buildHQReportFromDraft(
-        hqDraft({
-          route: [true, true, true],
-          frame: [true, true, true, true, true, true, true, true],
-          workflow: [true, true, true, true],
-          repair: [true, true, true],
-        })
-      );
-      assert(report.scores.total === 100, `服务端应算出 100 分，实际 ${report.scores.total}`);
-      assert(report.dimensions.every((dimension) => dimension.evidence.length > 0), "命中 probe 应合并 evidence");
-      assert(report.promptTemplates.length >= 2, "报告应保留 prompt 模板");
-    }),
-    test("AI-HQ", "默认题目跨领域", () => {
-      const text = HQ_ROUNDS.map((round) => `${round.question}\n${round.scenarioPrompt ?? ""}`).join("\n");
-      assert(!/Cursor|Claude Code|coding|MBTI|代码/.test(text), "默认题目不应强依赖 coding 场景");
-    }),
-  ];
-}
-
 export function runSelfTests(): SelfTestResult[] {
-  return [...runAiMbtiSelfTests(), ...runAiHqSelfTests()];
+  return runAiMbtiSelfTests();
 }
 
 export function summarizeSelfTests(results: SelfTestResult[]) {

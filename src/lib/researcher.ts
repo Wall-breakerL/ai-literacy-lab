@@ -1,4 +1,4 @@
-import { appendSystemPromptBlock, cacheSystemPrompt, type ClaudeSystemPrompt, type ClaudeTool, type ClaudeToolChoice, type ClaudeToolUse } from "@/lib/claude";
+import { appendSystemPromptBlock, cacheSystemPrompt, type QwenSystemPrompt, type QwenTool, type QwenToolChoice, type QwenToolUse } from "@/lib/qwen";
 import { summarizeSessionStateForPrompt } from "@/lib/sessionState";
 import type {
   AgentBOutput,
@@ -28,7 +28,7 @@ export function normalizeInitialInterviewOpening(value: string): string {
     .replace(/^["“]|["”]$/g, "")
     .trim();
   if (!clean) return "";
-  if (/AI|ai|ChatGPT|Claude|Cursor|工具|目标|提升|改善|协作体验|怎么使用/.test(clean)) {
+  if (/AI|ai|ChatGPT|Qwen|Cursor|工具|目标|提升|改善|协作体验|怎么使用/.test(clean)) {
     return "";
   }
   return clean.slice(0, 60);
@@ -203,7 +203,7 @@ const evidenceSchema = {
   additionalProperties: false,
 };
 
-export const UPDATE_SESSION_STATE_TOOL: ClaudeTool = {
+export const UPDATE_SESSION_STATE_TOOL: QwenTool = {
   name: "update_session_state",
   description: "分析 AI-MBTI 访谈上下文，更新用户背景、目标上下文，并给访谈官下一步提示。聊天阶段不要生成问卷。",
   input_schema: {
@@ -230,7 +230,7 @@ export const UPDATE_SESSION_STATE_TOOL: ClaudeTool = {
   },
 };
 
-export const GENERATE_QUESTIONNAIRE_TOOL: ClaudeTool = {
+export const GENERATE_QUESTIONNAIRE_TOOL: QwenTool = {
   name: "generate_questionnaire",
   description: "【旧版兼容】旧单次问卷工具，仅保留给遗留调用和历史解析；当前 Phase 6 主动流程必须使用 generate_questionnaire_batch。",
   input_schema: {
@@ -255,7 +255,7 @@ export const GENERATE_QUESTIONNAIRE_TOOL: ClaudeTool = {
   },
 };
 
-export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: ClaudeTool = {
+export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: QwenTool = {
   name: "generate_questionnaire_batch",
   description: "基于当前 AI-MBTI 状态输出 Phase 6 的问卷部分，并避免和已有题目相似。",
   input_schema: {
@@ -292,7 +292,7 @@ export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: ClaudeTool = {
   },
 };
 
-export const UPDATE_MID_DIALOGUE_TOOL: ClaudeTool = {
+export const UPDATE_MID_DIALOGUE_TOOL: QwenTool = {
   name: "update_mid_dialogue",
   description: "解析 Phase 6 中途对话，把用户对场景适配度的反馈写入结构化 ScenarioGuidance。",
   input_schema: {
@@ -314,11 +314,11 @@ export const UPDATE_MID_DIALOGUE_TOOL: ClaudeTool = {
   },
 };
 
-export function getResearcherTool(roundCount: number): ClaudeTool {
+export function getResearcherTool(roundCount: number): QwenTool {
   return roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? GENERATE_QUESTIONNAIRE_TOOL : UPDATE_SESSION_STATE_TOOL;
 }
 
-export function getResearcherToolChoice(roundCount: number): ClaudeToolChoice {
+export function getResearcherToolChoice(roundCount: number): QwenToolChoice {
   if (roundCount < QUESTIONNAIRE_ENTRY_ROUND) return "auto";
   return {
     type: "tool",
@@ -330,21 +330,21 @@ export function getResearcherMaxTokens(roundCount: number, configuredMaxTokens: 
   return Math.min(configuredMaxTokens, roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? 4096 : 1024);
 }
 
-export function getQuestionnaireBatchToolChoice(): ClaudeToolChoice {
+export function getQuestionnaireBatchToolChoice(): QwenToolChoice {
   return {
     type: "tool",
     name: GENERATE_QUESTIONNAIRE_BATCH_TOOL.name,
   };
 }
 
-export function getMidDialogueToolChoice(): ClaudeToolChoice {
+export function getMidDialogueToolChoice(): QwenToolChoice {
   return {
     type: "tool",
     name: UPDATE_MID_DIALOGUE_TOOL.name,
   };
 }
 
-export function buildResearcherSystemPrompt(sessionState?: SessionState): ClaudeSystemPrompt {
+export function buildResearcherSystemPrompt(sessionState?: SessionState): QwenSystemPrompt {
   const base = cacheSystemPrompt(RESEARCHER_TOOL_SYSTEM);
   return sessionState
     ? appendSystemPromptBlock(base, summarizeSessionStateForPrompt(sessionState), { cache: true })
@@ -660,7 +660,7 @@ function buildInitialInterviewRoundInstruction(userReplyCount: number): string {
 - “更有效地使用 AI”只是兜底目标，不是具体 recentUse。`;
 }
 
-export function agentBOutputFromToolUses(toolUses: ClaudeToolUse[], roundCount: number): AgentBOutput | null {
+export function agentBOutputFromToolUses(toolUses: QwenToolUse[], roundCount: number): AgentBOutput | null {
   const expectedName = roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? GENERATE_QUESTIONNAIRE_TOOL.name : UPDATE_SESSION_STATE_TOOL.name;
   const toolUse = toolUses.find((item) => item.name === expectedName);
   const input = parseToolInputRecord(toolUse?.input);
@@ -700,7 +700,7 @@ export function agentBOutputFromToolUses(toolUses: ClaudeToolUse[], roundCount: 
 }
 
 export function questionnaireBatchOutputFromToolUses(
-  toolUses: ClaudeToolUse[],
+  toolUses: QwenToolUse[],
   textBlocks: string[] = []
 ): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === GENERATE_QUESTIONNAIRE_BATCH_TOOL.name);
@@ -790,7 +790,7 @@ function qwenToolInputRepairCandidates(text: string): string[] {
   return candidates;
 }
 
-export function midDialogueOutputFromToolUses(toolUses: ClaudeToolUse[], turn: number): AgentBOutput | null {
+export function midDialogueOutputFromToolUses(toolUses: QwenToolUse[], turn: number): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === UPDATE_MID_DIALOGUE_TOOL.name);
   const input = parseToolInputRecord(toolUse?.input);
   if (!input) return null;

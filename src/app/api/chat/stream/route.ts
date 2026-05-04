@@ -3,11 +3,11 @@ import {
   RESEARCHER_FALLBACK_MODEL,
   RESEARCHER_MAX_TOKENS,
   RESEARCHER_MODEL,
-  assertClaudeApiKey,
-  createClaudeMessageWithTools,
+  assertQwenApiConfig,
+  createQwenMessageWithTools,
   getUpstreamErrorMessage,
-  type ClaudeMessageWithToolsResult,
-} from "@/lib/claude";
+  type QwenMessageWithToolsResult,
+} from "@/lib/qwen";
 import {
   agentBOutputFromToolUses,
   buildMidDialoguePrompt,
@@ -48,7 +48,7 @@ const STREAM_CHUNK_DELAY_MS = 18;
 const STREAM_CHUNK_SIZE = 2;
 
 export async function POST(req: NextRequest) {
-  const missing = assertClaudeApiKey();
+  const missing = assertQwenApiConfig();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function createModelOpeningMessage(baseSessionState: SessionState): Promise<string> {
-  const result = await createClaudeMessageWithTools({
+  const result = await createQwenMessageWithTools({
     model: RESEARCHER_MODEL,
     system: buildResearcherSystemPrompt(baseSessionState),
     messages: [
@@ -272,7 +272,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-type ResearcherToolResult = ClaudeMessageWithToolsResult & { model: string };
+type ResearcherToolResult = QwenMessageWithToolsResult & { model: string };
 
 function getResearcherRoundCount(roundCount: number): number {
   return Math.min(roundCount, QUESTIONNAIRE_ENTRY_ROUND - 1);
@@ -312,7 +312,7 @@ async function createResearcherMessageWithFallback(
   };
   try {
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_MODEL,
       })),
@@ -321,7 +321,7 @@ async function createResearcherMessageWithFallback(
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_FALLBACK_MODEL,
       })),
@@ -355,7 +355,7 @@ async function createMidDialogueMessageWithFallback(
   };
   try {
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_MODEL,
       })),
@@ -364,7 +364,7 @@ async function createMidDialogueMessageWithFallback(
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_FALLBACK_MODEL,
       })),
@@ -398,7 +398,7 @@ async function createMidDialogueTransitionRepairMessageWithFallback(
     maxTokens: 256,
   };
   const callModel = async (model: string) => {
-    const result = await createClaudeMessageWithTools({
+    const result = await createQwenMessageWithTools({
       ...params,
       model,
     });

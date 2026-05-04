@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  LLM_PROVIDER,
+  QWEN_BASE_URL,
   RESEARCHER_FALLBACK_MODEL,
   RESEARCHER_MAX_TOKENS,
   RESEARCHER_MODEL,
-  assertClaudeApiKey,
-  createClaudeMessageWithTools,
+  assertQwenApiConfig,
+  createQwenMessageWithTools,
   getUpstreamErrorMessage,
-  type ClaudeMessageWithToolsResult,
-} from "@/lib/claude";
+  type QwenMessageWithToolsResult,
+} from "@/lib/qwen";
 import {
   applySessionStatePatch,
   buildSessionStatePatchFromAgentBOutput,
@@ -50,7 +50,7 @@ export const runtime = "nodejs";
 
 const MAX_CHAT_RETRIES = Math.max(
   1,
-  Number.parseInt(process.env.CLAUDE_CHAT_MAX_RETRIES ?? "3", 10) || 3
+  Number.parseInt(process.env.QWEN_CHAT_MAX_RETRIES ?? "3", 10) || 3
 );
 const LOCAL_DEBUG_ROOT = path.join(process.cwd(), ".local-debug", "interview-runs");
 
@@ -98,7 +98,7 @@ type LocalDebugSessionLog = {
     llmBaseUrl: string;
     maxChatRetries: number;
     retryDelayMs: number;
-    agentBQuestionnaireRetryDelayMs: number;
+    questionnaireRetryDelayMs: number;
     researcher: {
       model: string;
       fallbackModel: string;
@@ -118,7 +118,7 @@ function sleep(ms: number) {
 
 const DEFAULT_CHAT_RETRY_DELAY_MS = 30_000;
 /** 问卷生成和转问卷轮次较重，重试间隔放宽。 */
-const QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS = 60_000;
+const QUESTIONNAIRE_RETRY_DELAY_MS = 60_000;
 
 /** 单次上游调用失败则重试，直至成功或用尽次数（避免无限循环与账单失控）。 */
 async function withChatRetries<T>(
@@ -175,16 +175,11 @@ async function upsertLocalDebugSession(
     startedAt: current?.startedAt ?? patch.startedAt,
     initialConfig:
       current?.initialConfig ?? {
-        llmProvider: LLM_PROVIDER,
-        llmBaseUrl:
-          LLM_PROVIDER === "openai-compatible"
-            ? process.env.OPENAI_COMPATIBLE_BASE_URL?.trim() ||
-              process.env.OPENAI_BASE_URL?.trim() ||
-              "https://api.openai.com/v1"
-            : process.env.ANTHROPIC_BASE_URL?.trim() || "https://api.anthropic.com/v1",
+        llmProvider: "qwen",
+        llmBaseUrl: QWEN_BASE_URL,
         maxChatRetries: MAX_CHAT_RETRIES,
         retryDelayMs: DEFAULT_CHAT_RETRY_DELAY_MS,
-        agentBQuestionnaireRetryDelayMs: QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS,
+        questionnaireRetryDelayMs: QUESTIONNAIRE_RETRY_DELAY_MS,
         researcher: {
           model: RESEARCHER_MODEL,
           fallbackModel: RESEARCHER_FALLBACK_MODEL,
@@ -202,7 +197,7 @@ async function upsertLocalDebugSession(
 }
 
 export async function POST(req: NextRequest) {
-  const missing = assertClaudeApiKey();
+  const missing = assertQwenApiConfig();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -295,7 +290,7 @@ export async function POST(req: NextRequest) {
 
     const agentBRetryDelayMs =
       shouldTransition
-        ? QUESTIONNAIRE_AGENT_B_RETRY_DELAY_MS
+        ? QUESTIONNAIRE_RETRY_DELAY_MS
         : DEFAULT_CHAT_RETRY_DELAY_MS;
     let researcherMessage = "";
     let researcherModel = RESEARCHER_MODEL;
@@ -484,7 +479,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-type ResearcherToolResult = ClaudeMessageWithToolsResult & { model: string };
+type ResearcherToolResult = QwenMessageWithToolsResult & { model: string };
 
 function getResearcherRoundCount(roundCount: number): number {
   return Math.min(roundCount, QUESTIONNAIRE_ENTRY_ROUND - 1);
@@ -510,7 +505,7 @@ function shouldGenerateAfterMidDialogue(agentBOutput: AgentBOutput): boolean {
 }
 
 async function createModelOpeningMessage(baseSessionState: SessionState): Promise<string> {
-  const result = await createClaudeMessageWithTools({
+  const result = await createQwenMessageWithTools({
     model: RESEARCHER_MODEL,
     system: buildResearcherSystemPrompt(baseSessionState),
     messages: [
@@ -545,7 +540,7 @@ async function createResearcherMessageWithFallback(
   };
   try {
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_MODEL,
       })),
@@ -554,7 +549,7 @@ async function createResearcherMessageWithFallback(
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_FALLBACK_MODEL,
       })),
@@ -588,7 +583,7 @@ async function createMidDialogueMessageWithFallback(
   };
   try {
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_MODEL,
       })),
@@ -597,7 +592,7 @@ async function createMidDialogueMessageWithFallback(
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
     return {
-      ...(await createClaudeMessageWithTools({
+      ...(await createQwenMessageWithTools({
         ...params,
         model: RESEARCHER_FALLBACK_MODEL,
       })),
@@ -631,7 +626,7 @@ async function createMidDialogueTransitionRepairMessageWithFallback(
     maxTokens: 256,
   };
   const callModel = async (model: string) => {
-    const result = await createClaudeMessageWithTools({
+    const result = await createQwenMessageWithTools({
       ...params,
       model,
     });

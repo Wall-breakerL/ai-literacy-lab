@@ -23,7 +23,7 @@ export function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> 
 }
 
 export function isRetryableApiFailure(status: number, detail: string): boolean {
-  if (status === 503 && /未配置 ANTHROPIC_API_KEY|configuration/i.test(detail)) return false;
+  if (status === 503 && /未配置 OPENAI_COMPATIBLE_API_KEY|configuration/i.test(detail)) return false;
   if (status === 401 || status === 403 || status === 400) return false;
   if (status === 500 || status === 502 || status === 503 || status === 429 || status === 504) return true;
   if (/529|负载|稍后重试|overloaded|timeout|rate limit|ECONNRESET|ETIMEDOUT|parse report|Failed to parse/i.test(detail))

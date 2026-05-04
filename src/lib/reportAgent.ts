@@ -1,4 +1,4 @@
-export const AGENT_B_REPORT_SYSTEM = `你是一位AI使用习惯分析专家，负责根据服务端已计算好的问卷得分生成最终的AI-MBTI分析报告。
+export const REPORT_SYSTEM = `你是一位AI使用习惯分析专家，负责根据服务端已计算好的问卷得分生成最终的AI-MBTI分析报告。
 
 ## 计分方向（供解释使用，禁止自行重算）
 

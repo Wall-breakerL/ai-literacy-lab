@@ -61,7 +61,6 @@ export default function TestLabPage() {
     failed: summary.failed,
     groups: {
       aiMbti: summarizeSelfTests(mbtiResults),
-      aiHq: { skipped: true, reason: "AI-HQ v0.1 已归档，后续会作为 AI-MBTI 报告补充模块重构。" },
     },
   };
 
@@ -103,13 +102,6 @@ export default function TestLabPage() {
         </section>
 
         <TestSection title="AI-MBTI 核心逻辑测试" results={mbtiResults} />
-
-        <section className="rounded-[20px] border border-[rgba(255,188,51,0.18)] bg-[rgba(255,188,51,0.05)] p-5 shadow-card-ring">
-          <h2 className="text-[20px] font-semibold text-near-white">AI-HQ 核心逻辑测试</h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-light-gray">
-            SKIPPED：AI-HQ v0.1 已归档，后续会作为 AI-MBTI 报告补充模块重构。
-          </p>
-        </section>
 
         <section className="space-y-4">
           <h2 className="text-[20px] font-semibold text-near-white">头像体系烟测</h2>

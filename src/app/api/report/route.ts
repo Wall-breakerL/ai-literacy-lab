@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AGENT_B_REPORT_SYSTEM } from "@/lib/reportAgent";
+import { REPORT_SYSTEM } from "@/lib/reportAgent";
 import { withLlmRetry } from "@/lib/llmRetry";
 import {
-  AGENT_B_MAX_TOKENS,
-  AGENT_B_MODEL,
-  assertClaudeApiKey,
+  REPORT_MAX_TOKENS,
+  REPORT_MODEL,
+  assertQwenApiConfig,
   cacheSystemPrompt,
-  createClaudeMessageWithTools,
+  createQwenMessageWithTools,
   getUpstreamErrorMessage,
-  type ClaudeTool,
-  type ClaudeToolUse,
-} from "@/lib/claude";
+  type QwenTool,
+  type QwenToolUse,
+} from "@/lib/qwen";
 import { getPersonalityCode, getPersonalityProfile } from "@/lib/personalityProfiles";
 import { getDisplayGoalLabel, getFallbackPromptTemplate, getReportTaskLabel } from "@/lib/reportDisplayContext";
 import { completePortableArtifacts } from "@/lib/reportPortableArtifacts";
@@ -39,7 +39,7 @@ import { parseJsonObjectFromModel } from "@/lib/jsonResponse";
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-const GENERATE_REPORT_TOOL: ClaudeTool = {
+const GENERATE_REPORT_TOOL: QwenTool = {
   name: "generate_ai_mbti_report",
   description: "生成 AI-MBTI 报告解释文本。必须通过工具参数返回结构化内容，不要输出 JSON 文本。",
   input_schema: {
@@ -187,7 +187,7 @@ const DIMENSION_ALIASES: Record<string, Dimension> = {
 };
 
 export async function POST(req: NextRequest) {
-  const missing = assertClaudeApiKey();
+  const missing = assertQwenApiConfig();
   if (missing) {
     return NextResponse.json({ error: "configuration", detail: missing }, { status: 503 });
   }
@@ -254,20 +254,20 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
 每个 dimensions.analysis 必须具体解释判断依据：至少包含分数/有效回答数量/一条用户原话或题目证据，不能是空字符串。`;
 
     const reportRequestBase = {
-      model: AGENT_B_MODEL,
-      system: cacheSystemPrompt(AGENT_B_REPORT_SYSTEM),
+      model: REPORT_MODEL,
+      system: cacheSystemPrompt(REPORT_SYSTEM),
       messages: [
         { role: "user" as const, content: prompt },
       ],
       tools: [GENERATE_REPORT_TOOL],
       temperature: 0.4,
-      maxTokens: AGENT_B_MAX_TOKENS,
+      maxTokens: REPORT_MAX_TOKENS,
     };
 
-    let toolResult: Awaited<ReturnType<typeof createClaudeMessageWithTools>>;
+    let toolResult: Awaited<ReturnType<typeof createQwenMessageWithTools>>;
     try {
       toolResult = await withLlmRetry(() =>
-        createClaudeMessageWithTools({
+        createQwenMessageWithTools({
           ...reportRequestBase,
           toolChoice: { type: "tool", name: GENERATE_REPORT_TOOL.name },
         })
@@ -278,7 +278,7 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
       });
       try {
         toolResult = await withLlmRetry(() =>
-          createClaudeMessageWithTools({
+          createQwenMessageWithTools({
             ...reportRequestBase,
             toolChoice: "auto",
           })
@@ -434,7 +434,7 @@ function formatQuoteEvidenceForPrompt(sessionState: SessionState | undefined): s
   return quotes || "（暂无用户原话证据，可引用具体问卷题目内容）";
 }
 
-function generatedReportFromToolUses(toolUses: ClaudeToolUse[]): GeneratedReportDraft | null {
+function generatedReportFromToolUses(toolUses: QwenToolUse[]): GeneratedReportDraft | null {
   const toolUse = toolUses.find((item) => item.name === GENERATE_REPORT_TOOL.name);
   if (!toolUse) return null;
   const input = typeof toolUse.input === "string"

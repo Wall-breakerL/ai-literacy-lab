@@ -48,7 +48,7 @@ export function inferTargetContextFromMessages(messages: Message[]): TargetConte
   const roleMatch = userText.match(/(?:我是|职业是|身份是)?([^，。；,;]{2,12})(?:，|,|。|；|;|$)/);
   const role = compact(roleMatch?.[1] ?? "") || DEFAULT_TARGET_CONTEXT.role;
   const recentUse =
-    compact(userText.match(/(?:用|使用|拿).{0,12}(?:AI|ai|GPT|gpt|Claude|Cursor).{0,28}/)?.[0] ?? "") ||
+    compact(userText.match(/(?:用|使用|拿).{0,12}(?:AI|ai|GPT|gpt|Qwen|Cursor).{0,28}/)?.[0] ?? "") ||
     DEFAULT_TARGET_CONTEXT.recentUse;
   const goal =
     compact(

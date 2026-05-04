@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import type { PersonalityProfile } from "@/lib/types";
 
-const AVATAR_BASE_PATH = "/avatars/ai-mbti";
+const AVATAR_BASE_PATH = "/avatars/avatar-choices";
 
 function getAvatarCode(code?: string) {
   return /^[A-Z]{4}$/.test(code ?? "") ? code! : "CEAL";

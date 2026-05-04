@@ -4,20 +4,20 @@
 
 AI-MBTI 是一个纯粹的“AI 使用风格 / 协作习惯”分析工具。它不评估真实工作能力，不把用户包装成高低等级，而是通过访谈、定制题目和报告，帮助用户看清自己如何与 AI 建立关系、推进任务、验证输出和修复偏差。
 
-FAA / AI-HQ 能力成熟度模块已从主链路移出。AI-HQ v0.1 页面和代码保留为 archived compatibility，不在 v6.0 主流程扩展。
+FAA / AI-HQ 能力成熟度模块已从主链路移出。独立 AI-HQ runtime 已删除，核心维度设计保留在 `docs/phase2-aihq-design.md`。
 
 ## 2. 当前交互场景
 
-当前 v6.0 主流程是单 researcher flow，不再是运行时 Agent A / Agent B 双代理协作。
+当前 v6.0 主流程是单 researcher flow，不再是运行时双代理协作。
 
 1. **背景访谈**：researcher 先问职业或身份，再追问主要 AI 使用场景。前两轮只收集背景、recentUse 和当前目标，不直接判断四维倾向。
 2. **Phase 6 第一部分问卷**：生成 `hybrid_batch1`，8 道题。
 3. **中途对话**：询问第一部分题目感受、跳过原因和第二部分真实使用场景，写入 `scenarioGuidance` / `refinedTargetContext`。
 4. **Phase 6 第二部分问卷**：生成 `hybrid_batch2`，16 道题。
 5. **报告生成**：服务端确定性计分，LLM 只写解释、建议、prompt 模板和报告文案。
-6. **Phase 7 反馈**：报告底部增加 1-2 轮反馈对话，整理成结构化反馈并写入 Notion；未配置或写入失败时保存到 `.local-debug/feedback/`。
+6. **Phase 7 反馈**：报告底部提供结构化反馈入口并写入 Notion；未配置或写入失败时保存到 `.local-debug/feedback/`。
 
-旧版 “16/20 道单次问卷” 和 “Agent A/B 通信协议” 属于 legacy design。代码中仍保留兼容入口，但文档和新迭代应以两部分 24 题为准。
+旧版 “16/20 道单次问卷” 和 “双代理通信协议” 属于 legacy design。文档和新迭代应以两部分 24 题为准。
 
 ## 3. 评估模型
 
@@ -125,7 +125,6 @@ interface ScenarioGuidance {
 | `src/app/interview/page.tsx` | 访谈、两部分问卷、中途对话前端状态机 |
 | `src/lib/reportScoring.ts` | 服务端确定性计分 |
 | `src/app/api/report/route.ts` | 报告生成入口 |
-| `src/lib/feedbackAgent.ts` | Phase 7 反馈对话整理 |
 | `src/lib/feedbackStorage.ts` | Notion 写入和本地 fallback |
 
 ## 9. 验证边界

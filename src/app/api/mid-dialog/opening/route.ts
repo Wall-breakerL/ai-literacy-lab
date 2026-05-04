@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   RESEARCHER_FALLBACK_MODEL,
   RESEARCHER_MODEL,
-  assertClaudeApiKey,
-  createClaudeMessageWithTools,
+  assertQwenApiConfig,
+  createQwenMessageWithTools,
   getUpstreamErrorMessage,
-} from "@/lib/claude";
+} from "@/lib/qwen";
 import {
   buildMidDialogueOpeningPrompt,
   buildResearcherSystemPrompt,
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   let source: OpeningSource = "fallback";
   let modelOpening: { text: string; model: string } | null = null;
 
-  const missing = assertClaudeApiKey();
+  const missing = assertQwenApiConfig();
   if (missing) {
     warnings.push(missing);
   } else {
@@ -99,7 +99,7 @@ async function generateOpening(
   };
 
   try {
-    const result = await createClaudeMessageWithTools({
+    const result = await createQwenMessageWithTools({
       ...params,
       model: RESEARCHER_MODEL,
     });
@@ -107,7 +107,7 @@ async function generateOpening(
     return text ? { text, model: RESEARCHER_MODEL } : null;
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
-    const result = await createClaudeMessageWithTools({
+    const result = await createQwenMessageWithTools({
       ...params,
       model: RESEARCHER_FALLBACK_MODEL,
     });

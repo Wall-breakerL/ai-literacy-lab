@@ -36,7 +36,7 @@ function createSessionState(sessionId = `smoke-phase6-phase7-${Date.now()}`) {
     phase: "interview",
     background: {
       role: "Product-minded developer",
-      tools: ["ChatGPT", "Claude", "GitHub Copilot"],
+      tools: ["ChatGPT", "Qwen", "GitHub Copilot"],
       recentUse: "Using AI to plan, implement, and review a Next.js feature.",
       goal: "Build a reliable AI workflow for product engineering without losing control of decisions.",
       goalStatus: "specific",
@@ -401,47 +401,6 @@ async function smokeFeedback() {
   console.log("ok structured feedback save");
 }
 
-async function smokeFeedbackChat() {
-  if (!runLlmSmoke) {
-    console.log("skip feedback chat: set RUN_LLM_SMOKE=1 to call the LLM");
-    return;
-  }
-
-  const result = await postJson("/api/feedback/chat", {
-    context: {
-      sessionId: "smoke-feedback-chat",
-      identity: "Product-minded developer",
-      personalityCode: "CEFL",
-      personalityName: "Collaborative Explorer",
-      role: "Product-minded developer",
-      recentUse: "Using AI to plan, implement, and review a Next.js feature.",
-      goal: "Build a reliable AI workflow for product engineering without losing control of decisions.",
-      totalQuestions: 24,
-      answeredQuestions: 21,
-      skipRate: 0.125,
-      reportSummary: "The user is exploratory but wants explicit uncertainty and review checkpoints.",
-      reportTags: ["exploratory", "review-oriented"],
-      collaborationManifesto: "I want AI to help me move faster while keeping key product decisions explicit.",
-      promptTemplateTitles: ["Plan before implementation", "Review risk checklist"],
-    },
-    messages: [
-      { role: "assistant", content: "What part of the report should we improve first?" },
-      { role: "user", content: "Make the questions more specific to product engineering and code review." },
-    ],
-  });
-
-  assertOneOf(result.json.action, ["ask_followup", "ready_to_save"], "feedbackChat.action");
-  assertText(result.json.assistantMessage, "feedbackChat.assistantMessage");
-  if (result.json.draft != null) {
-    assertRecord(result.json.draft, "feedbackChat.draft");
-    assertText(result.json.draft.sessionId, "feedbackChat.draft.sessionId");
-    assertText(result.json.draft.summary, "feedbackChat.draft.summary");
-    assert.ok(Array.isArray(result.json.draft.feedbackTypes), "feedbackChat.draft.feedbackTypes must be an array");
-  }
-
-  console.log("ok feedback chat LLM smoke");
-}
-
 await assertServerReady();
 console.log(`smoke base url: ${baseUrl}`);
 
@@ -449,6 +408,5 @@ await smokeOpening();
 const { generated } = await smokeQuestionnaireGeneration();
 await smokeReport(generated);
 await smokeFeedback();
-await smokeFeedbackChat();
 
 console.log("phase6/phase7 API smoke complete");

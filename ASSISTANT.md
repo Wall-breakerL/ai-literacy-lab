@@ -1,18 +1,18 @@
 # ASSISTANT.md
 
-This file provides guidance to the assistant (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding assistants working in this repository.
 
 ## Project Overview
 
-**Human-AI Performance Lab** (`human-ai-performance-lab`, v6.0.0) — an AI-MBTI assessment system. Users chat with a single "researcher" agent for a lightweight background interview, then complete Phase 6's three 8-question batches: habit, scenario, and mixed. Two mid-dialogues between batches collect user feedback about fit and scenario granularity. The server deterministically scores four dimensions and the LLM writes a personalized report.
+**Human-AI Performance Lab** (`human-ai-performance-lab`) is an AI-MBTI assessment system. Users complete a lightweight background interview, two questionnaire batches, one mid-dialogue calibration, and a final report. The server deterministically scores four dimensions, while Qwen writes explanatory report text through structured tool calls.
 
-The four AI-MBTI dimensions (each scored 0–100):
+The four AI-MBTI dimensions are scored 0-100:
 - **Relation**: Instrumental ↔ Collaborative
 - **Workflow**: Framed ↔ Exploratory
 - **Epistemic**: Auditing ↔ Trusting
 - **RepairScope**: Global ↔ Local
 
-Note: AI-HQ v0.1 (the `/hq-interview`, `/hq-report` flow and `src/lib/hq*.ts`) is **archived** — keep working but do not extend. `/test-lab` currently skips the AI-HQ section in the UI.
+AI-HQ runtime pages, APIs, and source files have been removed. `docs/phase2-aihq-design.md` only preserves the dimension design for future report-module work.
 
 ## Commands
 
@@ -20,67 +20,76 @@ Note: AI-HQ v0.1 (the `/hq-interview`, `/hq-report` flow and `src/lib/hq*.ts`) i
 npm run dev          # Next.js dev server (http://localhost:3000)
 npm run build        # production build
 npm run start        # run production build
-npm run lint         # next lint (ESLint, .eslintrc.json extends next/core-web-vitals)
-npm run typecheck    # tsc --noEmit (strict TS)
+npm run lint         # next lint
+npm run typecheck    # tsc --noEmit
 
-npm run check:llm        # Verify LLM provider config + minimal chat call (reads .env.local)
-npm run check:llm-tools  # Verify provider supports tool use (force a test tool call)
-npm run test:browser     # Open /test-lab via Playwright; validates the structured self-test summary
-npm run smoke:phase6-phase7  # API smoke against a running dev server; RUN_LLM_SMOKE=1 also tests feedback chat
+npm run check:llm        # Verify Qwen/OpenAI-compatible config + minimal chat call
+npm run check:llm-tools  # Verify Qwen tool-call support
+npm run test:browser     # Open /test-lab via Playwright and read self-test summary
+npm run smoke:phase6-phase7  # API smoke against a running dev server
 ```
 
-There is no unit test runner; **self-tests live in `src/lib/selfTests.ts`** and are surfaced through the `/test-lab` page. To run a focused case, edit `selfTests.ts`, then load `/test-lab` or run `npm run test:browser`. Current visible coverage is AI-MBTI logic only: 1-6 scoring, skipped answers, Phase 6 24-question scoring/confidence, fallback batch validity, generic-scenario rejection, duplicate-question detection, `batchAnswers` report fallback, mid-dialogue visible-text safety, four-dimension fill-in, personality codes, 16-type config, Phase 5 portable artifacts, question text composition, and target-context fallback. This is not API E2E coverage.
+There is no unit test runner. Self-tests live in `src/lib/selfTests.ts` and surface through `/test-lab`. They cover AI-MBTI scoring, skipped answers, questionnaire batch structure, fallback validity, duplicate-question detection, report fallback from `batchAnswers`, mid-dialogue safety, personality profiles, portable report artifacts, and target-context fallback.
 
 ## Architecture
 
 ### Stack
-Next.js 14 App Router · TypeScript (strict) · Tailwind · Framer Motion · Recharts · react-markdown. Routing uses `/src/app/**`. Path alias `@/*` → `src/*`.
 
-### Two LLM provider modes (see `src/lib/claude.ts`)
-`LLM_PROVIDER` switches between:
-- `openai-compatible` → calls `${OPENAI_COMPATIBLE_BASE_URL}/chat/completions`. Some gateways require `OPENAI_COMPATIBLE_FORCE_TEMPERATURE=1`. For **Alibaba DashScope** (`OPENAI_COMPATIBLE_BASE_URL` containing `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com`), `src/lib/claude.ts` automatically merges `enable_thinking: false` into every `/chat/completions` body so **forced `tool_choice`** (questionnaire and researcher tools) matches Qwen hybrid-thinking rules. Override with `OPENAI_COMPATIBLE_ENABLE_THINKING=1` or add vendor fields via `OPENAI_COMPATIBLE_EXTRA_JSON` (JSON object, shallow-merged last).
-- `anthropic` → calls `${ANTHROPIC_BASE_URL}/messages` with `ANTHROPIC_VERSION`.
+Next.js 14 App Router · TypeScript strict · Tailwind · Framer Motion · Recharts · react-markdown. Routing uses `src/app/**`; path alias `@/*` maps to `src/*`.
 
-`createClaudeMessageWithTools()` is the unified entrypoint and handles tool-use across both providers. Main AI-MBTI models are configured by `CLAUDE_RESEARCHER_MODEL`, `CLAUDE_RESEARCHER_FALLBACK_MODEL`, and `CLAUDE_RESEARCHER_MAX_TOKENS`. `ENABLE_PROMPT_CACHE=1` toggles prompt caching. `CLAUDE_AGENT_A_MODEL` / `CLAUDE_AGENT_B_MODEL` remain as legacy aliases for archived or compatibility paths.
+### Qwen LLM Layer
 
-### Single-agent "researcher" flow
-The current AI-MBTI pipeline is **one agent (the researcher)** doing tool-augmented turns, not the older Agent A + Agent B split. Treat older 16/20 single-questionnaire and Agent A/B documentation as legacy unless explicitly updating compatibility code. Key modules:
+`src/lib/qwen.ts` is the only LLM transport. It calls `${OPENAI_COMPATIBLE_BASE_URL}/chat/completions` with `OPENAI_COMPATIBLE_API_KEY`.
 
-- `src/lib/researcher.ts` — system prompt, tool schemas, batch-questionnaire prompts, mid-dialogue prompts, and parsing of tool-uses into `AgentBOutput`. The initial background boundary still uses `QUESTIONNAIRE_ENTRY_ROUND` (=2), but Phase 6 questionnaire generation is batch-driven after that.
-- `src/lib/sessionState.ts` — canonical `SessionState` (background, evidence, openProbes, questionnaire, answers, phase, `questionnaireBatches`, `batchAnswers`, `midDialogues`, `refinedTargetContext`, `scenarioGuidance`). `applySessionStatePatch` advances state and `pruneOldTranscript` keeps prompt size bounded.
-- `src/lib/targetContext.ts` — infers/normalizes the user's current goal so generated questions can bind to it; has fallback inference from messages.
-- `src/lib/fallbackQuestionnaire.ts` + `src/lib/questionnaireValidation.ts` — Phase 6 has three 8-question fallback batches and validation for per-batch and 24-question totals. The legacy 16-question fallback remains for old single-questionnaire compatibility.
-- `src/lib/reportScoring.ts` — **deterministic server-side scoring**. Reverse items are flipped here; "不了解/没想好" (skip) does not contribute. Confidence is high at >=4 valid answers per dimension, medium at 2-3, low below 2. The LLM never computes scores.
-- `src/lib/reportAgent.ts` — given final scores + evidence, produces the report (summary, personality code, tags, dimension analyses, prompt templates).
-- `src/lib/personalityProfiles.ts` — the 16-type code map (e.g. `IFAL` → "细节修补师").
-- `src/lib/feedbackAgent.ts` + `src/lib/feedbackStorage.ts` — Phase 7 report feedback dialogue and Notion/local storage.
+Primary config:
+- `QWEN_MODEL`
+- `QWEN_FALLBACK_MODEL`
+- `QWEN_MAX_TOKENS`
+- `QWEN_CHAT_MAX_RETRIES`
+- optional `QWEN_REPORT_MODEL` / `QWEN_REPORT_MAX_TOKENS`
 
-### API routes (`src/app/api/`)
-- `chat/route.ts` and `chat/stream/route.ts` — main AI-MBTI conversation endpoint; `maxDuration = 60` (Vercel Pro). Uses `MAX_CHAT_RETRIES` (`CLAUDE_CHAT_MAX_RETRIES`, default 3) and `llmRetry`/`clientApiRetry`.
-- `questionnaire/generate/route.ts` — Phase 6 batch generation; returns one 8-question batch and updated `SessionState`.
-- `mid-dialog/opening/route.ts` — creates the first visible mid-dialogue prompt after batch 1 or batch 2.
-- `questionnaire/route.ts` — legacy questionnaire delivery & validation.
-- `report/route.ts` — final scoring + report generation; accepts request answers first, then `sessionState.answers`, then flattened `sessionState.batchAnswers`.
-- `feedback/chat/route.ts` and `feedback/route.ts` — Phase 7 feedback dialogue and structured feedback save.
-- `hq-chat/*`, `hq-report` — **archived** AI-HQ endpoints, do not extend.
-- `local-debug/interview-run/route.ts` — dev-only access to debug logs.
+For DashScope base URLs, `src/lib/qwen.ts` auto-adds `enable_thinking:false` unless `OPENAI_COMPATIBLE_ENABLE_THINKING=1`. `OPENAI_COMPATIBLE_EXTRA_JSON` can shallow-merge vendor-specific fields into chat-completion requests.
+
+### Researcher Flow
+
+The current AI-MBTI pipeline is a single researcher flow, not the older two-agent runtime split.
+
+- `src/lib/researcher.ts` — researcher system prompt, tool schemas, questionnaire prompts, mid-dialogue prompts, and tool-use parsing.
+- `src/lib/sessionState.ts` — canonical `SessionState`, phase helper, batch answers, mid-dialogues, `refinedTargetContext`, and `scenarioGuidance`.
+- `src/lib/targetContext.ts` — infers and normalizes the user's role, recent use, and goal.
+- `src/lib/fallbackQuestionnaire.ts` and `src/lib/questionnaireValidation.ts` — fallback batches and validation for 8+16 questionnaire generation.
+- `src/lib/reportScoring.ts` — deterministic server-side scoring. The model never computes scores.
+- `src/lib/reportAgent.ts` — report-writing system prompt.
+- `src/lib/personalityProfiles.ts` — fixed 16-type map and profile metadata.
+- `src/lib/feedbackStorage.ts` — Notion write and local feedback fallback.
+
+### API Routes
+
+- `chat/route.ts` and `chat/stream/route.ts` — main AI-MBTI conversation endpoints.
+- `questionnaire/generate/route.ts` — 8+16 batch generation.
+- `mid-dialog/opening/route.ts` — mid-dialogue opening prompt generation.
+- `report/route.ts` — scoring plus report generation.
+- `feedback/route.ts` — structured feedback save.
+- `local-debug/interview-run/route.ts` — dev-only debug log access.
 
 ### Pages
-`/` (home), `/interview` (AI-MBTI background interview + three batches + mid-dialogues), `/report`, `/feedback-debug`, `/test-lab` (self tests), `/avatar-preview`, plus archived `/hq-interview`, `/hq-report`.
 
-### Local debug logs and feedback storage
-In dev, interview runs are written to `.local-debug/interview-runs/` (raw user text, system prompts, model responses). Phase 7 writes structured feedback to Notion when `NOTION_API_KEY` and a feedback data source id are configured; otherwise it writes JSON to `.local-debug/feedback/`. Both directories can contain user text and report context. Already gitignored — **do not commit**.
+`/`, `/interview`, `/report`, `/test-lab`, `/avatar-preview`, and `/mock-report`.
+
+### Local Debug Data
+
+In dev, interview runs are written to `.local-debug/interview-runs/`. Feedback writes to Notion when configured, otherwise to `.local-debug/feedback/`. Both directories can contain user text and report context. They are gitignored and must not be committed.
 
 ## Design System
 
-`Design.md` documents a **Raycast-style dark theme**: near-black blue-tinted background `#07080a`, surfaces `#101111` / `#1b1c1e`, multi-layer macOS-style shadows with inset highlights, Raycast Red `#FF6363` used only as punctuation (hero stripes, danger), Raycast Blue `hsl(202,100%,67%)` for interactive accents, Inter with positive letter-spacing (~0.2px) for body, GeistMono for code. Tailwind tokens are configured in `tailwind.config.ts` to match. New UI must follow this system rather than introducing new palettes.
+`Design.md` documents the Raycast-style dark theme. New UI should follow the existing Tailwind tokens, surface colors, shadows, typography, and accent usage.
 
-## Conventions specific to this repo
+## Repo Conventions
 
-- LLM calls are **structured-output via tool use**, not free-form JSON parsing. When extending the researcher, add fields to the tool schema in `researcher.ts` and consume them through `agentBOutputFromToolUses`.
-- Scoring logic stays in TypeScript; never ask the model to output numerical scores.
-- Background phase responses must contain a real Chinese assistant message **and** a tool call — both are required for the round to advance.
-- Phase 6 batches are fixed at 8 questions each: four dimensions × two questions, one forward and one reverse. `habit_batch` uses `scenario: "习惯"`, `scenario_batch` requires concrete scenarios, and `mixed_batch` is four habit plus four scenario questions.
-- Mid-dialogues must write user corrections into `scenarioGuidance` / `refinedTargetContext`; do not rely only on transcript text.
-- The questionnaire always exposes a separate "不了解 / 没想好" option; treat it as a skip (no score), not a 7th Likert level.
-- When changing prompts/models, also run `npm run check:llm` against the configured gateway before committing — gateways differ in tool-use semantics and temperature handling.
+- LLM calls use structured tool calls, not free-form JSON parsing.
+- Scoring logic stays in TypeScript.
+- Background phase responses must include a user-facing Chinese assistant message and a tool call.
+- Questionnaire batches are fixed at 8 and 16 questions for the current flow.
+- Mid-dialogues must write user corrections into `scenarioGuidance` / `refinedTargetContext`.
+- “不了解 / 没想好” is a skip, not a seventh Likert level.
+- After prompt/model changes, run static checks first; run `npm run check:llm` only when the local Qwen gateway config is ready.

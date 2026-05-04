@@ -3,10 +3,10 @@ import {
   RESEARCHER_FALLBACK_MODEL,
   RESEARCHER_MAX_TOKENS,
   RESEARCHER_MODEL,
-  assertClaudeApiKey,
-  createClaudeMessageWithTools,
+  assertQwenApiConfig,
+  createQwenMessageWithTools,
   getUpstreamErrorMessage,
-} from "@/lib/claude";
+} from "@/lib/qwen";
 import { getFallbackQuestionnaireBatch } from "@/lib/fallbackQuestionnaire";
 import { questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
 import {
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
   let result: BatchGenerationResult | null = null;
   let upstreamDebug: QuestionnaireGenerateDebug | undefined;
 
-  const missing = assertClaudeApiKey();
+  const missing = assertQwenApiConfig();
   if (missing) {
     warnings.push(missing);
   } else {
@@ -323,7 +323,7 @@ async function callResearcherBatchTool({
   existingQuestions: QuestionnaireQuestion[];
   scenarioGuidance?: ScenarioGuidance;
   retryReason?: string;
-}): Promise<{ output: AgentBOutput | null; model: string; raw: Awaited<ReturnType<typeof createClaudeMessageWithTools>> }> {
+}): Promise<{ output: AgentBOutput | null; model: string; raw: Awaited<ReturnType<typeof createQwenMessageWithTools>> }> {
   const params = {
     system: buildResearcherSystemPrompt(sessionState),
     messages: [
@@ -345,7 +345,7 @@ async function callResearcherBatchTool({
   };
 
   try {
-    const apiResult = await createClaudeMessageWithTools({
+    const apiResult = await createQwenMessageWithTools({
       ...params,
       model: RESEARCHER_MODEL,
     });
@@ -356,7 +356,7 @@ async function callResearcherBatchTool({
     };
   } catch (error) {
     if (RESEARCHER_FALLBACK_MODEL === RESEARCHER_MODEL) throw error;
-    const apiResult = await createClaudeMessageWithTools({
+    const apiResult = await createQwenMessageWithTools({
       ...params,
       model: RESEARCHER_FALLBACK_MODEL,
     });
