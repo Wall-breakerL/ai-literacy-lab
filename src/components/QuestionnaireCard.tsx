@@ -116,16 +116,16 @@ export function QuestionnaireCard({
         </div>
 
         {/* Scale */}
-        <div className="space-y-3 relative z-10">
+          <div className="space-y-3 relative z-10">
           <div className="text-[11px] text-dim-gray/90 mb-1">
-            下列数字表示认同程度（1–6），与题号无关
+            下列数字表示认同程度（0–5），与题号无关
           </div>
           <div className="flex justify-between text-[12px] text-dim-gray">
             <span>否定</span>
             <span>肯定</span>
           </div>
           <div className="flex items-center justify-between gap-2">
-            {[1, 2, 3, 4, 5, 6].map((score) => (
+            {[0, 1, 2, 3, 4, 5].map((score) => (
               <motion.button
                 key={score}
                 type="button"
@@ -190,7 +190,7 @@ export function QuestionnaireCard({
             不了解 / 没想好
           </button>
           <p className="text-[11px] text-dim-gray/80 leading-relaxed">
-            选择这一项时，本题不会计入分数。
+            选择这一项时，本题会按中间值 2.5 计入分数。
           </p>
 
           <div className="mt-6 grid grid-cols-2 gap-3">

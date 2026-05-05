@@ -1,4 +1,4 @@
-import { getUpstreamErrorMessage } from "@/lib/qwen";
+import { getUpstreamErrorMessage } from "@/lib/llm";
 
 function getHttpStatus(err: unknown): number | undefined {
   if (!err || typeof err !== "object") return undefined;

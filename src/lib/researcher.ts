@@ -1,10 +1,16 @@
-import { appendSystemPromptBlock, cacheSystemPrompt, type QwenSystemPrompt, type QwenTool, type QwenToolChoice, type QwenToolUse } from "@/lib/qwen";
+import {
+  cacheLlmSystemPrompt,
+  type LlmSystemPrompt,
+  type LlmTool,
+  type LlmToolChoice,
+  type LlmToolUse,
+} from "@/lib/llm";
+import { appendSystemPromptBlock } from "@/lib/qwen";
 import { summarizeSessionStateForPrompt } from "@/lib/sessionState";
 import type {
   AgentBOutput,
   Dimension,
   DirectiveAction,
-  GoalType,
   Message,
   MidDialogueKey,
   MidDialogueStatus,
@@ -53,17 +59,6 @@ const MID_DIALOGUE_STATUSES: MidDialogueStatus[] = [
   "exit_requested",
 ];
 const SCENARIO_GRANULARITIES: ScenarioGuidance["granularity"][] = ["specific", "balanced", "abstract"];
-const GOAL_TYPES: GoalType[] = [
-  "product_building",
-  "research_writing",
-  "learning",
-  "coding_system",
-  "business_decision",
-  "daily_efficiency",
-  "creative_work",
-  "other",
-];
-
 export type MidDialogueOpeningSkippedQuestion = Pick<QuestionnaireAnswer, "dimension" | "scenario" | "question">;
 
 export const RESEARCHER_TOOL_SYSTEM = `<role>
@@ -81,7 +76,7 @@ export const RESEARCHER_TOOL_SYSTEM = `<role>
 ## 阶段边界
 
 - 聊天背景阶段：先输出一句用户可见回复，再调用 update_session_state；只收集背景，不判断四维倾向，不生成问卷。
-- Phase 6 主动问卷阶段：按两部分生成共 24 题；hybrid_batch1 是第一部分 8 题，hybrid_batch2 是第二部分 16 题。
+- Active 主动问卷阶段：按两部分生成共 16 题；hybrid_batch1 是第一轮 8 题，hybrid_batch2 是第二轮 8 题。
 - Phase 6 批次生成阶段：只调用 generate_questionnaire_batch 工具；用户提示写入 userFacingMessage，正文可以为空。
 - generate_questionnaire 是旧版单次问卷兼容工具，不属于当前主动两段式流程。
 - 每轮如果用户说了任何能体现 Relation / Workflow / Epistemic / RepairScope 倾向的具体行为，把用户原话片段写入 newEvidence.quote；如果只是背景信息，也至少写 1 条背景 quote。
@@ -104,20 +99,18 @@ Workflow: Framed 框架型 ↔ Exploratory 探索型
 Epistemic: Auditing 审计型 ↔ Trusting 信任型
 RepairScope: Global 全局重评 ↔ Local 局部调整
 
-reverse=false：用户越认同，越靠近 Collaborative / Exploratory / Trusting / Local。
-reverse=true：用户越认同，越靠近 Instrumental / Framed / Auditing / Global。
+active 流程全部 reverse=false：用户越认同，越靠近 Collaborative / Framed / Auditing / Global。
 </scoring_model_for_internal_use>`;
 
 const targetContextSchema = {
   type: "object",
   properties: {
     role: { type: "string" },
+    tools: { type: "array", items: { type: "string" } },
     recentUse: { type: "string" },
     goal: { type: "string" },
-    goalStatus: { type: "string", enum: ["specific", "generic", "missing"] },
-    goalType: { type: "string", enum: GOAL_TYPES },
   },
-  required: ["role", "recentUse", "goal", "goalStatus", "goalType"],
+  required: ["role", "recentUse", "goal"],
   additionalProperties: false,
 };
 
@@ -148,9 +141,10 @@ const questionnaireQuestionSchema = {
     dimension: { type: "string", enum: DIMENSIONS },
     scenario: { type: "string" },
     question: { type: "string" },
+    questionType: { type: "string", enum: ["universal", "semi_specific", "specific"] },
     reverse: { type: "boolean" },
   },
-  required: ["dimension", "scenario", "question", "reverse"],
+  required: ["dimension", "scenario", "question"],
   additionalProperties: false,
 };
 
@@ -160,9 +154,10 @@ const existingQuestionSchema = {
     dimension: { type: "string", enum: DIMENSIONS },
     scenario: { type: "string" },
     question: { type: "string" },
+    questionType: { type: "string", enum: ["universal", "semi_specific", "specific"] },
     reverse: { type: "boolean" },
   },
-  required: ["dimension", "scenario", "question", "reverse"],
+  required: ["dimension", "scenario", "question"],
   additionalProperties: false,
 };
 
@@ -203,7 +198,7 @@ const evidenceSchema = {
   additionalProperties: false,
 };
 
-export const UPDATE_SESSION_STATE_TOOL: QwenTool = {
+export const UPDATE_SESSION_STATE_TOOL: LlmTool = {
   name: "update_session_state",
   description: "分析 AI-MBTI 访谈上下文，更新用户背景、目标上下文，并给访谈官下一步提示。聊天阶段不要生成问卷。",
   input_schema: {
@@ -230,7 +225,7 @@ export const UPDATE_SESSION_STATE_TOOL: QwenTool = {
   },
 };
 
-export const GENERATE_QUESTIONNAIRE_TOOL: QwenTool = {
+export const GENERATE_QUESTIONNAIRE_TOOL: LlmTool = {
   name: "generate_questionnaire",
   description: "【旧版兼容】旧单次问卷工具，仅保留给遗留调用和历史解析；当前 Phase 6 主动流程必须使用 generate_questionnaire_batch。",
   input_schema: {
@@ -255,7 +250,7 @@ export const GENERATE_QUESTIONNAIRE_TOOL: QwenTool = {
   },
 };
 
-export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: QwenTool = {
+export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: LlmTool = {
   name: "generate_questionnaire_batch",
   description: "基于当前 AI-MBTI 状态输出 Phase 6 的问卷部分，并避免和已有题目相似。",
   input_schema: {
@@ -292,7 +287,7 @@ export const GENERATE_QUESTIONNAIRE_BATCH_TOOL: QwenTool = {
   },
 };
 
-export const UPDATE_MID_DIALOGUE_TOOL: QwenTool = {
+export const UPDATE_MID_DIALOGUE_TOOL: LlmTool = {
   name: "update_mid_dialogue",
   description: "解析 Phase 6 中途对话，把用户对场景适配度的反馈写入结构化 ScenarioGuidance。",
   input_schema: {
@@ -314,11 +309,11 @@ export const UPDATE_MID_DIALOGUE_TOOL: QwenTool = {
   },
 };
 
-export function getResearcherTool(roundCount: number): QwenTool {
+export function getResearcherTool(roundCount: number): LlmTool {
   return roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? GENERATE_QUESTIONNAIRE_TOOL : UPDATE_SESSION_STATE_TOOL;
 }
 
-export function getResearcherToolChoice(roundCount: number): QwenToolChoice {
+export function getResearcherToolChoice(roundCount: number): LlmToolChoice {
   if (roundCount < QUESTIONNAIRE_ENTRY_ROUND) return "auto";
   return {
     type: "tool",
@@ -330,22 +325,22 @@ export function getResearcherMaxTokens(roundCount: number, configuredMaxTokens: 
   return Math.min(configuredMaxTokens, roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? 4096 : 1024);
 }
 
-export function getQuestionnaireBatchToolChoice(): QwenToolChoice {
+export function getQuestionnaireBatchToolChoice(): LlmToolChoice {
   return {
     type: "tool",
     name: GENERATE_QUESTIONNAIRE_BATCH_TOOL.name,
   };
 }
 
-export function getMidDialogueToolChoice(): QwenToolChoice {
+export function getMidDialogueToolChoice(): LlmToolChoice {
   return {
     type: "tool",
     name: UPDATE_MID_DIALOGUE_TOOL.name,
   };
 }
 
-export function buildResearcherSystemPrompt(sessionState?: SessionState): QwenSystemPrompt {
-  const base = cacheSystemPrompt(RESEARCHER_TOOL_SYSTEM);
+export function buildResearcherSystemPrompt(sessionState?: SessionState): LlmSystemPrompt {
+  const base = cacheLlmSystemPrompt(RESEARCHER_TOOL_SYSTEM);
   return sessionState
     ? appendSystemPromptBlock(base, summarizeSessionStateForPrompt(sessionState), { cache: true })
     : base;
@@ -372,13 +367,10 @@ export function buildQuestionnaireBatchPrompt({
   const guidance = formatScenarioGuidanceForPrompt(scenarioGuidance ?? sessionState.scenarioGuidance);
   const retry = retryReason ? `\n\n【上一次输出问题】\n${retryReason}\n请重新生成，必须修正这些问题。` : "";
   const isFirstBatch = batchMode === "hybrid_batch1";
-  const batchLabel = isFirstBatch ? "第一部分问卷（8题）" : "第二部分问卷（16题）";
-  const questionCount = isFirstBatch ? 8 : 16;
-  const habitCount = isFirstBatch ? 4 : 8;
-  const scenarioCount = questionCount - habitCount;
-  const perDimensionCount = isFirstBatch ? 2 : 4;
-  const forwardPerDimension = isFirstBatch ? 2 : 2;
-  const reversePerDimension = isFirstBatch ? 0 : 2;
+  const batchLabel = isFirstBatch ? "第一轮问卷（8题）" : "第二轮问卷（8题）";
+  const questionTypes = isFirstBatch
+    ? "通用题 4 道 + 半具体题 4 道；每个维度 1 道 universal + 1 道 semi_specific"
+    : "半具体题 4 道 + 具体题 4 道；每个维度 1 道 semi_specific + 1 道 specific";
 
   return `<task>
 你现在要生成${batchLabel}。必须调用 generate_questionnaire_batch 工具，把题目写入 nextQuestions，把给用户看的过渡语写入 userFacingMessage。
@@ -386,17 +378,15 @@ export function buildQuestionnaireBatchPrompt({
 
 <batch_contract>
 batchMode: ${batchMode}
-总题数：${questionCount} 题
-习惯题：${habitCount} 道 scenario="习惯"
-场景题：${scenarioCount} 道结合用户背景、AI 使用方式或场景反馈的题
-维度分布：Relation / Workflow / Epistemic / RepairScope 各 ${perDimensionCount} 题
-正反向分布：每个维度 ${forwardPerDimension} 道 reverse=false、${reversePerDimension} 道 reverse=true
-${isFirstBatch ? "" : "总卷合约：两部分合计后每个维度 6 题，其中 4 道 reverse=false、2 道 reverse=true；总计 12 道习惯题 + 12 道场景题。"}
+总题数：8 题
+维度分布：Relation / Workflow / Epistemic / RepairScope 各 2 题
+题目类型分布：${questionTypes}
+正反向分布：全部 reverse=false
+计分方式：用户选择 0-5 分，跳过按 2.5 分计算
 </batch_contract>
 
 <direction_contract>
-reverse=false：认同度高 -> 更倾向 Collaborative / Exploratory / Trusting / Local。
-reverse=true：认同度高 -> 更倾向 Instrumental / Framed / Auditing / Global。
+全部正向：认同度高 -> Relation=Collaborative、Workflow=Framed、Epistemic=Auditing、RepairScope=Global。
 </direction_contract>
 
 <user_context>
@@ -413,12 +403,31 @@ ${guidance}
 </scenario_guidance>
 
 <question_design>
-- 习惯题描述通用 AI 使用倾向，任何职业都能理解，scenario 必须精确写成 "习惯"。
-- 场景题要绑定 targetContext、refinedTargetContext 或 scenarioGuidance；如果 granularity=abstract，可以降低职业细节，但仍要让用户能代入。
-- 题干使用第一人称倾向陈述句，不写问句。
+- 通用题 scenario 必须精确写成 “通用”，questionType=”universal”。
+- 半具体题 scenario 写 2-6 字职业或任务类型短语，例如”写代码””开会””课程学习”，questionType=”semi_specific”。
+- 具体题 scenario 写 4-12 字 recentUse 或 scenarioGuidance 里的真实场景短语，例如”写产品需求文档””优化 React 性能”，questionType=”specific”。
+- scenario 只写场景名称，不要写”...时””...的时候”等后缀，不要写完整句子。
+- 题干（question）必须是自包含的完整陈述，包含场景描述和行为倾向两部分：
+  * 通用题：直接从”我...”开头，不需要场景前缀
+  * 半具体题和具体题：必须包含场景描述，格式为”[场景]时/中/过程中，我...”
 - 题干避免和已有题目语义重复，第二部分尤其要和第一部分互补。
 - userFacingMessage 用 1 句自然中文告诉用户这一部分题已经准备好，并提示点击按钮进入作答；不要解释维度、计分或内部分析。
-</question_design>${retry}`;
+</question_design>
+
+<question_examples>
+【通用题】
+✓ scenario=”通用”，question=”我倾向于把 AI 当成讨论伙伴，而不只是执行工具。”
+
+【半具体题】
+✓ scenario=”写代码”，question=”写代码时，我会先明确需求，再开始编写。”
+✓ scenario=”团队协作”，question=”在团队项目中，我会邀请 AI 参与头脑风暴。”
+✗ scenario=”写代码”，question=”我会先明确需求，再开始编写。”（缺少场景描述）
+
+【具体题】
+✓ scenario=”写产品需求文档”，question=”写产品需求文档时，我习惯先列大纲，再让 AI 帮我细化。”
+✓ scenario=”优化 React 性能”，question=”在优化 React 性能过程中，我会先验证 AI 给的方案。”
+✗ scenario=”写产品需求文档”，question=”我习惯先列大纲，再让 AI 帮我细化。”（缺少场景描述）
+</question_examples>${retry}`;
 }
 
 export function buildMidDialoguePrompt({
@@ -486,10 +495,9 @@ export function buildMidDialogueTransitionRepairPrompt({
     .join("\n");
   const target = agentBOutput.targetContext ?? sessionState.refinedTargetContext ?? {
     role: sessionState.background.role,
+    tools: sessionState.background.tools,
     recentUse: sessionState.background.recentUse,
     goal: sessionState.background.goal,
-    goalStatus: sessionState.background.goalStatus,
-    goalType: sessionState.background.goalType,
   };
   const guidance = agentBOutput.scenarioGuidance ?? sessionState.scenarioGuidance;
 
@@ -503,10 +511,9 @@ ${recentHistory || "（暂无）"}
 
 【当前目标上下文】
 role: ${target.role}
+tools: ${(target.tools ?? []).join("、") || "未明确"}
 recentUse: ${target.recentUse}
 goal: ${target.goal}
-goalStatus: ${target.goalStatus}
-goalType: ${target.goalType}
 
 【工具结果摘要】
 directive.action: ${agentBOutput.directive.action}
@@ -539,10 +546,9 @@ export function buildMidDialogueOpeningPrompt({
 }): string {
   const target = sessionState.refinedTargetContext ?? {
     role: sessionState.background.role,
+    tools: sessionState.background.tools,
     recentUse: sessionState.background.recentUse,
     goal: sessionState.background.goal,
-    goalStatus: sessionState.background.goalStatus,
-    goalType: sessionState.background.goalType,
   };
   const skipSummary =
     skippedQuestionSamples.length > 0
@@ -591,7 +597,7 @@ export function buildResearcherToolPrompt(messages: Message[], roundCount: numbe
     return `【旧版单次问卷兼容路径】
 当前对话轮数：${roundCount}（旧逻辑中已达问卷生成轮次，≥${QUESTIONNAIRE_ENTRY_ROUND}）
 
-	注意：当前 Phase 6 主动问卷流程不是本路径；主动流程必须使用 generate_questionnaire_batch，hybrid_batch1 8 题、hybrid_batch2 16 题，共 24 题。
+	注意：当前 active 主动问卷流程不是本路径；主动流程必须使用 generate_questionnaire_batch，两轮各 8 题，共 16 题。
 以下要求仅用于遗留调用或历史导出兼容，不应作为 Phase 6 主动批次生成说明。
 
 【对话记录】
@@ -602,11 +608,10 @@ ${history || "（尚无用户发言，请仍基于可得的访谈官开场等信
 如果输出用户可见正文，只能是一句陈述式过渡，例如“好的，我会根据你刚才说的写代码场景生成第一批问卷。”不要再追问用户，不要问目标、用途、课程作业、个人项目、学习新技术等问题；系统此时已经会进入问卷生成。
 
 旧版兼容问卷硬性要求：
-1. nextQuestions 长度只能是 16 或 20，优先 16。
-2. 16 题时 Relation / Workflow / Epistemic / RepairScope 各 4 题；20 题时各 5 题。
-3. 每个维度内必须同时包含 reverse=false 与 reverse=true。
-4. reverse=false 代表认同该题时更靠近高端：Collaborative / Exploratory / Trusting / Local。
-5. reverse=true 代表认同时更靠近低端：Instrumental / Framed / Auditing / Global。
+1. nextQuestions 长度只能是 16。
+2. Relation / Workflow / Epistemic / RepairScope 各 4 题。
+3. active 新流程不使用反向题；旧版兼容题也优先全部 reverse=false。
+4. reverse=false 代表认同该题时更靠近：Collaborative / Framed / Auditing / Global。
 6. 每题尽量绑定 targetContext；每个维度至少 2 题绑定用户目标或近期使用场景。
 7. scenario 是 8～24 字短场景短语，不要写完整段落；question 是第一人称倾向陈述，不重复 scenario。
 8. 不要编造用户明显没有经历过的场景；目标缺失时，围绕 recentUse 出题。`;
@@ -633,10 +638,10 @@ ${buildInitialInterviewRoundInstruction(userReplyCount)}
 
 <structured_output_rules>
 - analysis.background_summary 概括用户职业、常用工具、典型场景和当前目标。
-- targetContext 必须包含 role、recentUse、goal、goalStatus、goalType。
+- targetContext 必须包含 role、recentUse、goal，可包含 tools。
 - role 优先来自用户对职业或身份的回答；如果没说清楚，保留已有值或写“用户”。
 - recentUse 优先来自用户对 AI 使用方式的回答；如果还没回答，recentUse 先保留已有值或写“使用 AI 完成日常任务”。
-- 如果目标缺失，goalStatus 写 "missing"，goal 写 "更有效地使用 AI"。
+- 如果目标缺失，goal 写 "提高效率，并获得更多 idea/思路/选择/灵感"。
 - directive.action 只能用 probe_new 或 probe_deep；hint 给访谈官一句中文提示，最多 40 字。
 - nextQuestions 必须为空数组。
 - newEvidence 至少 1 条，quote 使用用户原话片段；即使只是背景信息，evidence_kind 也写 "quote"。
@@ -660,7 +665,7 @@ function buildInitialInterviewRoundInstruction(userReplyCount: number): string {
 - “更有效地使用 AI”只是兜底目标，不是具体 recentUse。`;
 }
 
-export function agentBOutputFromToolUses(toolUses: QwenToolUse[], roundCount: number): AgentBOutput | null {
+export function agentBOutputFromToolUses(toolUses: LlmToolUse[], roundCount: number): AgentBOutput | null {
   const expectedName = roundCount >= QUESTIONNAIRE_ENTRY_ROUND ? GENERATE_QUESTIONNAIRE_TOOL.name : UPDATE_SESSION_STATE_TOOL.name;
   const toolUse = toolUses.find((item) => item.name === expectedName);
   const input = parseToolInputRecord(toolUse?.input);
@@ -700,7 +705,7 @@ export function agentBOutputFromToolUses(toolUses: QwenToolUse[], roundCount: nu
 }
 
 export function questionnaireBatchOutputFromToolUses(
-  toolUses: QwenToolUse[],
+  toolUses: LlmToolUse[],
   textBlocks: string[] = []
 ): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === GENERATE_QUESTIONNAIRE_BATCH_TOOL.name);
@@ -790,7 +795,7 @@ function qwenToolInputRepairCandidates(text: string): string[] {
   return candidates;
 }
 
-export function midDialogueOutputFromToolUses(toolUses: QwenToolUse[], turn: number): AgentBOutput | null {
+export function midDialogueOutputFromToolUses(toolUses: LlmToolUse[], turn: number): AgentBOutput | null {
   const toolUse = toolUses.find((item) => item.name === UPDATE_MID_DIALOGUE_TOOL.name);
   const input = parseToolInputRecord(toolUse?.input);
   if (!input) return null;
@@ -833,10 +838,9 @@ export function normalizeMidDialogueOutput({
   const latestUser = userMessages[userMessages.length - 1]?.content.trim() ?? "";
   const targetContext = agentBOutput.targetContext ?? {
     role: sessionState.background.role,
+    tools: sessionState.background.tools,
     recentUse: sessionState.refinedTargetContext?.recentUse ?? sessionState.background.recentUse,
     goal: sessionState.refinedTargetContext?.goal ?? sessionState.background.goal,
-    goalStatus: sessionState.refinedTargetContext?.goalStatus ?? sessionState.background.goalStatus,
-    goalType: sessionState.refinedTargetContext?.goalType ?? sessionState.background.goalType,
   };
   const existingGuidance = agentBOutput.scenarioGuidance ?? sessionState.scenarioGuidance;
   const status =
@@ -994,25 +998,20 @@ function parseAnalysis(value: unknown): AgentBOutput["analysis"] {
 function parseTargetContext(value: unknown): TargetContext | undefined {
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
-  const goalStatus = record.goalStatus;
-  const goalType = record.goalType;
   if (
     typeof record.role !== "string" ||
     isPlaceholder(record.role) ||
     typeof record.recentUse !== "string" ||
     isPlaceholder(record.recentUse) ||
-    typeof record.goal !== "string" ||
-    (goalStatus !== "specific" && goalStatus !== "generic" && goalStatus !== "missing") ||
-    !GOAL_TYPES.includes(goalType as GoalType)
+    typeof record.goal !== "string"
   ) {
     return undefined;
   }
   return {
     role: record.role,
+    tools: Array.isArray(record.tools) ? record.tools.filter((item): item is string => typeof item === "string") : [],
     recentUse: record.recentUse,
     goal: record.goal,
-    goalStatus,
-    goalType: goalType as GoalType,
   };
 }
 
@@ -1100,16 +1099,20 @@ function parseQuestions(value: unknown): QuestionnaireQuestion[] {
     if (
       !DIMENSIONS.includes(record.dimension as Dimension) ||
       typeof record.scenario !== "string" ||
-      typeof record.question !== "string" ||
-      typeof record.reverse !== "boolean"
+      typeof record.question !== "string"
     ) {
       return [];
     }
+    const questionType =
+      record.questionType === "universal" || record.questionType === "semi_specific" || record.questionType === "specific"
+        ? record.questionType
+        : undefined;
     return [{
       dimension: record.dimension as Dimension,
       scenario: record.scenario,
       question: record.question,
-      reverse: record.reverse,
+      questionType,
+      reverse: typeof record.reverse === "boolean" ? record.reverse : false,
     }];
   });
 }

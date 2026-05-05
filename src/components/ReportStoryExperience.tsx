@@ -54,26 +54,26 @@ const DIMENSION_META: Record<Dimension, DimensionMeta> = {
     highColor: "#f97316",
   },
   Workflow: {
-    lowLabel: "框架型",
-    highLabel: "探索型",
-    lowLetter: "F",
-    highLetter: "E",
+    lowLabel: "探索型",
+    highLabel: "框架型",
+    lowLetter: "E",
+    highLetter: "F",
     lowColor: "#4f46e5",
     highColor: "#14b8a6",
   },
   Epistemic: {
-    lowLabel: "审计型",
-    highLabel: "信任型",
-    lowLetter: "A",
-    highLetter: "T",
+    lowLabel: "信任型",
+    highLabel: "审计型",
+    lowLetter: "T",
+    highLetter: "A",
     lowColor: "#64748b",
     highColor: "#fbbf24",
   },
   RepairScope: {
-    lowLabel: "全局型",
-    highLabel: "局部型",
-    lowLetter: "G",
-    highLetter: "L",
+    lowLabel: "局部型",
+    highLabel: "全局型",
+    lowLetter: "L",
+    highLetter: "G",
     lowColor: "#8b5cf6",
     highColor: "#10b981",
   },
@@ -83,15 +83,19 @@ function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function displayScore(dimension: DimensionReport) {
+  return clampScore(dimension.scorePercent ?? dimension.score);
+}
+
 function strongestDimension(dimensions: DimensionReport[]) {
   return dimensions.reduce((prev, cur) =>
-    Math.abs(cur.score - 50) > Math.abs(prev.score - 50) ? cur : prev
+    Math.abs(displayScore(cur) - 50) > Math.abs(displayScore(prev) - 50) ? cur : prev
   );
 }
 
 function tendencyTag(dimension: DimensionReport) {
   const meta = DIMENSION_META[dimension.dimension];
-  const highSide = dimension.score >= 50;
+  const highSide = displayScore(dimension) >= 50;
   return {
     label: highSide ? meta.highLabel : meta.lowLabel,
     color: highSide ? meta.highColor : meta.lowColor,
@@ -100,7 +104,7 @@ function tendencyTag(dimension: DimensionReport) {
 
 function visibleTags(report: ReportPageModel) {
   const dimensionTags = report.dimensions
-    .filter((dimension) => dimension.score >= 60 || dimension.score <= 40)
+    .filter((dimension) => displayScore(dimension) >= 60 || displayScore(dimension) <= 40)
     .map(tendencyTag);
 
   if (dimensionTags.length) return dimensionTags;
@@ -118,7 +122,7 @@ function getPromptTemplate(report: ReportPageModel): PromptTemplate {
 
 function getSpectrumAccent(dimension: DimensionReport) {
   const meta = DIMENSION_META[dimension.dimension];
-  return dimension.score >= 50 ? meta.highColor : meta.lowColor;
+  return displayScore(dimension) >= 50 ? meta.highColor : meta.lowColor;
 }
 
 function SpectrumBar({
@@ -133,7 +137,7 @@ function SpectrumBar({
   index?: number;
 }) {
   const meta = DIMENSION_META[dimension.dimension];
-  const score = clampScore(dimension.score);
+  const score = displayScore(dimension);
   const accent = getSpectrumAccent(dimension);
   const isExtreme = Math.abs(score - 50) >= 25;
   const tendency = score >= 50 ? meta.highLabel : meta.lowLabel;
@@ -680,13 +684,13 @@ function PosterPreview({
         </div>
 
         {/* 底部分隔 */}
-        <div className="mt-9 flex items-center gap-3">
+        <div className="mt-5 flex items-center gap-3 sm:mt-9">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-white/[0.08]" />
           <div className="h-1 w-1 rotate-45 bg-amber-200/40" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/15 to-white/[0.08]" />
         </div>
 
-        <div className="mt-6 rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3.5">
+        <div className="mt-3 rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3.5 sm:mt-6">
           <p className="text-[10px] uppercase tracking-[0.28em] text-amber-100/55">Golden Line</p>
           <p className="mt-2 font-serif-cn text-[14px] leading-relaxed text-amber-50/90">
             「{goldenLine}」

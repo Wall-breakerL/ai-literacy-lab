@@ -4,15 +4,17 @@ import type { Dimension, DimensionReport, QuestionnaireAnswer, SessionState } fr
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 
 const SCALE_LABELS: Record<number, string> = {
-  1: "肯定不会",
-  2: "一般不会",
-  3: "偶尔会",
-  4: "经常会",
-  5: "通常会",
-  6: "肯定会",
+  0: "肯定不会",
+  1: "一般不会",
+  2: "偶尔会",
+  3: "经常会",
+  4: "通常会",
+  5: "肯定会",
 };
-const LIKERT_MIN = 1;
-const LIKERT_MAX = 6;
+const LIKERT_MIN = 0;
+const LIKERT_MAX = 5;
+const DIMENSION_SCORE_MAX = 20;
+const SKIPPED_SCORE = 2.5;
 
 const DIMENSION_META: Record<
   Dimension,
@@ -33,48 +35,49 @@ const DIMENSION_META: Record<
   },
   Workflow: {
     label: "工作流程",
-    lowTendency: "Framed",
-    lowLabel: "框架型",
-    highTendency: "Exploratory",
-    highLabel: "探索型",
+    lowTendency: "Exploratory",
+    lowLabel: "探索型",
+    highTendency: "Framed",
+    highLabel: "框架型",
   },
   Epistemic: {
     label: "认知态度",
-    lowTendency: "Auditing",
-    lowLabel: "审计型",
-    highTendency: "Trusting",
-    highLabel: "信任型",
+    lowTendency: "Trusting",
+    lowLabel: "信任型",
+    highTendency: "Auditing",
+    highLabel: "审计型",
   },
   RepairScope: {
     label: "修复范围",
-    lowTendency: "Global",
-    lowLabel: "全局重评型",
-    highTendency: "Local",
-    highLabel: "局部调整型",
+    lowTendency: "Local",
+    lowLabel: "局部调整型",
+    highTendency: "Global",
+    highLabel: "全局重评型",
   },
 };
 
 function clampRawScore(score: number): number {
-  if (!Number.isFinite(score)) return 3;
+  if (!Number.isFinite(score)) return SKIPPED_SCORE;
   return Math.min(LIKERT_MAX, Math.max(LIKERT_MIN, Math.round(score)));
 }
 
-function toLikertPercent(rawScore: number): number {
-  const span = LIKERT_MAX - LIKERT_MIN;
-  if (span <= 0) return 50;
-  return ((rawScore - LIKERT_MIN) / span) * 100;
+function toScorePercent(score: number, scoreMax = DIMENSION_SCORE_MAX): number {
+  if (scoreMax <= 0) return 50;
+  return Math.round((score / scoreMax) * 100);
 }
 
-export function scoreAnswer(answer: QuestionnaireAnswer): number | null {
-  if (answer.skipped || answer.score == null) return null;
+export function scoreAnswer(answer: QuestionnaireAnswer): number {
+  if (answer.skipped || answer.score == null) return SKIPPED_SCORE;
   const raw = clampRawScore(answer.score);
-  const normalized = toLikertPercent(raw);
-  return answer.reverse ? 100 - normalized : normalized;
+  return answer.reverse ? LIKERT_MAX - raw : raw;
 }
 
-function getConfidence(answeredCount: number) {
-  if (answeredCount >= 4) return "high";
-  if (answeredCount >= 2) return "medium";
+function getConfidence(score: number, answeredCount: number) {
+  if (answeredCount === 0) return "low";
+  const distance = Math.abs(score - DIMENSION_SCORE_MAX / 2);
+  const ratio = distance / (DIMENSION_SCORE_MAX / 2);
+  if (ratio >= 0.6 && answeredCount >= 4) return "high";
+  if (ratio >= 0.3 && answeredCount >= 2) return "medium";
   return "low";
 }
 
@@ -96,14 +99,13 @@ export function scoreQuestionnaireAnswers(answers: QuestionnaireAnswer[]): Dimen
     const dimensionAnswers = answers.filter((answer) => answer.dimension === dimension);
     const answered = dimensionAnswers.filter((answer) => !answer.skipped && answer.score != null);
     const skippedCount = dimensionAnswers.length - answered.length;
-    const scored = answered
-      .map(scoreAnswer)
-      .filter((score): score is number => typeof score === "number");
+    const scored = dimensionAnswers.map(scoreAnswer);
     const score =
       scored.length > 0
-        ? Math.round(scored.reduce((sum, value) => sum + value, 0) / scored.length)
-        : 50;
-    const high = score >= 50;
+        ? roundHalf(scored.reduce((sum, value) => sum + value, 0))
+        : DIMENSION_SCORE_MAX / 2;
+    const scorePercent = toScorePercent(score);
+    const high = score >= DIMENSION_SCORE_MAX / 2;
 
     return {
       dimension,
@@ -111,6 +113,8 @@ export function scoreQuestionnaireAnswers(answers: QuestionnaireAnswer[]): Dimen
       tendency: high ? meta.highTendency : meta.lowTendency,
       tendencyLabel: high ? meta.highLabel : meta.lowLabel,
       score,
+      scoreMax: DIMENSION_SCORE_MAX,
+      scorePercent,
       evidence: answered.slice(0, 2).map((answer) => {
         const scoreLabel = answer.score != null ? (SCALE_LABELS[answer.score] ?? `${answer.score} 分`) : null;
         return scoreLabel ? `${answer.question}（选：${scoreLabel}）` : answer.question;
@@ -119,7 +123,7 @@ export function scoreQuestionnaireAnswers(answers: QuestionnaireAnswer[]): Dimen
       advice: "",
       answeredCount: answered.length,
       skippedCount,
-      confidence: getConfidence(answered.length),
+      confidence: getConfidence(score, answered.length),
     };
   });
 }
@@ -148,5 +152,10 @@ function buildDimensionAnalysisFallback(base: DimensionReport): string {
     ? base.evidence.slice(0, 2).map((item) => `「${item}」`).join("、")
     : "当前有效回答";
   const skippedText = skippedCount > 0 ? `，另有 ${skippedCount} 题跳过或不适用` : "";
-  return `从当前数据看，${base.label} 有 ${answeredCount} 题有效${skippedText}，分数为 ${base.score}，更接近「${base.tendencyLabel}」。主要依据是 ${evidenceText}。这个判断更适合作为当前使用场景下的协作倾向，而不是固定不变的人格标签。`;
+  const max = base.scoreMax ?? DIMENSION_SCORE_MAX;
+  return `从当前数据看，${base.label} 有 ${answeredCount} 题有效${skippedText}，分数为 ${base.score}/${max}，更接近「${base.tendencyLabel}」。主要依据是 ${evidenceText}。这个判断更适合作为当前使用场景下的协作倾向，而不是固定不变的人格标签。`;
+}
+
+function roundHalf(value: number): number {
+  return Math.round(value * 2) / 2;
 }

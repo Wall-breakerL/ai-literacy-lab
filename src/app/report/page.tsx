@@ -23,7 +23,7 @@ import {
   hasAwkwardReportContextText,
 } from "@/lib/reportDisplayContext";
 import { scoreAnswer } from "@/lib/reportScoring";
-import { isSessionState } from "@/lib/sessionState";
+import { flattenBatchAnswers, isSessionState } from "@/lib/sessionState";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import {
   isRetryableApiFailure,
@@ -63,12 +63,12 @@ type ReportPageModel = FinalReport & {
 type DimensionItem = FinalReport["dimensions"][number];
 
 const SCALE_LABELS: Record<number, string> = {
-  1: "肯定不会",
-  2: "一般不会",
-  3: "偶尔会",
-  4: "经常会",
-  5: "通常会",
-  6: "肯定会",
+  0: "肯定不会",
+  1: "一般不会",
+  2: "偶尔会",
+  3: "经常会",
+  4: "通常会",
+  5: "肯定会",
 };
 
 const BATCH_LABELS = {
@@ -135,8 +135,8 @@ function limitFeedbackText(text: string) {
 
 function rawScorePercent(score: number | null): number | null {
   if (score == null || !Number.isFinite(score)) return null;
-  const raw = Math.min(6, Math.max(1, Math.round(score)));
-  return ((raw - 1) / 5) * 100;
+  const raw = Math.min(5, Math.max(0, Math.round(score)));
+  return (raw / 5) * 100;
 }
 
 function formatScore(value: number | null) {
@@ -145,10 +145,9 @@ function formatScore(value: number | null) {
 }
 
 function dimensionAverageFormula(dimension: DimensionScoreDetail) {
-  if (!dimension.contributions.length) return "无有效题，使用默认分 50";
+  if (!dimension.contributions.length) return "无题目，使用默认中点 10/20";
   const sum = dimension.contributions.reduce((total, score) => total + score, 0);
-  const average = sum / dimension.contributions.length;
-  return `round((${dimension.contributions.map((score) => formatScore(score)).join(" + ")}) / ${dimension.contributions.length}) = round(${formatScore(average)}) = ${dimension.score}`;
+  return `${dimension.contributions.map((score) => formatScore(score)).join(" + ")} = ${formatScore(sum)} / 20`;
 }
 
 function resolveAnswerBatchEntries(
@@ -259,16 +258,16 @@ function buildStyleOverview(report: ReportPageModel, strongest: DimensionItem) {
 }
 
 function dimensionPreference(dimension: DimensionItem) {
-  const high = dimension.score >= 50;
+  const high = (dimension.scorePercent ?? dimension.score) >= 50;
   switch (dimension.dimension) {
     case "Relation":
       return high ? "把 AI 当作协作伙伴，欢迎它主动补充思路" : "把 AI 当作执行工具，先按我的目标完成任务";
     case "Workflow":
-      return high ? "边探索边调整方向" : "先定框架、步骤和交付标准";
+      return high ? "先定框架、步骤和交付标准" : "边探索边调整方向";
     case "Epistemic":
-      return high ? "较快试用 AI 的建议，再用结果校准" : "审计输出，重要判断请标注依据";
+      return high ? "审计输出，重要判断请标注依据" : "较快试用 AI 的建议，再用结果校准";
     case "RepairScope":
-      return high ? "优先做局部修改，并说明改动理由" : "必要时重组整体方案，但先说明取舍";
+      return high ? "必要时重组整体方案，但先说明取舍" : "优先做局部修改，并说明改动理由";
   }
 }
 
@@ -496,26 +495,20 @@ export default function ReportPage() {
       const targetContextStr = sessionStorage.getItem("ai_mbti_target_context");
       const sessionStateStr = sessionStorage.getItem("ai_mbti_session_state");
 
-      if (!historyStr) {
-        router.push("/");
-        return;
-      }
-
       setLoading(true);
       setError("");
       setWaitHint(null);
 
-      let messages: Message[];
+      let messages: Message[] = [];
       let questionnaireAnswers: QuestionnaireAnswer[] = [];
       let sessionState: SessionState | undefined;
-      try {
-        messages = JSON.parse(historyStr) as Message[];
-      } catch {
-        if (!cancelled) {
-          setError("访谈记录无效，请重新完成访谈。");
-          setLoading(false);
+      if (sessionStateStr) {
+        try {
+          const parsed = JSON.parse(sessionStateStr);
+          sessionState = isSessionState(parsed) ? parsed : undefined;
+        } catch {
+          sessionState = undefined;
         }
-        return;
       }
 
       if (answersStr) {
@@ -525,17 +518,34 @@ export default function ReportPage() {
           // Ignore invalid answers
         }
       }
-      if (sessionStateStr) {
+      if (questionnaireAnswers.length === 0 && sessionState?.answers?.length) {
+        questionnaireAnswers = sessionState.answers;
+      }
+      if (questionnaireAnswers.length === 0 && sessionState?.batchAnswers) {
+        questionnaireAnswers = flattenBatchAnswers(sessionState.batchAnswers);
+      }
+
+      const hasNewFlowData = Boolean(sessionState && questionnaireAnswers.length > 0);
+      const hasOldFlowData = Boolean(historyStr);
+      if (!hasNewFlowData && !hasOldFlowData) {
+        router.push("/");
+        return;
+      }
+
+      if (historyStr) {
         try {
-          const parsed = JSON.parse(sessionStateStr);
-          sessionState = isSessionState(parsed) ? parsed : undefined;
-          if (questionnaireAnswers.length === 0 && sessionState?.answers) {
-            questionnaireAnswers = sessionState.answers;
-          }
+          messages = JSON.parse(historyStr) as Message[];
         } catch {
-          sessionState = undefined;
+          if (!hasNewFlowData) {
+            if (!cancelled) {
+              setError("访谈记录无效，请重新完成访谈。");
+              setLoading(false);
+            }
+            return;
+          }
         }
       }
+
       let targetContext: TargetContext | undefined = undefined;
       if (targetContextStr) {
         try {
@@ -547,10 +557,9 @@ export default function ReportPage() {
       targetContext ??= sessionState
         ? {
             role: sessionState.background.role,
+            tools: sessionState.background.tools,
             recentUse: sessionState.background.recentUse,
             goal: sessionState.background.goal,
-            goalStatus: sessionState.background.goalStatus,
-            goalType: sessionState.background.goalType,
           }
         : undefined;
 

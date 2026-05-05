@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Qwen tool-call validation script.
+ * OpenAI-compatible LLM tool-call validation script.
  *
  * Usage: node scripts/check-llm-tools.mjs
- * Requires: .env.local with OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY.
+ * Requires: .env.local with LLM_BASE_URL / LLM_API_KEY or OPENAI_COMPATIBLE_*.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -116,12 +116,26 @@ function mergeOpenAiCompatibleChatBody(openAiBaseUrl, base) {
 
 loadEnvFile(".env.local");
 
-const baseUrl = (process.env.OPENAI_COMPATIBLE_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-const apiKey = (process.env.OPENAI_COMPATIBLE_API_KEY || "").trim();
-const model = process.env.QWEN_MODEL?.trim() || "qwen3.6-plus";
+const baseUrl = (
+  process.env.LLM_BASE_URL ||
+  process.env.DEEPSEEK_BASE_URL ||
+  process.env.OPENAI_COMPATIBLE_BASE_URL ||
+  "https://api.openai.com/v1"
+).replace(/\/$/, "");
+const apiKey = (
+  process.env.LLM_API_KEY ||
+  process.env.DEEPSEEK_API_KEY ||
+  process.env.OPENAI_COMPATIBLE_API_KEY ||
+  ""
+).trim();
+const model =
+  process.env.LLM_RESEARCHER_MODEL?.trim() ||
+  process.env.DEEPSEEK_MODEL?.trim() ||
+  process.env.QWEN_MODEL?.trim() ||
+  "qwen3.6-plus";
 const forcedTemperature = parseOptionalNumber(process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE);
 
-console.log("Qwen tool-call check");
+console.log("OpenAI-compatible LLM tool-call check");
 console.log({
   envFile: existsSync(".env.local") ? ".env.local" : "missing",
   baseUrl,
@@ -132,7 +146,7 @@ console.log({
 });
 
 if (!apiKey) {
-  console.error("Missing OPENAI_COMPATIBLE_API_KEY.");
+  console.error("Missing LLM_API_KEY / DEEPSEEK_API_KEY / OPENAI_COMPATIBLE_API_KEY.");
   process.exit(1);
 }
 
@@ -207,4 +221,4 @@ if (!validateToolInput(matchingToolUse.input)) {
   process.exit(1);
 }
 
-console.log("Qwen tool-call check passed.");
+console.log("OpenAI-compatible LLM tool-call check passed.");

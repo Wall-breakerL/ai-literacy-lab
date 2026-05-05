@@ -41,8 +41,6 @@ export function createInitialSessionState(sessionId: string): SessionState {
       tools: [],
       recentUse: DEFAULT_TARGET_CONTEXT.recentUse,
       goal: DEFAULT_TARGET_CONTEXT.goal,
-      goalStatus: DEFAULT_TARGET_CONTEXT.goalStatus,
-      goalType: DEFAULT_TARGET_CONTEXT.goalType,
       summary: "",
     },
     evidence: [],
@@ -108,10 +106,9 @@ export function buildSessionStatePatchFromAgentBOutput(
     background: target
       ? {
           role: target.role,
+          tools: target.tools,
           recentUse: target.recentUse,
           goal: target.goal,
-          goalStatus: target.goalStatus,
-          goalType: target.goalType,
           summary: agentBOutput.analysis.background_summary,
         }
       : {
@@ -142,9 +139,9 @@ export function summarizeSessionStateForPrompt(state: SessionState): string {
 身份：${state.background.role}
 工具：${tools.join("、") || "未明确"}
 近期使用：${state.background.recentUse}
-目标：${state.background.goal}（${state.background.goalStatus}/${state.background.goalType}）
+目标：${state.background.goal}
 摘要：${state.background.summary || "（暂无）"}
-当前有效目标上下文：${target.role} / ${target.recentUse} / ${target.goal}（${target.goalStatus}/${target.goalType}）
+当前有效目标上下文：${target.role} / ${target.recentUse} / ${target.goal}
 问卷批次：${formatBatchSummary(state)}
 场景调整：${guidance}
 证据：
@@ -155,10 +152,9 @@ ${evidenceText}
 export function getEffectiveTargetContext(state: SessionState): TargetContext {
   return state.refinedTargetContext ?? {
     role: state.background.role,
+    tools: state.background.tools,
     recentUse: state.background.recentUse,
     goal: state.background.goal,
-    goalStatus: state.background.goalStatus,
-    goalType: state.background.goalType,
   };
 }
 
