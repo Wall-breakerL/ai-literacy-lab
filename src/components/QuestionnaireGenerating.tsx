@@ -2,9 +2,12 @@
 
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  QUESTIONNAIRE_READY_MIN_PROGRESS,
+  getQuestionnaireLoadingProgress,
+} from "@/lib/loadingProgress";
 
 interface QuestionnaireGeneratingProps {
-  estimatedDuration?: number;
   isReady?: boolean;
   onComplete?: () => void;
 }
@@ -62,11 +65,9 @@ function TypewriterText({ stages }: { stages: typeof STAGES }) {
 }
 
 function FakeProgressBar({
-  duration,
   isCompleting,
   onAnimationComplete,
 }: {
-  duration: number;
   isCompleting: boolean;
   onAnimationComplete?: () => void;
 }) {
@@ -88,17 +89,17 @@ function FakeProgressBar({
   useEffect(() => {
     if (isCompleting) {
       const startProgress = progressRef.current;
-      const remaining = 100 - startProgress;
       const startTime = Date.now();
-      const completionDuration = 1000;
+      const bridgeTarget = Math.max(startProgress, QUESTIONNAIRE_READY_MIN_PROGRESS);
+      const bridgeDuration = startProgress < QUESTIONNAIRE_READY_MIN_PROGRESS ? 700 : 0;
+      const completionDuration = 1400;
       completedRef.current = false;
 
       const interval = setInterval(() => {
         const elapsed = Date.now() - startTime;
-        const newProgress = Math.min(
-          startProgress + (remaining * elapsed) / completionDuration,
-          100
-        );
+        const newProgress = elapsed < bridgeDuration
+          ? startProgress + ((bridgeTarget - startProgress) * elapsed) / Math.max(bridgeDuration, 1)
+          : bridgeTarget + ((100 - bridgeTarget) * (elapsed - bridgeDuration)) / completionDuration;
         setProgressValue(newProgress);
 
         if (newProgress >= 100 && !completedRef.current) {
@@ -115,13 +116,13 @@ function FakeProgressBar({
       const startTime = Date.now();
       const interval = setInterval(() => {
         const elapsed = Date.now() - startTime;
-        const rawProgress = Math.min((elapsed / duration) * 90, 90);
+        const rawProgress = getQuestionnaireLoadingProgress(elapsed);
         setProgressValue(Math.max(progressRef.current, rawProgress));
       }, 100);
 
       return () => clearInterval(interval);
     }
-  }, [duration, isCompleting, setProgressValue]);
+  }, [isCompleting, setProgressValue]);
 
   return (
     <div className="w-full max-w-md">
@@ -314,7 +315,6 @@ function EnergyCore() {
 }
 
 export function QuestionnaireGenerating({
-  estimatedDuration = 60000,
   isReady = false,
   onComplete,
 }: QuestionnaireGeneratingProps) {
@@ -380,11 +380,7 @@ export function QuestionnaireGenerating({
 
       <div className="relative z-10 flex flex-col items-center gap-6 w-full max-w-md">
         <TypewriterText stages={STAGES} />
-        <FakeProgressBar
-          duration={estimatedDuration}
-          isCompleting={isCompleting}
-          onAnimationComplete={handleAnimationComplete}
-        />
+        <FakeProgressBar isCompleting={isCompleting} onAnimationComplete={handleAnimationComplete} />
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

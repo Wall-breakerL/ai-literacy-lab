@@ -9,16 +9,6 @@ export type DirectiveAction =
   | "start_questionnaire"
   | "finish_mid_dialog"
   | "exit_requested";
-export type GoalStatus = "specific" | "generic" | "missing";
-export type GoalType =
-  | "product_building"
-  | "research_writing"
-  | "learning"
-  | "coding_system"
-  | "business_decision"
-  | "daily_efficiency"
-  | "creative_work"
-  | "other";
 export type DimensionConfidence = "high" | "medium" | "low";
 /** Active AI-MBTI 两段式问卷仅两批 */
 export type QuestionnaireBatchKey = "batch1" | "batch2";
@@ -97,8 +87,6 @@ export interface SessionState {
     tools: string[];
     recentUse: string;
     goal: string;
-    goalStatus: GoalStatus;
-    goalType: GoalType;
     summary?: string;
   };
   evidence: SessionEvidence[];
@@ -131,7 +119,10 @@ export interface DimensionReport {
   label: string;
   tendency: string;
   tendencyLabel: string;
+  /** 原始维度分，新流程每维 4 题 × 5 分，默认满分 20。 */
   score: number;
+  scoreMax?: number;
+  scorePercent?: number;
   evidence: string[];
   analysis: string;
   advice: string;
@@ -142,10 +133,9 @@ export interface DimensionReport {
 
 export interface TargetContext {
   role: string;
+  tools?: string[];
   recentUse: string;
   goal: string;
-  goalStatus: GoalStatus;
-  goalType: GoalType;
 }
 
 export interface ScenarioGuidance {
@@ -218,8 +208,10 @@ export interface FinalReport {
 export interface QuestionnaireQuestion {
   dimension: Dimension;
   question: string;
-  /** 场景题：具体情境描述；习惯题：模型约定填字面量「习惯」，UI 会按习惯题展示 */
+  /** 通用题写「通用」；半具体/具体题写任务或场景标签。 */
   scenario: string;
+  questionType?: "universal" | "semi_specific" | "specific";
+  /** 旧版兼容字段；新 active 流程固定 false。 */
   reverse?: boolean;
 }
 

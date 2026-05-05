@@ -188,23 +188,23 @@ function countPreferenceSignals(text: string): number {
 
 function preferenceText(dimension: DimensionReport | undefined): string {
   if (!dimension) return "我习惯先把目标说清楚，再让 AI 给出可执行的版本";
-  const high = dimension.score >= 50;
+  const high = (dimension.scorePercent ?? dimension.score) >= 50;
   const preferences: Record<Dimension, { high: string; low: string }> = {
     Relation: {
       high: "我习惯把 AI 当作协作伙伴，先和它一起拆问题",
       low: "我习惯把 AI 当作执行工具，先给清晰指令和边界",
     },
     Workflow: {
-      high: "我偏好先探索可能方案，再逐步收束到可执行路径",
-      low: "我偏好先定框架和规则，再让 AI 按结构执行",
+      high: "我偏好先定框架和规则，再让 AI 按结构执行",
+      low: "我偏好先探索可能方案，再逐步收束到可执行路径",
     },
     Epistemic: {
-      high: "我倾向于先让 AI 给出判断，再结合语境取用",
-      low: "我倾向于审计和核对输出，不确定处请主动标注",
+      high: "我倾向于审计和核对输出，不确定处请主动标注",
+      low: "我倾向于先让 AI 给出判断，再结合语境取用",
     },
     RepairScope: {
-      high: "我偏好局部修改和小步迭代，避免无谓重写",
-      low: "我偏好在方向偏离时整体重组，重新描述需求",
+      high: "我偏好在方向偏离时整体重组，重新描述需求",
+      low: "我偏好局部修改和小步迭代，避免无谓重写",
     },
   };
   return high ? preferences[dimension.dimension].high : preferences[dimension.dimension].low;
@@ -213,7 +213,7 @@ function preferenceText(dimension: DimensionReport | undefined): string {
 function sortBySignal(dimensions: DimensionReport[]): DimensionReport[] {
   return dimensions
     .slice()
-    .sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50));
+    .sort((a, b) => Math.abs((b.scorePercent ?? b.score) - 50) - Math.abs((a.scorePercent ?? a.score) - 50));
 }
 
 function charLength(value: string): number {

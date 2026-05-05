@@ -21,7 +21,7 @@ const FEATURE_CARDS = [
   },
   {
     icon: FileText,
-    title: "24 题定制问卷",
+    title: "16 题定制问卷",
     description: "基于你的场景动态生成个性化问题",
     color: "#55b3ff",
   },
@@ -215,14 +215,15 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={() => router.push("/interview")}
-            className="group relative w-full max-w-[280px] overflow-hidden rounded-2xl bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green px-8 py-4 text-lg font-semibold text-white shadow-glow-rainbow transition-all hover:shadow-glow-pulse sm:w-auto"
+            onClick={() => router.push("/intake")}
+            aria-label="开始 AI-MBTI 测评"
+            className="group relative w-full max-w-[220px] overflow-hidden rounded-xl bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green px-6 py-3.5 text-base font-semibold text-white shadow-glow-rainbow transition-all hover:shadow-glow-pulse"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-raycast-red via-raycast-blue to-raycast-green opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
-            <div className="relative flex items-center justify-center gap-3">
-              <Sparkles className="w-6 h-6 animate-pulse" />
-              开始 AI-MBTI 测评
-              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+            <div className="relative flex items-center justify-center gap-2.5 whitespace-nowrap">
+              <Sparkles className="h-5 w-5 animate-pulse" />
+              开始测评
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </div>
           </button>
 
@@ -242,7 +243,7 @@ export default function LandingPage() {
         transition={{ duration: 1, delay: 2 }}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-600 text-xs"
       >
-        Powered by qwen3.6-plus
+        Powered by an OpenAI-compatible LLM
       </motion.div>
     </main>
   );

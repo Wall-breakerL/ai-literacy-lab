@@ -16,14 +16,14 @@ const DIMENSION_META: Record<
   { lowLabel: string; highLabel: string; lowLetter: string; highLetter: string; lowColor: string; highColor: string }
 > = {
   Relation: { lowLabel: "工具型", highLabel: "伙伴型", lowLetter: "I", highLetter: "C", lowColor: "#2563eb", highColor: "#f97316" },
-  Workflow: { lowLabel: "框架型", highLabel: "探索型", lowLetter: "F", highLetter: "E", lowColor: "#4f46e5", highColor: "#14b8a6" },
-  Epistemic: { lowLabel: "审计型", highLabel: "信任型", lowLetter: "A", highLetter: "T", lowColor: "#64748b", highColor: "#fbbf24" },
-  RepairScope: { lowLabel: "全局型", highLabel: "局部型", lowLetter: "G", highLetter: "L", lowColor: "#8b5cf6", highColor: "#10b981" },
+  Workflow: { lowLabel: "探索型", highLabel: "框架型", lowLetter: "E", highLetter: "F", lowColor: "#14b8a6", highColor: "#4f46e5" },
+  Epistemic: { lowLabel: "信任型", highLabel: "审计型", lowLetter: "T", highLetter: "A", lowColor: "#fbbf24", highColor: "#64748b" },
+  RepairScope: { lowLabel: "局部型", highLabel: "全局型", lowLetter: "L", highLetter: "G", lowColor: "#10b981", highColor: "#8b5cf6" },
 };
 
 function DimensionSpectrumBar({ report, index }: { report: DimensionReport; index: number }) {
   const meta = DIMENSION_META[report.dimension];
-  const score = Math.max(0, Math.min(100, Math.round(report.score)));
+  const score = Math.max(0, Math.min(100, Math.round(report.scorePercent ?? report.score)));
   const accent = score >= 50 ? meta.highColor : meta.lowColor;
   const isExtreme = Math.abs(score - 50) >= 25;
   const lowScore = 100 - score;

@@ -52,7 +52,7 @@ export function normalizeReportTaskLabel(value: string | undefined, fallback = "
 
 export function getDisplayGoalLabel(targetContext: TargetContext): string | undefined {
   const goal = normalizeAiText(targetContext.goal);
-  if (!goal || targetContext.goalStatus === "missing" || PLACEHOLDER_GOALS.has(goal)) return undefined;
+  if (!goal || PLACEHOLDER_GOALS.has(goal)) return undefined;
   return goal;
 }
 

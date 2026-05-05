@@ -259,11 +259,12 @@ export function getPersonalityWorkflow(code: string): string {
 
 export function getPersonalityCode(dimensions: DimensionReport[]): string {
   const byDimension = new Map(dimensions.map((dimension) => [dimension.dimension, dimension]));
+  const pct = (dimension: DimensionReport | undefined) => dimension?.scorePercent ?? dimension?.score ?? 50;
   return [
-    (byDimension.get("Relation")?.score ?? 50) >= 50 ? "C" : "I",
-    (byDimension.get("Workflow")?.score ?? 50) >= 50 ? "E" : "F",
-    (byDimension.get("Epistemic")?.score ?? 50) >= 50 ? "T" : "A",
-    (byDimension.get("RepairScope")?.score ?? 50) >= 50 ? "L" : "G",
+    pct(byDimension.get("Relation")) >= 50 ? "C" : "I",
+    pct(byDimension.get("Workflow")) >= 50 ? "F" : "E",
+    pct(byDimension.get("Epistemic")) >= 50 ? "A" : "T",
+    pct(byDimension.get("RepairScope")) >= 50 ? "G" : "L",
   ].join("");
 }
 

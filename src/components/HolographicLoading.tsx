@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getLoadingPhaseIndex, getReportLoadingProgress } from "@/lib/loadingProgress";
 
 interface HolographicLoadingProps {
   onComplete?: () => void;
@@ -9,11 +10,11 @@ interface HolographicLoadingProps {
 }
 
 const PHASES = [
-  { key: "relation", label: "关系维度", color: "#ff6363", duration: 3000 },
-  { key: "workflow", label: "工作流维度", color: "#55b3ff", duration: 3000 },
-  { key: "epistemic", label: "认知维度", color: "#5fc992", duration: 3000 },
-  { key: "repair", label: "修复维度", color: "#ffbc33", duration: 3000 },
-  { key: "synthesis", label: "综合分析", color: "#a78bfa", duration: 2000 },
+  { key: "relation", label: "关系维度", color: "#ff6363" },
+  { key: "workflow", label: "工作流维度", color: "#55b3ff" },
+  { key: "epistemic", label: "认知维度", color: "#5fc992" },
+  { key: "repair", label: "修复维度", color: "#ffbc33" },
+  { key: "synthesis", label: "综合分析", color: "#a78bfa" },
 ];
 
 const MATRIX_CHARS = "AIMBTICFEALGT01";
@@ -298,6 +299,7 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const completionStartedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
+  const progressRef = useRef(0);
 
   const currentPhase = PHASES[phaseIndex];
 
@@ -310,12 +312,30 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  const setProgressValue = useCallback((value: number) => {
+    progressRef.current = value;
+    setProgress(value);
+  }, []);
+
   useEffect(() => {
     if (!reportReady || completionStartedRef.current) return;
     completionStartedRef.current = true;
     setIsCompleting(true);
-    setProgress(100);
     setPhaseIndex(PHASES.length - 1);
+    const startProgress = progressRef.current;
+    const startTime = Date.now();
+    let animationFrame: number;
+
+    const animateCompletion = () => {
+      const elapsed = Date.now() - startTime;
+      const nextProgress = Math.min(100, startProgress + ((100 - startProgress) * elapsed) / 1800);
+      setProgressValue(nextProgress);
+      if (nextProgress < 100) {
+        animationFrame = requestAnimationFrame(animateCompletion);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animateCompletion);
 
     const exitTimer = window.setTimeout(() => {
       setShouldExit(true);
@@ -325,10 +345,11 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
     }, 2300);
 
     return () => {
+      cancelAnimationFrame(animationFrame);
       window.clearTimeout(exitTimer);
       window.clearTimeout(completeTimer);
     };
-  }, [reportReady]);
+  }, [reportReady, setProgressValue]);
 
   useEffect(() => {
     if (isCompleting) return;
@@ -337,43 +358,9 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
 
     const updateProgress = () => {
       const elapsed = Date.now() - startTime;
-      const totalPhaseDuration = PHASES.reduce((sum, p) => sum + p.duration, 0);
-
-      // Calculate which phase we should be in
-      let accumulatedTime = 0;
-      let targetPhaseIndex = 0;
-      for (let i = 0; i < PHASES.length; i++) {
-        if (elapsed >= accumulatedTime && elapsed < accumulatedTime + PHASES[i].duration) {
-          targetPhaseIndex = i;
-          break;
-        }
-        accumulatedTime += PHASES[i].duration;
-        if (i === PHASES.length - 1) targetPhaseIndex = i;
-      }
-
-      // Update phase if changed
-      if (targetPhaseIndex < PHASES.length) {
-        setPhaseIndex(targetPhaseIndex);
-      }
-
-      // Pseudo progress calculation
-      let targetProgress: number;
-
-      if (elapsed < totalPhaseDuration * 0.7) {
-        // 0-70%: steady progress
-        targetProgress = (elapsed / (totalPhaseDuration * 0.7)) * 70;
-      } else if (elapsed < totalPhaseDuration) {
-        // 70-90%: slower progress
-        const phase2Elapsed = elapsed - totalPhaseDuration * 0.7;
-        const phase2Duration = totalPhaseDuration * 0.3;
-        targetProgress = 70 + (phase2Elapsed / phase2Duration) * 20;
-      } else {
-        // 90-95%: very slow, waiting for API
-        const overtime = elapsed - totalPhaseDuration;
-        targetProgress = 90 + Math.min(5, (overtime / 10000) * 5);
-      }
-
-      setProgress(Math.min(95, targetProgress));
+      const targetProgress = getReportLoadingProgress(elapsed);
+      setPhaseIndex(getLoadingPhaseIndex(targetProgress, PHASES.length));
+      setProgressValue(targetProgress);
       animationFrame = requestAnimationFrame(updateProgress);
     };
 
@@ -382,7 +369,7 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
     return () => {
       cancelAnimationFrame(animationFrame);
     };
-  }, [isCompleting]);
+  }, [isCompleting, setProgressValue]);
 
   return (
     <AnimatePresence mode="wait">
@@ -475,7 +462,9 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
             >
               {isCompleting
                 ? "正在生成你的专属 AI 协作画像..."
-                : "深度解析你的 AI 使用模式，请稍候..."}
+                : progress >= 92
+                  ? "报告文本还在收尾，通常会在 40–60 秒内完成。"
+                  : "深度解析你的 AI 使用模式，预计 40–60 秒。"}
             </motion.p>
 
             {/* Phase indicators */}

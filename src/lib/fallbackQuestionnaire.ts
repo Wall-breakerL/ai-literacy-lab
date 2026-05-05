@@ -7,7 +7,7 @@ import type {
 
 /**
  * Legacy single-questionnaire fallback：每维 4 题（含正反向），共 16 题。
- * 当前 AI-MBTI 主链路使用下方两部分 8+16 题 fallback。
+ * 当前 AI-MBTI 主链路使用下方两部分 8+8 题 fallback。
  */
 export const FALLBACK_QUESTIONNAIRE: QuestionnaireQuestion[] = [
   // Relation ×4
@@ -114,159 +114,119 @@ export const FALLBACK_QUESTIONNAIRE: QuestionnaireQuestion[] = [
 
 export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, QuestionnaireQuestion[]> = {
   hybrid_batch1: [
-    // Relation ×2 (all forward)
     {
       dimension: "Relation",
-      scenario: "习惯",
-      question: "我习惯把 AI 当成一起打磨思路的协作者，而不是只负责交付结果的工具。",
+      scenario: "通用",
+      question: "我倾向于把 AI 当成讨论伙伴，而不只是执行工具。",
+      questionType: "universal",
       reverse: false,
     },
     {
       dimension: "Relation",
-      scenario: "需要快速完成当前任务时",
-      question: "即使需要快速完成任务，我也希望 AI 能补充判断或提醒我可能忽略的取舍。",
-      reverse: false,
-    },
-    // Workflow ×2 (all forward)
-    {
-      dimension: "Workflow",
-      scenario: "习惯",
-      question: "我习惯先给 AI 一个大方向，再通过多轮尝试逐步靠近想要的结果。",
+      scenario: "做事",
+      question: "做事时，我期待 AI 主动提醒我可能忽略的问题。",
+      questionType: "semi_specific",
       reverse: false,
     },
     {
       dimension: "Workflow",
-      scenario: "当前任务需要稳定交付时",
-      question: "即使任务需要稳定交付，我也愿意先让 AI 试几个切入方向，再从中收敛。",
+      scenario: "通用",
+      question: "用 AI 时，我习惯先明确目标，再开始对话。",
+      questionType: "universal",
       reverse: false,
     },
-    // Epistemic ×2 (all forward)
+    {
+      dimension: "Workflow",
+      scenario: "完成任务",
+      question: "完成任务前，我会先定好步骤，再让 AI 帮我推进。",
+      questionType: "semi_specific",
+      reverse: false,
+    },
     {
       dimension: "Epistemic",
-      scenario: "习惯",
-      question: "我习惯在 AI 的答案看起来顺畅时直接采纳，不会逐条核验。",
+      scenario: "通用",
+      question: "AI 给出答案后，我通常会先验证再使用。",
+      questionType: "universal",
       reverse: false,
     },
     {
       dimension: "Epistemic",
-      scenario: "当前任务涉及重要判断时",
-      question: "如果 AI 对重要判断的说明足够清楚，我会先采纳它，再在推进中校正。",
-      reverse: false,
-    },
-    // RepairScope ×2 (all forward)
-    {
-      dimension: "RepairScope",
-      scenario: "习惯",
-      question: "我习惯在 AI 已有输出上局部修改，尽量保留其中可用的部分。",
+      scenario: "做判断",
+      question: "做判断时，我会让 AI 说明依据，再决定是否采用。",
+      questionType: "semi_specific",
       reverse: false,
     },
     {
       dimension: "RepairScope",
-      scenario: "当前任务越改越乱时",
-      question: "即使当前任务越改越乱，我也会先找还能保留的部分，再让 AI 局部修正。",
+      scenario: "通用",
+      question: "AI 出错时，我更愿意重新描述问题，而不是只改局部。",
+      questionType: "universal",
+      reverse: false,
+    },
+    {
+      dimension: "RepairScope",
+      scenario: "出错时",
+      question: "结果偏离预期时，我会换个角度重新向 AI 说明。",
+      questionType: "semi_specific",
       reverse: false,
     },
   ],
   hybrid_batch2: [
-    // Relation ×4 (2习惯 + 2场景)
     {
       dimension: "Relation",
-      scenario: "习惯",
-      question: "我习惯把 AI 当成执行指令的工具，尽量少和它讨论过程。",
-      reverse: true,
-    },
-    {
-      dimension: "Relation",
-      scenario: "习惯",
-      question: "我更希望 AI 严格执行我的安排，不要主动改变任务方向。",
-      reverse: true,
-    },
-    {
-      dimension: "Relation",
-      scenario: "调整后的 AI 协作场景中",
-      question: "我会自然地让 AI 参与判断和取舍，而不只是等待我下达具体命令。",
+      scenario: "协作任务",
+      question: "处理协作任务时，我会让 AI 一起比较不同方案的取舍。",
+      questionType: "semi_specific",
       reverse: false,
     },
     {
       dimension: "Relation",
-      scenario: "处理调整后的任务时",
-      question: "我会让 AI 一起比较不同方案的取舍，再决定下一步怎么推进。",
-      reverse: false,
-    },
-    // Workflow ×4 (2习惯 + 2场景)
-    {
-      dimension: "Workflow",
-      scenario: "习惯",
-      question: "我愿意让 AI 先探索多个版本，再从中挑选和收敛。",
+      scenario: "当前任务",
+      question: "做当前任务时，我希望 AI 主动指出我没考虑到的边界。",
+      questionType: "specific",
       reverse: false,
     },
     {
       dimension: "Workflow",
-      scenario: "习惯",
-      question: "我习惯先写清楚目标、边界和步骤，再让 AI 在框架里完成任务。",
-      reverse: true,
-    },
-    {
-      dimension: "Workflow",
-      scenario: "打磨调整后的任务方案时",
-      question: "我会先让 AI 尝试不同切入点，再判断哪个方向值得继续。",
+      scenario: "规划任务",
+      question: "规划任务时，我会先写清楚边界，再让 AI 展开内容。",
+      questionType: "semi_specific",
       reverse: false,
     },
     {
       dimension: "Workflow",
-      scenario: "需要把调整后的任务稳定交付时",
-      question: "我会先把流程和格式固定下来，再让 AI 按照这个框架工作。",
-      reverse: true,
-    },
-    // Epistemic ×4 (2习惯 + 2场景)
-    {
-      dimension: "Epistemic",
-      scenario: "习惯",
-      question: "我习惯检查 AI 的依据、推理和遗漏，再决定是否采用它的结论。",
-      reverse: true,
-    },
-    {
-      dimension: "Epistemic",
-      scenario: "习惯",
-      question: "如果 AI 给出的判断能推进任务，我会先相信它并继续往下做。",
+      scenario: "当前任务",
+      question: "推进当前任务前，我会先让 AI 复述目标和交付标准。",
+      questionType: "specific",
       reverse: false,
     },
     {
       dimension: "Epistemic",
-      scenario: "当前任务涉及重要判断时",
-      question: "我会要求 AI 说明依据，并自己复核关键结论是否可靠。",
-      reverse: true,
+      scenario: "重要判断",
+      question: "遇到重要判断时，我会要求 AI 标出不确定的地方。",
+      questionType: "semi_specific",
+      reverse: false,
     },
     {
       dimension: "Epistemic",
-      scenario: "处理调整后的任务时",
-      question: "如果 AI 的判断能解释清楚并推进任务，我会先采纳它再边做边校正。",
-      reverse: false,
-    },
-    // RepairScope ×4 (2习惯 + 2场景)
-    {
-      dimension: "RepairScope",
-      scenario: "习惯",
-      question: "我会优先在已有答案里找可保留的部分，再让 AI 做局部修正。",
+      scenario: "当前任务",
+      question: "做当前任务时，AI 的关键建议我会先核对再采用。",
+      questionType: "specific",
       reverse: false,
     },
     {
       dimension: "RepairScope",
-      scenario: "习惯",
-      question: "当输出方向明显不对时，我会换一种提法重新开始。",
-      reverse: true,
-    },
-    {
-      dimension: "RepairScope",
-      scenario: "修正已调整的 AI 输出时",
-      question: "我会沿着已有输出逐段修正，让 AI 继续在原方向上迭代。",
+      scenario: "结果跑偏",
+      question: "结果跑偏时，我会重新描述背景，让 AI 换框架再来。",
+      questionType: "semi_specific",
       reverse: false,
     },
     {
       dimension: "RepairScope",
-      scenario: "当前任务的输出有偏差时",
-      question: "我会重新描述需求，让 AI 从新的框架开始生成。",
-      reverse: true,
+      scenario: "当前任务",
+      question: "当前任务越改越乱时，我倾向于重开对话重新说明。",
+      questionType: "specific",
+      reverse: false,
     },
   ],
 };
@@ -282,7 +242,7 @@ export function getFallbackQuestionnaireBatch(
 ): QuestionnaireQuestion[] {
   const anchor = getScenarioAnchor(options);
   return FALLBACK_QUESTIONNAIRE_BATCHES[mode].map((question) => {
-    if (question.scenario === "习惯") return { ...question };
+    if (question.questionType === "universal" || question.scenario === "通用") return { ...question };
     return {
       ...question,
       scenario: personalizeScenario(question.scenario, anchor, options?.scenarioGuidance),
@@ -296,8 +256,8 @@ function getScenarioAnchor(options?: {
 }): string {
   const raw =
     options?.scenarioGuidance?.scenarioSummary ||
-    options?.targetContext?.goal ||
     options?.targetContext?.recentUse ||
+    options?.targetContext?.goal ||
     "当前 AI 协作任务";
   return raw.trim().replace(/\s+/g, " ").slice(0, 24) || "当前 AI 协作任务";
 }

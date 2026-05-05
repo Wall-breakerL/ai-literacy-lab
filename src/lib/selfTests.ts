@@ -3,6 +3,8 @@ import {
   FALLBACK_QUESTIONNAIRE_BATCHES,
   FALLBACK_QUESTIONNAIRE_TOTAL,
 } from "@/lib/fallbackQuestionnaire";
+import { createSessionStateFromIntake } from "@/lib/intakeState";
+import { buildScenarioGuidanceFromForm } from "@/lib/midFeedbackState";
 import { buildQuestionStem } from "@/lib/questionText";
 import {
   findSimilarQuestionText,
@@ -25,8 +27,9 @@ import {
   normalizeMidDialogueVisibleText,
   RESEARCHER_TOOL_SYSTEM,
 } from "@/lib/researcher";
-import { resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
+import { isSkippedQuestionnaireAnswer, resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
+import { getQuestionnaireLoadingProgress, getReportLoadingProgress } from "@/lib/loadingProgress";
 import type { AgentBOutput, Dimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
@@ -68,6 +71,17 @@ function answer(dimension: Dimension, score: number | null, reverse = false): Qu
   };
 }
 
+function assertQuestionTypes(
+  questions: QuestionnaireQuestion[],
+  expected: Record<NonNullable<QuestionnaireQuestion["questionType"]>, number>,
+  label: string
+) {
+  for (const [type, count] of Object.entries(expected)) {
+    const actual = questions.filter((question) => question.questionType === type).length;
+    assert(actual === count, `${label} ${type} 应为 ${count} 题，实际 ${actual}`);
+  }
+}
+
 function repeatedAnswers(dimension: Dimension, count: number, score: number, reverse = false): QuestionnaireAnswer[] {
   return Array.from({ length: count }, (_, index) => ({
     ...answer(dimension, score, reverse),
@@ -83,21 +97,18 @@ function skippedAnswer(dimension: Dimension, score: number | null = null): Quest
   };
 }
 
-function countHabitQuestions(questions: QuestionnaireQuestion[]): number {
-  return questions.filter((question) => question.scenario.trim() === "习惯").length;
-}
-
 function assertHybridBatchShape(
   questions: QuestionnaireQuestion[],
   label: string,
-  expected: { count: number; habits: number; perDimension: number; reversePerDimension: number }
+  expected: {
+    count: number;
+    perDimension: number;
+    reversePerDimension: number;
+    questionTypes: Record<NonNullable<QuestionnaireQuestion["questionType"]>, number>;
+  }
 ) {
   assert(questions.length === expected.count, `${label} 应为 ${expected.count} 题`);
-  assert(countHabitQuestions(questions) === expected.habits, `${label} 应包含 ${expected.habits} 道习惯题`);
-  assert(
-    questions.length - countHabitQuestions(questions) === expected.count - expected.habits,
-    `${label} 应包含 ${expected.count - expected.habits} 道场景题`
-  );
+  assertQuestionTypes(questions, expected.questionTypes, label);
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert(items.length === expected.perDimension, `${label} 每维应有 ${expected.perDimension} 题：${dimension}`);
@@ -109,12 +120,12 @@ function assertHybridBatchShape(
 }
 
 function assertHybridTotalBalance(questions: QuestionnaireQuestion[]) {
-  assert(questions.length === 24, "总卷应为 24 题");
-  assert(countHabitQuestions(questions) === 12, "总卷应包含 12 道习惯题");
+  assert(questions.length === 16, "总卷应为 16 题");
+  assertQuestionTypes(questions, { universal: 4, semi_specific: 8, specific: 4 }, "总卷");
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
-    assert(items.length === 6, `总卷每维应有 6 题：${dimension}`);
-    assert(items.filter((question) => question.reverse).length === 2, `总卷每维应有 2 道反向题：${dimension}`);
+    assert(items.length === 4, `总卷每维应有 4 题：${dimension}`);
+    assert(items.filter((question) => question.reverse).length === 0, `总卷每维不应有反向题：${dimension}`);
   }
 }
 
@@ -128,8 +139,6 @@ function sessionState(overrides: Partial<SessionState>): SessionState {
       tools: ["ChatGPT"],
       recentUse: "需求分析",
       goal: "提高需求拆解质量",
-      goalStatus: "specific",
-      goalType: "product_building",
     },
     evidence: [],
     openProbes: [],
@@ -139,34 +148,62 @@ function sessionState(overrides: Partial<SessionState>): SessionState {
 
 export function runAiMbtiSelfTests(): SelfTestResult[] {
   return [
+    test("AI-MBTI", "信息收集页创建简化 SessionState", () => {
+      const state = createSessionStateFromIntake({
+        role: "产品经理",
+        recentUse: "我用 Claude 写需求文档，并让它补充边界情况",
+        tools: ["Claude", "Cursor"],
+      });
+      assert(state.phase === "questionnaire_batch1", "intake 后应进入第一轮问卷阶段");
+      assert(state.background.role === "产品经理", "role 应来自表单");
+      assert(state.background.tools.includes("Claude"), "tools 应来自表单");
+      assert(!("goalStatus" in state.background), "新流程 background 不应包含 goalStatus");
+      assert(!("goalType" in state.background), "新流程 background 不应包含 goalType");
+      assert(state.questionnaireBatches?.batch1 === undefined, "intake 阶段不应已有题目");
+    }),
+    test("AI-MBTI", "中途反馈表单本地生成 ScenarioGuidance", () => {
+      const guidance = buildScenarioGuidanceFromForm(
+        {
+          overallFeeling: "far",
+          issueText: "第 3 题太抽象，没法回答",
+          focusScenario: "写产品需求文档时补充边界情况",
+        },
+        "用 AI 写需求文档"
+      );
+      assert(guidance.status === "abstract_scenarios", "不太贴近应映射为 abstract_scenarios");
+      assert(guidance.granularity === "specific", "填写聚焦场景后应为 specific");
+      assert(guidance.includeTopics.includes("写产品需求文档时补充边界情况"), "应保留聚焦场景关键词");
+      assert(guidance.userCorrectionQuote?.includes("第 3 题"), "应保留题号反馈原文");
+    }),
     test("AI-MBTI", "正向题计分方向", () => {
-      assert(scoreAnswer(answer("Relation", 6, false)) === 100, "正向题 6 应为 100 分");
-      assert(scoreAnswer(answer("Relation", 1, false)) === 0, "正向题 1 应为 0 分");
+      assert(scoreAnswer(answer("Relation", 5, false)) === 5, "正向题 5 应贡献 5 分");
+      assert(scoreAnswer(answer("Relation", 0, false)) === 0, "正向题 0 应贡献 0 分");
     }),
-    test("AI-MBTI", "反向题计分方向", () => {
-      assert(scoreAnswer(answer("Workflow", 6, true)) === 0, "反向题 6 应为 0 分");
-      assert(scoreAnswer(answer("Workflow", 1, true)) === 100, "反向题 1 应为 100 分");
-    }),
-    test("AI-MBTI", "不了解 / 没想好不计分", () => {
-      assert(scoreAnswer(answer("Epistemic", null, false)) == null, "跳过题应返回 null");
+    test("AI-MBTI", "不了解 / 没想好按 2.5 计分", () => {
+      const skipped = answer("Epistemic", null, false);
+      assert(isSkippedQuestionnaireAnswer(skipped), "跳过题应可被 UI 明确识别");
+      assert(scoreAnswer(skipped) === 2.5, "跳过题应贡献中位数 2.5");
       const scored = scoreQuestionnaireAnswers([
-        answer("Relation", 6),
+        answer("Relation", 5),
         answer("Relation", null),
-        answer("Relation", 4),
+        answer("Relation", 3),
         answer("Relation", null),
       ]);
       const relation = scored.find((item) => item.dimension === "Relation");
-      assert(relation?.answeredCount === 2, "Relation 有效题数应为 2");
+      assert(relation?.answeredCount === 2, "Relation 已答题数应为 2");
       assert(relation?.skippedCount === 2, "Relation 跳过题数应为 2");
+      assert(relation?.score === 13, `Relation 分数应为 13/20，实际 ${relation?.score}`);
+      assert(relation?.scoreMax === 20, "Relation 满分应为 20");
     }),
-    test("AI-MBTI", "Phase 6 24 题问卷计分", () => {
+    test("AI-MBTI", "16 题问卷计分", () => {
       const scored = scoreQuestionnaireAnswers(
-        DIMENSIONS.flatMap((dimension) => repeatedAnswers(dimension, 6, 6))
+        DIMENSIONS.flatMap((dimension) => repeatedAnswers(dimension, 4, 5))
       );
       assert(scored.length === 4, "应输出四个维度");
-      assert(scored.every((dimension) => dimension.answeredCount === 6), "每个维度应有 6 道有效题");
-      assert(scored.every((dimension) => dimension.confidence === "high"), "6 道有效题应为 high confidence");
-      assert(scored.every((dimension) => dimension.score === 100), "正向 6 分题应计为 100");
+      assert(scored.every((dimension) => dimension.answeredCount === 4), "每个维度应有 4 道已答题");
+      assert(scored.every((dimension) => dimension.confidence === "high"), "远离中点应为 high confidence");
+      assert(scored.every((dimension) => dimension.score === 20), "4 道 5 分题应计为 20");
+      assert(scored.every((dimension) => dimension.scorePercent === 100), "满分百分比应为 100");
     }),
     test("AI-MBTI", "Phase 6 confidence 阈值", () => {
       const scored = scoreQuestionnaireAnswers([
@@ -177,21 +214,21 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       ]);
       assert(scored.find((item) => item.dimension === "Relation")?.confidence === "high", "4 题应为 high");
       assert(scored.find((item) => item.dimension === "Workflow")?.confidence === "medium", "3 题应为 medium");
-      assert(scored.find((item) => item.dimension === "Epistemic")?.confidence === "medium", "2 题应为 medium");
+      assert(scored.find((item) => item.dimension === "Epistemic")?.confidence === "low", "2 道 5 分题离中点不够远，应为 low");
       assert(scored.find((item) => item.dimension === "RepairScope")?.confidence === "low", "1 题应为 low");
     }),
-    test("AI-MBTI", "Phase 6 跳过题不参与置信度和分数", () => {
+    test("AI-MBTI", "Phase 6 跳过题按中位数计分但不计入有效题数", () => {
       const scored = scoreQuestionnaireAnswers([
-        answer("Relation", 6),
-        answer("Relation", 6),
+        answer("Relation", 5),
+        answer("Relation", 5),
         skippedAnswer("Relation", 1),
         skippedAnswer("Relation", null),
       ]);
       const relation = scored.find((item) => item.dimension === "Relation");
       assert(relation?.answeredCount === 2, "跳过题不应计入有效题数");
       assert(relation?.skippedCount === 2, "跳过题数应保留");
-      assert(relation?.confidence === "medium", "2 道有效题应为 medium");
-      assert(relation?.score === 100, `跳过的 1 分不应拉低分数，实际 ${relation?.score}`);
+      assert(relation?.confidence === "medium", "2 道高分且偏离中点应为 medium");
+      assert(relation?.score === 15, `2 道 5 分 + 2 道跳过应计为 15/20，实际 ${relation?.score}`);
     }),
     test("AI-MBTI", "Phase 6 batchAnswers 报告入口兜底", () => {
       const requestAnswer = { ...answer("Relation", 1), question: "request answer" };
@@ -262,19 +299,19 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       const second = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2;
       assertHybridBatchShape(first, "hybrid_batch1 fallback", {
         count: 8,
-        habits: 4,
         perDimension: 2,
         reversePerDimension: 0,
+        questionTypes: { universal: 4, semi_specific: 4, specific: 0 },
       });
       assertHybridBatchShape(second, "hybrid_batch2 fallback", {
-        count: 16,
-        habits: 8,
-        perDimension: 4,
-        reversePerDimension: 2,
+        count: 8,
+        perDimension: 2,
+        reversePerDimension: 0,
+        questionTypes: { universal: 0, semi_specific: 4, specific: 4 },
       });
       assert(validateQuestionnaireBatch(first, "hybrid_batch1"), "hybrid_batch1 fallback 应合法");
       assert(validateQuestionnaireBatch(second, "hybrid_batch2"), "hybrid_batch2 fallback 应合法");
-      assert(validateQuestionnaireTotal(FALLBACK_QUESTIONNAIRE_TOTAL), "两部分 fallback 合并后应是合法 24 题");
+      assert(validateQuestionnaireTotal(FALLBACK_QUESTIONNAIRE_TOTAL), "两部分 fallback 合并后应是合法 16 题");
       assertHybridTotalBalance(FALLBACK_QUESTIONNAIRE_TOTAL);
     }),
     test("AI-MBTI", "Phase 6 hybrid 批次允许泛场景（放宽校验）", () => {
@@ -317,26 +354,28 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         existingQuestions: FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1,
       });
 
-      assert(firstPrompt.includes("第一部分问卷（8题）"), "第一部分 prompt 应使用自然批次名称");
-      assert(firstPrompt.includes("4 道 scenario=\"习惯\""), "第一部分 prompt 应保留习惯题精确数量");
+      assert(firstPrompt.includes("第一轮问卷（8题）"), "第一轮 prompt 应使用自然批次名称");
+      assert(firstPrompt.includes("总题数：8 题"), "第一轮 prompt 应保留题数");
+      assert(firstPrompt.includes("通用题 4 道 + 半具体题 4 道"), "第一轮 prompt 应保留题型分布");
       assert(firstPrompt.includes("Relation / Workflow / Epistemic / RepairScope 各 2 题"), "第一部分 prompt 应保留每维题数");
-      assert(firstPrompt.includes("每个维度 2 道 reverse=false、0 道 reverse=true"), "第一部分 prompt 应保留全正向合约");
-      assert(secondPrompt.includes("第二部分问卷（16题）"), "第二部分 prompt 应使用自然批次名称");
-      assert(secondPrompt.includes("8 道 scenario=\"习惯\""), "第二部分 prompt 应保留习惯题精确数量");
-      assert(secondPrompt.includes("两部分合计后每个维度 6 题，其中 4 道 reverse=false、2 道 reverse=true"), "第二部分 prompt 应保留总卷方向合约");
+      assert(firstPrompt.includes("正反向分布：全部 reverse=false"), "第一轮 prompt 应保留全正向合约");
+      assert(firstPrompt.includes("计分方式：用户选择 0-5 分，跳过按 2.5 分计算"), "第一轮 prompt 应保留计分合约");
+      assert(secondPrompt.includes("第二轮问卷（8题）"), "第二轮 prompt 应使用自然批次名称");
+      assert(secondPrompt.includes("半具体题 4 道 + 具体题 4 道"), "第二轮 prompt 应保留题型分布");
+      assert(secondPrompt.includes("正反向分布：全部 reverse=false"), "第二轮 prompt 应保留全正向合约");
     }),
     test("AI-MBTI", "Phase 6 batch validator 强制新正反向结构", () => {
       const invalidFirst = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question, index) => (
         index === 1 ? { ...question, reverse: true } : question
       ));
       const invalidSecond = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question, index) => (
-        index === 0 ? { ...question, reverse: false } : question
+        index === 0 ? { ...question, reverse: true } : question
       ));
 
       assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 全正向应合法");
       assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 出现反向题应非法");
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 每维 2 正 2 反应合法");
-      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 正反向失衡应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 全正向应合法");
+      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 出现反向题应非法");
     }),
     test("AI-MBTI", "Phase 6 prompt 优化分离自然对话与结构化输出", () => {
       assert(RESEARCHER_TOOL_SYSTEM.includes("双重职责"), "system prompt 应明确对话者与分析者两种职责");
@@ -360,7 +399,7 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
     }),
     test("AI-MBTI", "Qwen 字符串 tool 参数可恢复为访谈状态", () => {
       const malformedInput = `{"analysis":{"reasoning":"用户提供了职业身份。","background_summary":"用户是学生。"}
-{"directive":{"action":"probe_new","hint":"追问 AI 使用场景"},"targetContext":{"role":"学生","recentUse":"使用 AI 完成日常任务","goal":"更有效地使用 AI","goalStatus":"missing","goalType":"learning"},"nextQuestions":[],"newEvidence":[{"quote":"学生","signal":"用户身份是学生","evidence_kind":"quote"}]}}`;
+{"directive":{"action":"probe_new","hint":"追问 AI 使用场景"},"targetContext":{"role":"学生","recentUse":"使用 AI 完成日常任务","goal":"提高效率，并获得更多 idea/思路/选择/灵感","tools":[]},"nextQuestions":[],"newEvidence":[{"quote":"学生","signal":"用户身份是学生","evidence_kind":"quote"}]}}`;
       const output = agentBOutputFromToolUses([
         {
           id: "call_qwen_tool_args",
@@ -378,7 +417,7 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
     }),
     test("AI-MBTI", "Qwen 字符串 tool 参数可恢复为第二批问卷", () => {
       const malformedInput = `{"analysis":{"reasoning":"生成第二批问卷。","background_summary":"学生使用 AI 写代码。"}
-{"batchMode":"hybrid_batch2","targetContext":{"role":"学生","recentUse":"写代码","goal":"更有效地使用 AI","goalStatus":"missing","goalType":"coding_system"},"userFacingMessage":"第二部分问卷已准备好。","nextQuestions":[{"dimension":"Relation","scenario":"习惯","question":"我通常只把 AI 当成执行代码任务的工具。","reverse":true}],"newEvidence":[]}}`;
+{"batchMode":"hybrid_batch2","targetContext":{"role":"学生","recentUse":"写代码","goal":"提高效率，并获得更多 idea/思路/选择/灵感","tools":[]},"userFacingMessage":"第二部分问卷已准备好。","nextQuestions":[{"dimension":"Relation","scenario":"写代码","question":"写代码时，我期待 AI 主动补充可能遗漏的问题。","questionType":"specific","reverse":false}],"newEvidence":[]}}`;
       const output = questionnaireBatchOutputFromToolUses([
         {
           id: "call_qwen_batch_args",
@@ -457,12 +496,12 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
     }),
     test("AI-MBTI", "人格 code 判定", () => {
       const scored = scoreQuestionnaireAnswers([
-        answer("Relation", 6),
-        answer("Workflow", 6),
-        answer("Epistemic", 6),
-        answer("RepairScope", 6),
+        ...repeatedAnswers("Relation", 4, 5),
+        ...repeatedAnswers("Workflow", 4, 5),
+        ...repeatedAnswers("Epistemic", 4, 5),
+        ...repeatedAnswers("RepairScope", 4, 5),
       ]);
-      assert(getPersonalityCode(scored) === "CETL", `预期 CETL，实际 ${getPersonalityCode(scored)}`);
+      assert(getPersonalityCode(scored) === "CFAG", `预期 CFAG，实际 ${getPersonalityCode(scored)}`);
     }),
     test("AI-MBTI", "16 型人格配置完整", () => {
       const codes = Object.keys(PERSONALITY_PROFILES);
@@ -489,8 +528,6 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
           role: "医生",
           recentUse: "科研写作和文献综述",
           goal: "提高论文初稿质量",
-          goalStatus: "specific",
-          goalType: "research_writing",
         },
         scored
       );
@@ -516,8 +553,6 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
           role: "学生",
           recentUse: "主要用ai写代码",
           goal: "更有效地使用 AI",
-          goalStatus: "missing",
-          goalType: "coding_system",
         },
         scoreQuestionnaireAnswers([
           answer("Relation", 6),
@@ -540,8 +575,6 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         role: "学生",
         recentUse: "主要用ai写代码",
         goal: "更有效地使用 AI",
-        goalStatus: "missing",
-        goalType: "coding_system",
       });
       const fullText = `${template.title}\n${template.useCase}\n${template.prompt}`;
       assert(template.prompt.startsWith("我在做 AI 辅助写代码"), "兜底模板应使用清洗后的具体任务");
@@ -576,8 +609,6 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
           role: "学生",
           recentUse: "写代码",
           goal: "完成个人项目",
-          goalStatus: "specific",
-          goalType: "coding_system",
         },
         scored
       );
@@ -592,8 +623,57 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         reverse: false,
       };
       const stem = buildQuestionStem(q);
-      assert(stem.label === "目标场景", "场景题 label 应为目标场景");
-      assert(stem.stem.startsWith("在科研写作遇到结构不清时"), `题面不自然：${stem.stem}`);
+      assert(stem.label === "任务场景", "场景题 label 应为任务场景");
+      assert(stem.stem === "我会先让 AI 给出几种路径，再选择其中一种继续打磨。", `题面不应额外拼接场景：${stem.stem}`);
+    }),
+    test("AI-MBTI", "问卷题面直接使用自包含题干", () => {
+      // 通用题：直接使用
+      const universal = buildQuestionStem({
+        dimension: "Relation",
+        scenario: "通用",
+        question: "我倾向于把 AI 当成讨论伙伴，而不只是执行工具。",
+        reverse: false,
+        questionType: "universal",
+      });
+      assert(universal.stem === "我倾向于把 AI 当成讨论伙伴，而不只是执行工具。", `通用题应直接使用：${universal.stem}`);
+      assert(universal.label === "通用倾向", `通用题标签错误：${universal.label}`);
+
+      // 半具体题：题干已包含场景，直接使用
+      const semiSpecific = buildQuestionStem({
+        dimension: "Workflow",
+        scenario: "写代码",
+        question: "写代码时，我会先明确需求，再开始编写。",
+        reverse: false,
+        questionType: "semi_specific",
+      });
+      assert(semiSpecific.stem === "写代码时，我会先明确需求，再开始编写。", `半具体题应直接使用：${semiSpecific.stem}`);
+      assert(semiSpecific.label === "任务场景", `半具体题标签错误：${semiSpecific.label}`);
+
+      // 具体题：题干已包含场景，直接使用
+      const specific = buildQuestionStem({
+        dimension: "Workflow",
+        scenario: "写产品需求文档",
+        question: "在写产品需求文档过程中，我习惯先列大纲，再让 AI 帮我细化。",
+        reverse: false,
+        questionType: "specific",
+      });
+      assert(specific.stem === "在写产品需求文档过程中，我习惯先列大纲，再让 AI 帮我细化。", `具体题应直接使用：${specific.stem}`);
+      assert(specific.label === "真实场景", `具体题标签错误：${specific.label}`);
+    }),
+    test("AI-MBTI", "加载进度曲线匹配真实等待时长", () => {
+      const q30 = getQuestionnaireLoadingProgress(30_000);
+      const q60 = getQuestionnaireLoadingProgress(60_000);
+      const q90 = getQuestionnaireLoadingProgress(90_000);
+      assert(q30 >= 50 && q30 <= 65, `问卷 30s 应已过半，实际 ${q30}`);
+      assert(q60 >= 88 && q60 <= 92, `问卷 60s 应接近 90%，实际 ${q60}`);
+      assert(q90 <= 95, `问卷等待态不应超过 95%，实际 ${q90}`);
+
+      const r40 = getReportLoadingProgress(40_000);
+      const r60 = getReportLoadingProgress(60_000);
+      const r90 = getReportLoadingProgress(90_000);
+      assert(r40 >= 65 && r40 <= 78, `报告 40s 应进入中后段，实际 ${r40}`);
+      assert(r60 >= 88 && r60 <= 93, `报告 60s 应接近完成但不到 95%，实际 ${r60}`);
+      assert(r90 <= 95, `报告等待态不应超过 95%，实际 ${r90}`);
     }),
     test("AI-MBTI", "targetContext 兜底", () => {
       const inferred = inferTargetContextFromMessages([
@@ -601,7 +681,7 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       ]);
       const normalized = normalizeTargetContext(undefined, inferred);
       assert(normalized.role.includes("医生"), `role 推断异常：${normalized.role}`);
-      assert(normalized.goalType === "research_writing", `goalType 应为 research_writing，实际 ${normalized.goalType}`);
+      assert(normalized.recentUse.includes("GPT"), `recentUse 推断异常：${normalized.recentUse}`);
     }),
   ];
 }

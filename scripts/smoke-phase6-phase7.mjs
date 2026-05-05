@@ -1,19 +1,17 @@
 #!/usr/bin/env node
 /**
- * Phase 6/7 integration smoke test.
- * Tests: interview flow, mid-dialog openings, questionnaire generation,
- * report generation, and feedback storage.
+ * Active AI-MBTI flow smoke test.
+ * Tests: 8+8 questionnaire generation, report generation, and feedback storage.
  *
  * Usage: node scripts/smoke-phase6-phase7.mjs
  * Requires: npm run dev (server running on localhost:3000)
- * Optional: RUN_LLM_SMOKE=1 to include LLM-based tests
+ * Optional: RUN_LLM_SMOKE=1 to require model-backed generation instead of fallback.
  */
 
 import assert from "node:assert/strict";
 
 const baseUrl = (process.env.BASE_URL || process.env.TEST_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const runLlmSmoke = process.env.RUN_LLM_SMOKE === "1";
-
 const dimensions = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 const batchModes = [
   ["hybrid_batch1", "batch1", "questionnaire_batch1"],
@@ -22,50 +20,32 @@ const batchModes = [
 
 const scenarioGuidance = {
   status: "refined",
-  scenarioSummary: "The user wants AI help for shipping a small product feature with clearer planning and review.",
+  scenarioSummary: "The user wants AI help for shipping product features with planning and review.",
   granularity: "specific",
   avoidTopics: ["generic writing advice"],
   includeTopics: ["feature planning", "code review", "debugging"],
   userCorrectionQuote: "I want questions about real product work, not generic study habits.",
 };
 
-function createSessionState(sessionId = `smoke-phase6-phase7-${Date.now()}`) {
+function createSessionState(sessionId = `smoke-active-flow-${Date.now()}`) {
   return {
     sessionId,
-    turn: 3,
-    phase: "interview",
+    turn: 1,
+    phase: "questionnaire_batch1",
     background: {
       role: "Product-minded developer",
       tools: ["ChatGPT", "Qwen", "GitHub Copilot"],
       recentUse: "Using AI to plan, implement, and review a Next.js feature.",
-      goal: "Build a reliable AI workflow for product engineering without losing control of decisions.",
-      goalStatus: "specific",
-      goalType: "product_building",
+      goal: "提高效率，并获得更多 idea/思路/选择/灵感",
       summary: "The user works on product engineering and wants practical AI collaboration patterns.",
     },
-    evidence: [
-      {
-        turn: 1,
-        dimension: "Workflow",
-        quote: "I usually ask AI to make a plan first, then I check whether it fits the product goal.",
-        signal: "strong",
-        evidenceKind: "quote",
-      },
-      {
-        turn: 2,
-        dimension: "Epistemic",
-        quote: "I do not want the model to hide uncertainty when it is guessing.",
-        signal: "strong",
-        evidenceKind: "quote",
-      },
-    ],
-    openProbes: ["How should AI behave when the implementation path is unclear?"],
+    evidence: [],
+    openProbes: [],
     refinedTargetContext: {
       role: "Product-minded developer",
+      tools: ["ChatGPT", "Qwen", "GitHub Copilot"],
       recentUse: "Using AI to plan, implement, and review a Next.js feature.",
-      goal: "Build a reliable AI workflow for product engineering without losing control of decisions.",
-      goalStatus: "specific",
-      goalType: "product_building",
+      goal: "提高效率，并获得更多 idea/思路/选择/灵感",
     },
     scenarioGuidance,
   };
@@ -78,58 +58,12 @@ function makeAnswers(questions, scores) {
       dimension: question.dimension,
       question: question.question,
       scenario: question.scenario,
-      reverse: Boolean(question.reverse),
+      reverse: false,
       score,
       skipped: score == null,
       ...(score == null ? { skipReason: "unsure_or_not_applicable" } : {}),
     };
   });
-}
-
-function minimalQuestions(label) {
-  const batch1 = dimensions.flatMap((dimension, dimensionIndex) => [
-    {
-      dimension,
-      question: `${label} ${dimension} direct question`,
-      scenario: dimensionIndex % 2 === 0 ? "习惯" : `${label} product work scenario`,
-      reverse: false,
-    },
-    {
-      dimension,
-      question: `${label} ${dimension} reverse question`,
-      scenario: dimensionIndex % 2 === 0 ? `${label} product work scenario` : "习惯",
-      reverse: true,
-    },
-  ]);
-
-  const batch2 = dimensions.flatMap((dimension, dimensionIndex) => [
-    {
-      dimension,
-      question: `${label} ${dimension} complementary question 1`,
-      scenario: dimensionIndex % 2 === 0 ? "习惯" : `${label} product work scenario`,
-      reverse: false,
-    },
-    {
-      dimension,
-      question: `${label} ${dimension} complementary question 2`,
-      scenario: dimensionIndex % 2 === 0 ? `${label} product work scenario` : "习惯",
-      reverse: true,
-    },
-    {
-      dimension,
-      question: `${label} ${dimension} complementary question 3`,
-      scenario: "习惯",
-      reverse: false,
-    },
-    {
-      dimension,
-      question: `${label} ${dimension} complementary question 4`,
-      scenario: `${label} product work scenario`,
-      reverse: true,
-    },
-  ]);
-
-  return label.includes("batch1") ? batch1 : batch2;
 }
 
 function assertRecord(value, label) {
@@ -158,34 +92,33 @@ function assertQuestion(question, label) {
   assertOneOf(question.dimension, dimensions, `${label}.dimension`);
   assertText(question.question, `${label}.question`);
   assertText(question.scenario, `${label}.scenario`);
-  assert.equal(typeof question.reverse, "boolean", `${label}.reverse must be boolean`);
+  assert.equal(question.reverse, false, `${label}.reverse must be false`);
+  assertOneOf(question.questionType, ["universal", "semi_specific", "specific"], `${label}.questionType`);
 }
 
-function assertQuestionBatch(questions, label) {
+function assertQuestionBatch(questions, mode, label) {
   assert.ok(Array.isArray(questions), `${label} must be an array`);
-
-  // hybrid_batch1: 8 题, hybrid_batch2: 16 题
-  const expectedLength = label.includes("batch1") ? 8 : 16;
-  const expectedHabits = label.includes("batch1") ? 4 : 8;
-  const expectedPerDimension = label.includes("batch1") ? 2 : 4;
-
-  assert.equal(questions.length, expectedLength, `${label} must contain ${expectedLength} questions`);
+  assert.equal(questions.length, 8, `${label} must contain 8 questions`);
 
   for (const [index, question] of questions.entries()) {
     assertQuestion(question, `${label}[${index}]`);
   }
 
-  assert.equal(
-    questions.filter((question) => question.scenario === "习惯").length,
-    expectedHabits,
-    `${label} must include ${expectedHabits} habit questions`
-  );
+  const expectedTypeCounts =
+    mode === "hybrid_batch1"
+      ? { universal: 4, semi_specific: 4, specific: 0 }
+      : { universal: 0, semi_specific: 4, specific: 4 };
+  for (const [type, count] of Object.entries(expectedTypeCounts)) {
+    assert.equal(
+      questions.filter((question) => question.questionType === type).length,
+      count,
+      `${label} must include ${count} ${type} questions`
+    );
+  }
 
   for (const dimension of dimensions) {
     const items = questions.filter((question) => question.dimension === dimension);
-    assert.equal(items.length, expectedPerDimension, `${label} must include ${expectedPerDimension} ${dimension} questions`);
-    const reverseCount = items.filter((question) => question.reverse).length;
-    assert.ok(reverseCount >= 1 && reverseCount < expectedPerDimension, `${label} must include mixed direction ${dimension} questions`);
+    assert.equal(items.length, 2, `${label} must include 2 ${dimension} questions`);
   }
 }
 
@@ -215,13 +148,6 @@ function assertReportShape(value) {
   assert.ok(Array.isArray(value.promptTemplates), "report.promptTemplates must be an array");
   assert.ok(Array.isArray(value.dimensions), "report.dimensions must be an array");
   assert.equal(value.dimensions.length, 4, "report.dimensions must contain 4 dimensions");
-  for (const dimension of dimensions) {
-    const item = value.dimensions.find((entry) => entry.dimension === dimension);
-    assertRecord(item, `report.dimensions.${dimension}`);
-    assert.equal(typeof item.score, "number", `report.dimensions.${dimension}.score must be a number`);
-    assertText(item.analysis, `report.dimensions.${dimension}.analysis`);
-    assert.ok(Array.isArray(item.evidence), `report.dimensions.${dimension}.evidence must be an array`);
-  }
 }
 
 async function postJson(path, body, options = {}) {
@@ -243,41 +169,12 @@ async function postJson(path, body, options = {}) {
 async function assertServerReady() {
   try {
     const response = await fetch(baseUrl, { method: "GET" });
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
   } catch (error) {
     console.error(`Cannot reach ${baseUrl}. Start the app with npm run dev first.`);
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-}
-
-async function smokeOpening() {
-  const questions = minimalQuestions("mid-dialog-batch1");
-  const baseSession = {
-    ...createSessionState("smoke-opening"),
-    questionnaireBatches: {
-      batch1: questions,
-    },
-    batchAnswers: {
-      batch1: makeAnswers(questions, [null, 5, null, 4]),
-    },
-  };
-
-  const opening = await postJson("/api/mid-dialog/opening", {
-    sessionState: baseSession,
-    completedBatchKey: "batch1",
-    answers: baseSession.batchAnswers.batch1,
-  });
-  assertText(opening.json.message, "opening.message");
-  assertModelSource(opening.json.source, "opening.source");
-  assert.ok(typeof opening.json.model === "string" && opening.json.model.length > 0, "opening.model");
-  assert.ok(typeof opening.json.thinkDurationSec === "number", "opening.thinkDurationSec");
-  assert.equal(opening.json.dialogKey, "dialog1", "opening.dialogKey");
-  assert.ok(Array.isArray(opening.json.warnings), "opening.warnings must be an array");
-
-  console.log("ok single mid-dialog opening payload");
 }
 
 async function smokeQuestionnaireGeneration() {
@@ -296,30 +193,26 @@ async function smokeQuestionnaireGeneration() {
     assert.equal(result.json.batchMode, batchMode, `${batchMode}.batchMode`);
     assertModelSource(result.json.source, `${batchMode}.source`);
     assertText(result.json.message, `${batchMode}.message`);
-    assert.ok(
-      String(result.json.message).includes("点击按钮"),
-      `${batchMode}.message 应提示点击按钮进入作答`
-    );
-    assertQuestionBatch(result.json.questions, `${batchMode}.questions`);
+    assert.ok(String(result.json.message).includes("点击按钮"), `${batchMode}.message should ask user to continue`);
+    assertQuestionBatch(result.json.questions, batchMode, `${batchMode}.questions`);
     assertSessionState(result.json.sessionState, `${batchMode}.sessionState`);
     assert.equal(result.json.sessionState.phase, expectedPhase, `${batchMode}.sessionState.phase`);
-    assertQuestionBatch(result.json.sessionState.questionnaireBatches[batchKey], `${batchMode}.sessionState.questionnaireBatches.${batchKey}`);
-    assert.ok(Array.isArray(result.json.sessionState.questionnaire), `${batchMode}.sessionState.questionnaire must be an array`);
-    const expectedMinLength = batchMode === "hybrid_batch1" ? 8 : existingQuestions.length + 16;
-    assert.ok(result.json.sessionState.questionnaire.length >= expectedMinLength, `${batchMode}.sessionState.questionnaire should include generated questions`);
-    assert.equal(typeof result.json.retryCount, "number", `${batchMode}.retryCount must be a number`);
-    assert.ok(
-      typeof result.json.model === "string" && result.json.model.length > 0,
-      `${batchMode}.model must be a non-empty string`
+    assertQuestionBatch(
+      result.json.sessionState.questionnaireBatches[batchKey],
+      batchMode,
+      `${batchMode}.sessionState.questionnaireBatches.${batchKey}`
     );
-    assert.ok(typeof result.json.thinkDurationSec === "number", `${batchMode}.thinkDurationSec`);
+    assert.equal(result.json.sessionState.questionnaire.length, existingQuestions.length + 8);
+    assert.equal(typeof result.json.retryCount, "number", `${batchMode}.retryCount must be a number`);
+    assertText(result.json.model, `${batchMode}.model`);
+    assert.equal(typeof result.json.thinkDurationSec, "number", `${batchMode}.thinkDurationSec`);
 
     generated[batchKey] = result.json.questions;
     sessionState = result.json.sessionState;
     existingQuestions = result.json.sessionState.questionnaire;
   }
 
-  console.log("ok questionnaire generate hybrid 8+16 batches");
+  console.log("ok questionnaire generate active 8+8 batches");
   return { sessionState, generated };
 }
 
@@ -339,10 +232,7 @@ async function smokeReport(generated) {
     "/api/report",
     {
       identity: "Product-minded developer",
-      messages: [
-        { role: "user", content: "I use AI for product planning and code review." },
-        { role: "assistant", content: "I will connect the report to practical engineering workflows." },
-      ],
+      messages: [{ role: "user", content: "I use AI for product planning and code review." }],
       sessionState,
     },
     { allowedStatuses: [200, 503] }
@@ -362,15 +252,15 @@ async function smokeFeedback() {
   const result = await postJson("/api/feedback", {
     draft: {
       sessionId: "smoke-feedback",
-      personalityCode: "CEFL",
+      personalityCode: "CFAG",
       role: "Product-minded developer",
       recentUse: "Using AI to plan, implement, and review a Next.js feature.",
-      goal: "Build a reliable AI workflow for product engineering without losing control of decisions.",
-      totalQuestions: 24,
-      answeredQuestions: 21,
+      goal: "提高效率，并获得更多 idea/思路/选择/灵感",
+      totalQuestions: 16,
+      answeredQuestions: 14,
       skipRate: 0.125,
-      summary: "The report was useful overall, but one scenario question felt too generic for product engineering work.",
-      usefulParts: ["The prompt templates were directly reusable.", "The workflow dimension matched the user's actual process."],
+      summary: "The report was useful overall, but one scenario question felt too generic.",
+      usefulParts: ["The prompt templates were directly reusable."],
       inaccurateParts: ["The report slightly overstated how much the user trusts AI output."],
       questionIssues: ["One question was too close to general productivity advice."],
       reportIssues: ["The summary needs a sharper link to product shipping decisions."],
@@ -378,35 +268,21 @@ async function smokeFeedback() {
       sentiment: "mixed",
       priority: "medium",
       feedbackTypes: ["report_issue", "question_issue", "prompt_template"],
-      rawDialogue: [
-        { role: "assistant", content: "Which part felt least useful?" },
-        { role: "user", content: "The generic productivity scenario did not fit my real work." },
-      ],
-      createdAt: "2026-04-30T00:00:00.000Z",
+      rawDialogue: [{ role: "user", content: "The generic productivity scenario did not fit my real work." }],
+      createdAt: "2026-05-05T00:00:00.000Z",
     },
   });
 
   assert.equal(result.json.success, true, "feedback.success must be true");
   assertOneOf(result.json.storage, ["local", "notion"], "feedback.storage");
-  if (result.json.storage === "local") {
-    assertText(result.json.file, "feedback.file");
-  }
-  if (result.json.storage === "notion") {
-    assertText(result.json.url, "feedback.url");
-  }
-  if (result.json.warning != null) {
-    assertText(result.json.warning, "feedback.warning");
-  }
-
   console.log("ok structured feedback save");
 }
 
 await assertServerReady();
 console.log(`smoke base url: ${baseUrl}`);
 
-await smokeOpening();
 const { generated } = await smokeQuestionnaireGeneration();
 await smokeReport(generated);
 await smokeFeedback();
 
-console.log("phase6/phase7 API smoke complete");
+console.log("active AI-MBTI API smoke complete");

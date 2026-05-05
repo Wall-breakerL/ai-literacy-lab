@@ -1,17 +1,37 @@
 const OPENAI_COMPATIBLE_BASE_URL =
-  process.env.OPENAI_COMPATIBLE_BASE_URL?.trim() || "https://api.openai.com/v1";
+  process.env.LLM_BASE_URL?.trim() ||
+  process.env.DEEPSEEK_BASE_URL?.trim() ||
+  process.env.OPENAI_COMPATIBLE_BASE_URL?.trim() ||
+  "https://api.openai.com/v1";
 const OPENAI_COMPATIBLE_FORCE_TEMPERATURE = parseOptionalNumber(
-  process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE
+  process.env.LLM_FORCE_TEMPERATURE ?? process.env.OPENAI_COMPATIBLE_FORCE_TEMPERATURE
 );
 const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== "0";
 
 export const QWEN_BASE_URL = OPENAI_COMPATIBLE_BASE_URL;
-export const RESEARCHER_MODEL = process.env.QWEN_MODEL?.trim() || "qwen3.6-plus";
+export const RESEARCHER_MODEL =
+  process.env.LLM_RESEARCHER_MODEL?.trim() ||
+  process.env.DEEPSEEK_MODEL?.trim() ||
+  process.env.QWEN_MODEL?.trim() ||
+  "qwen3.6-plus";
 export const RESEARCHER_FALLBACK_MODEL =
-  process.env.QWEN_FALLBACK_MODEL?.trim() || RESEARCHER_MODEL;
-export const RESEARCHER_MAX_TOKENS = parsePositiveInt(process.env.QWEN_MAX_TOKENS, 8192);
-export const REPORT_MODEL = process.env.QWEN_REPORT_MODEL?.trim() || RESEARCHER_MODEL;
-export const REPORT_MAX_TOKENS = parsePositiveInt(process.env.QWEN_REPORT_MAX_TOKENS, 8192);
+  process.env.LLM_RESEARCHER_FALLBACK_MODEL?.trim() ||
+  process.env.DEEPSEEK_FALLBACK_MODEL?.trim() ||
+  process.env.QWEN_FALLBACK_MODEL?.trim() ||
+  RESEARCHER_MODEL;
+export const RESEARCHER_MAX_TOKENS = parsePositiveInt(
+  process.env.LLM_RESEARCHER_MAX_TOKENS ?? process.env.QWEN_MAX_TOKENS,
+  8192
+);
+export const REPORT_MODEL =
+  process.env.LLM_REPORT_MODEL?.trim() ||
+  process.env.DEEPSEEK_REPORT_MODEL?.trim() ||
+  process.env.QWEN_REPORT_MODEL?.trim() ||
+  RESEARCHER_MODEL;
+export const REPORT_MAX_TOKENS = parsePositiveInt(
+  process.env.LLM_REPORT_MAX_TOKENS ?? process.env.QWEN_REPORT_MAX_TOKENS,
+  8192
+);
 
 type QwenRole = "user" | "assistant";
 
@@ -155,7 +175,12 @@ function mergeOpenAiCompatibleChatBody(base: Record<string, unknown>): Record<st
 }
 
 function getOpenAiCompatibleApiKey(): string {
-  return process.env.OPENAI_COMPATIBLE_API_KEY?.trim() || "";
+  return (
+    process.env.LLM_API_KEY?.trim() ||
+    process.env.DEEPSEEK_API_KEY?.trim() ||
+    process.env.OPENAI_COMPATIBLE_API_KEY?.trim() ||
+    ""
+  );
 }
 
 function normalizeQwenMessages(messages: QwenMessage[]): QwenMessage[] {
@@ -207,10 +232,10 @@ function systemPromptToOpenAiText(system: QwenSystemPrompt | undefined): string 
 
 export function assertQwenApiConfig(): string | null {
   if (!getOpenAiCompatibleApiKey()) {
-    return "未配置 OPENAI_COMPATIBLE_API_KEY：Qwen OpenAI-compatible 网关需要 Bearer API key。";
+    return "未配置 LLM_API_KEY / DEEPSEEK_API_KEY / OPENAI_COMPATIBLE_API_KEY：OpenAI-compatible LLM 网关需要 Bearer API key。";
   }
   if (!OPENAI_COMPATIBLE_BASE_URL.trim()) {
-    return "未配置 OPENAI_COMPATIBLE_BASE_URL：Qwen OpenAI-compatible 网关需要 /v1 base URL。";
+    return "未配置 LLM_BASE_URL / DEEPSEEK_BASE_URL / OPENAI_COMPATIBLE_BASE_URL：OpenAI-compatible LLM 网关需要 /v1 base URL。";
   }
   return null;
 }
