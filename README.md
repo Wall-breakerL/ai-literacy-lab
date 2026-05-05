@@ -6,7 +6,7 @@
 
 **你和 AI 的协作方式，比你想象的更有规律。**
 
-*一个基于访谈 + 动态问卷 + 个性化报告的 AI 协作风格测评系统*
+*一个基于信息收集表单 + 两段式动态问卷 + 中途反馈校准 + 个性化报告的 AI 协作风格测评系统*
 
 ---
 
@@ -15,7 +15,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Framer Motion](https://img.shields.io/badge/Framer-Motion-0055FF?style=flat-square&logo=framer&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-5fc992?style=flat-square)
-![Version](https://img.shields.io/badge/Version-6.2.0-FF6363?style=flat-square)
+![Version](https://img.shields.io/badge/Version-7.0.0-FF6363?style=flat-square)
 
 </div>
 
@@ -30,18 +30,20 @@
 **测评流程：**
 
 ```
-① 轻量背景访谈（~3 分钟）
-   └─ 单一 Researcher Agent 对话 · 了解职业身份与 AI 使用场景
+① 信息收集（/intake）
+   └─ 表单填写 · 职业 / 身份 · 具体 AI 使用经历 · 常用 AI 工具
+      不调用 LLM，本地初始化 SessionState
 
-② 两段式定制问卷（Phase 6 · 共 24 题）
-   ├─ Batch 1：8 题（习惯题 × 4 + 场景题 × 4）
-   ├─ 中途校准对话（确认感受 · 调整方向）
-   └─ Batch 2：16 题（习惯题 × 8 + 场景题 × 8）
+② 两段式定制问卷（共 16 题）
+   ├─ Batch 1：8 题（通用题 × 4 + 半具体题 × 4）· 快速采样协作风格
+   ├─ 中途反馈页（/mid-feedback）
+   │   └─ 表单收集：第一轮整体感受 · 题目问题反馈 · 第二轮希望聚焦的场景
+   └─ Batch 2：8 题（半具体题 × 4 + 具体题 × 4）· 贴近真实场景校准
 
 ③ 服务端确定性计分
    └─ TypeScript 精准计算四维得分，LLM 不参与评分
 
-④ 个性化报告 + 幻灯片 + 海报
+④ 个性化报告
    └─ LLM 生成解释 · 建议 · Prompt 模板
 ```
 
@@ -235,7 +237,7 @@
 | 图表 | ![Recharts](https://img.shields.io/badge/-Recharts-FF6384?style=flat-square) |
 | AI 接入 | Qwen3.6-plus via OpenAI-compatible gateway（保留原生 Anthropic Messages API 路径）|
 | 设计语言 | Raycast 风格暗色主题 · `#07080a` 底色 · Raycast Red `#FF6363` |
-| 数据存储 | Notion API（Phase 7 反馈）· `.local-debug/` 本地 fallback |
+| 数据存储 | `.local-debug/` 本地反馈存储 |
 
 ---
 
@@ -277,7 +279,7 @@ npm run smoke:phase6-phase7
 
 <div align="center">
 
-**Human-AI Performance Lab** · v6.2.0 · 2026
+**Human-AI Performance Lab** · v7.0.0 · 2026
 
 *了解协作习惯，才能真正释放 AI 的潜力。*
 

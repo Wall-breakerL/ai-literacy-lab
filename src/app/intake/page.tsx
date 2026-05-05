@@ -12,16 +12,32 @@ import {
 
 const TOOL_OPTIONS = ["ChatGPT", "Claude", "Gemini", "文心一言", "通义千问", "豆包", "Kimi", "Copilot", "Cursor"];
 
+const ROLE_OPTIONS = [
+  "程序员/开发者",
+  "产品经理",
+  "设计师",
+  "数据分析师",
+  "编辑/运营",
+  "市场/营销",
+  "学生",
+  "研究生/博士",
+  "教师/讲师",
+  "咨询/顾问",
+  "销售/商务",
+];
+
 export default function IntakePage() {
   const router = useRouter();
   const [role, setRole] = useState("");
+  const [selectedRoleOption, setSelectedRoleOption] = useState<string | null>(null);
+  const [customRole, setCustomRole] = useState("");
   const [recentUse, setRecentUse] = useState("");
   const [tools, setTools] = useState<string[]>([]);
   const [customTool, setCustomTool] = useState("");
   const [error, setError] = useState("");
 
   const form: IntakeForm = useMemo(() => ({
-    role,
+    role: role.trim() || "",
     recentUse,
     tools: customTool.trim() ? [...tools, customTool.trim()] : tools,
   }), [customTool, recentUse, role, tools]);
@@ -63,15 +79,60 @@ export default function IntakePage() {
 
         <section className="rounded-[18px] border border-white/10 bg-surface-100/75 p-5 shadow-card-ring backdrop-blur-sm sm:p-7">
           <div className="grid gap-5">
-            <label className="grid gap-2">
+            <div className="grid gap-3">
               <span className="text-sm font-semibold text-light-gray">职业 / 身份</span>
-              <input
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                placeholder="例如：产品经理、前端工程师、材料系研究生"
-                className="h-12 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
-              />
-            </label>
+              <div className="flex flex-wrap gap-2">
+                {ROLE_OPTIONS.map((roleOption) => {
+                  const selected = selectedRoleOption === roleOption;
+                  return (
+                    <button
+                      key={roleOption}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRoleOption(roleOption);
+                        setRole(roleOption);
+                        setCustomRole("");
+                      }}
+                      className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
+                        selected
+                          ? "border-raycast-blue bg-raycast-blue/15 text-near-white shadow-[0_0_18px_rgba(85,179,255,0.18)]"
+                          : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                      }`}
+                    >
+                      {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                      {roleOption}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoleOption("other");
+                    setRole(customRole);
+                  }}
+                  className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
+                    selectedRoleOption === "other"
+                      ? "border-raycast-blue bg-raycast-blue/15 text-near-white shadow-[0_0_18px_rgba(85,179,255,0.18)]"
+                      : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                  }`}
+                >
+                  {selectedRoleOption === "other" ? <Check className="h-3.5 w-3.5" /> : null}
+                  其他...
+                </button>
+              </div>
+              {selectedRoleOption === "other" && (
+                <input
+                  value={customRole}
+                  onChange={(event) => {
+                    setCustomRole(event.target.value);
+                    setRole(event.target.value);
+                  }}
+                  placeholder="请输入你的职业，例如：宠物美容师、自由职业者"
+                  className="h-12 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
+                  autoFocus
+                />
+              )}
+            </div>
 
             <label className="grid gap-2">
               <span className="text-sm font-semibold text-light-gray">具体 AI 使用经历</span>

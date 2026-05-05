@@ -362,7 +362,7 @@ export function ReportStoryExperience({
       if (event.key === "ArrowLeft") setSlideIndex((value) => Math.max(0, value - 1));
       if (event.key === "ArrowRight") {
         setSlideIndex((value) => {
-          if (value >= 4) {
+          if (value >= 5) {
             setShowPoster(true);
             return value;
           }
@@ -375,7 +375,7 @@ export function ReportStoryExperience({
   }, [showPoster]);
 
   const goNext = () => {
-    if (slideIndex >= 4) {
+    if (slideIndex >= 5) {
       setShowPoster(true);
       return;
     }
@@ -383,7 +383,9 @@ export function ReportStoryExperience({
   };
 
   const copyPrompt = async () => {
-    await navigator.clipboard.writeText(promptTemplate.prompt);
+    // 优先使用toolbox中的第一个prompt模板
+    const promptText = (report as any).toolbox?.promptTemplates?.[0]?.prompt ?? promptTemplate.prompt;
+    await navigator.clipboard.writeText(promptText);
     setCopiedPrompt(true);
     window.setTimeout(() => setCopiedPrompt(false), 1500);
   };
@@ -398,6 +400,7 @@ export function ReportStoryExperience({
   };
 
   const slides = [
+    // 第1页：首页 - Persona + Tags + 四维光谱
     <SlideShell key="who" primary={pPrimary} secondary={pSecondary}>
       <div className="flex min-h-[496px] flex-col items-center justify-center text-center">
         <PersonalityAvatar profile={report.personality} size={168} />
@@ -415,106 +418,187 @@ export function ReportStoryExperience({
             <TagBadge key={tag.label} label={tag.label} color={tag.color} />
           ))}
         </div>
-      </div>
-    </SlideShell>,
-    <SlideShell key="what" primary={pPrimary} secondary={pSecondary}>
-      <div className="space-y-8">
-        <div>
-          <p className="text-[12px] font-semibold text-slate-400">WHAT</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-white">你的 AI 协作倾向</h2>
-        </div>
-        <div className="space-y-8">
+        {/* 添加四维光谱 */}
+        <div className="mt-8 w-full space-y-4">
           {report.dimensions.map((dimension, index) => (
-            <SpectrumBar key={dimension.dimension} dimension={dimension} showScore index={index} />
+            <SpectrumBar key={dimension.dimension} dimension={dimension} compact index={index} />
           ))}
         </div>
       </div>
     </SlideShell>,
+
+    // 第2页：Persona详细介绍
     <SlideShell key="persona" primary={pPrimary} secondary={pSecondary}>
       <PersonaSlide profile={report.personality} />
     </SlideShell>,
-    <SlideShell key="why" primary={pPrimary} secondary={pSecondary}>
-      <div>
-        <p className="text-[12px] font-semibold text-slate-400">WHY</p>
-        <h2 className="mt-2 text-[24px] font-semibold text-white">关于你，3 个值得记住的发现</h2>
-        <div className="mt-8 divide-y divide-white/10">
-          {insights.map((insight, index) => (
-            <div key={insight.label} className="grid gap-4 py-6 first:pt-0 sm:grid-cols-[32px_1fr]">
-              <div
-                className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-semibold text-white"
-                style={{
-                  background: `linear-gradient(135deg, ${strongestMeta.lowColor}, ${strongestMeta.highColor})`,
-                }}
-              >
-                {index + 1}
-              </div>
-              <div>
-                <h3 className="text-[14px] font-semibold text-white">{insight.label}</h3>
-                <p className="mt-2 text-[13px] leading-[1.6] text-slate-300">{insight.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </SlideShell>,
-    <SlideShell key="how" primary={pPrimary} secondary={pSecondary}>
-      <div className="space-y-7">
+
+    // 第3页：风格画像
+    <SlideShell key="styleProfile" primary={pPrimary} secondary={pSecondary}>
+      <div className="space-y-6">
         <div>
-          <p className="text-[12px] font-semibold text-slate-400">HOW</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-white">下次使用 AI 可以这样做</h2>
+          <p className="text-[12px] font-semibold text-slate-400">YOUR STYLE</p>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">你的协作风格画像</h2>
         </div>
-        <section>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-[14px] font-semibold text-white">Prompt 模板</p>
-            <button
-              type="button"
-              onClick={copyPrompt}
-              className="flex h-9 items-center gap-2 rounded-[8px] border border-white/10 px-3 text-[13px] font-semibold text-slate-200 hover:border-white/20"
-            >
-              {copiedPrompt ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-              {copiedPrompt ? "已复制" : "复制"}
-            </button>
+
+        {/* 对比：不同风格的人会怎么做 */}
+        {(report as any).styleProfile?.comparison && (report as any).styleProfile.comparison.styles && (
+          <div className="space-y-3">
+            <p className="text-[13px] font-semibold text-slate-300">
+              {(report as any).styleProfile.comparison.scenario}
+            </p>
+            {(report as any).styleProfile.comparison.styles.slice(0, 2).map((style: any, index: number) => (
+              <div key={index} className="space-y-2 rounded-[8px] p-3" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <p className="text-[13px] font-semibold text-white">{style.type}</p>
+                <p className="text-[12px] leading-[1.6] text-slate-300">{style.approach}</p>
+                <div className="flex gap-3 text-[11px]">
+                  <span className="text-green-400">✓ {style.pros}</span>
+                  <span className="text-orange-400">✗ {style.cons}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div
-            className="rounded-[8px] p-4"
-            style={{ background: "rgba(255,255,255,0.05)", borderLeft: `3px solid ${strongestAccent}`, border: `1px solid rgba(255,255,255,0.08)`, borderLeftWidth: 3, borderLeftColor: strongestAccent }}
-          >
-            <p className="text-[14px] font-semibold text-white">{promptTemplate.title}</p>
-            <p className="mt-1 text-[12px] text-slate-400">{promptTemplate.useCase}</p>
-            <p className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-[1.65] text-slate-200">
-              &ldquo;{promptTemplate.prompt}&rdquo;
+        )}
+
+        {/* 独特组合 */}
+        {(report as any).styleProfile?.uniqueness && (
+          <div className="rounded-[8px] p-4" style={{ background: `linear-gradient(135deg, ${strongestMeta.lowColor}15, ${strongestMeta.highColor}15)`, border: "1px solid rgba(255,255,255,0.08)" }}>
+            <p className="text-[14px] font-semibold text-white">
+              {(report as any).styleProfile.uniqueness.combination}
+            </p>
+            <p className="mt-2 text-[12px] text-slate-300">
+              {(report as any).styleProfile.uniqueness.percentage}
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
             </p>
           </div>
-        </section>
-        <section>
-          <p className="mb-2 text-[14px] font-semibold text-white">适合你的工作流</p>
-          <p className="whitespace-pre-wrap rounded-[8px] p-4 text-[13px] leading-[1.65] text-slate-200" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            {manifestoText}
-          </p>
-        </section>
-        <div className="grid gap-2">
-          {["试用 Prompt 模板", "试用工作流"].map((item, index) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={Boolean(checkedActions[index])}
-              onClick={() => setCheckedActions((value) => ({ ...value, [index]: !value[index] }))}
-              className="flex h-11 items-center gap-3 rounded-[8px] px-3 text-left text-[13px] font-semibold text-slate-200 transition-all"
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-            >
-              <span
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors"
-                style={{
-                  borderColor: checkedActions[index] ? strongestAccent : "rgba(255,255,255,0.2)",
-                  backgroundColor: checkedActions[index] ? strongestAccent : "transparent",
-                }}
-              >
-                {checkedActions[index] ? <Check className="h-3.5 w-3.5 text-white" /> : null}
-              </span>
-              <span className={checkedActions[index] ? "text-slate-500 line-through" : ""}>{item}</span>
-            </button>
-          ))}
+        )}
+      </div>
+    </SlideShell>,
+
+    // 第4页：问题诊断
+    <SlideShell key="problems" primary={pPrimary} secondary={pSecondary}>
+      <div className="space-y-6">
+        <div>
+          <p className="text-[12px] font-semibold text-slate-400">WATCH OUT</p>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">你可能遇到的问题</h2>
         </div>
+
+        {(report as any).problems && (report as any).problems.length > 0 ? (
+          <div className="space-y-4">
+            {(report as any).problems.slice(0, 2).map((problem: any, index: number) => (
+              <div key={index} className="space-y-3 rounded-[8px] p-4" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <h3 className="text-[15px] font-semibold text-white">{problem.title}</h3>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400">症状</p>
+                  <p className="mt-1 text-[12px] leading-[1.6] text-slate-300">{problem.symptom}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400">怎么改</p>
+                  <p className="mt-1 text-[12px] leading-[1.6] text-slate-300">{problem.howToFix.immediate}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[13px] text-slate-400">暂无问题诊断</p>
+        )}
+      </div>
+    </SlideShell>,
+
+    // 第5页：工具箱
+    <SlideShell key="toolbox" primary={pPrimary} secondary={pSecondary}>
+      <div className="space-y-6">
+        <div>
+          <p className="text-[12px] font-semibold text-slate-400">TOOLBOX</p>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">适合你的AI工具箱</h2>
+        </div>
+
+        {/* Prompt模板 */}
+        {(report as any).toolbox?.promptTemplates && (report as any).toolbox.promptTemplates.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[13px] font-semibold text-white">Prompt 模板</p>
+              <button
+                type="button"
+                onClick={copyPrompt}
+                className="flex h-8 items-center gap-2 rounded-[6px] border border-white/10 px-2.5 text-[12px] font-semibold text-slate-200 hover:border-white/20"
+              >
+                {copiedPrompt ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedPrompt ? "已复制" : "复制"}
+              </button>
+            </div>
+            <div
+              className="rounded-[8px] p-3"
+              style={{ background: "rgba(255,255,255,0.05)", borderLeft: `3px solid ${strongestAccent}`, border: `1px solid rgba(255,255,255,0.08)`, borderLeftWidth: 3, borderLeftColor: strongestAccent }}
+            >
+              <p className="text-[13px] font-semibold text-white">{(report as any).toolbox.promptTemplates[0].title}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{(report as any).toolbox.promptTemplates[0].useCase}</p>
+              <p className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-[1.65] text-slate-200">
+                &ldquo;{(report as any).toolbox.promptTemplates[0].prompt}&rdquo;
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* Checklist */}
+        {(report as any).toolbox?.checklists && (report as any).toolbox.checklists.length > 0 && (
+          <section>
+            <p className="mb-2 text-[13px] font-semibold text-white">{(report as any).toolbox.checklists[0].title}</p>
+            <div className="space-y-1.5">
+              {(report as any).toolbox.checklists[0].items.slice(0, 3).map((item: string, i: number) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-white/20 text-[10px] text-slate-400">
+                    {i + 1}
+                  </span>
+                  <p className="text-[12px] leading-[1.5] text-slate-300">{item}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </SlideShell>,
+
+    // 第6页：工作流
+    <SlideShell key="workflow" primary={pPrimary} secondary={pSecondary}>
+      <div className="space-y-6">
+        <div>
+          <p className="text-[12px] font-semibold text-slate-400">WORKFLOW</p>
+          <h2 className="mt-2 text-[24px] font-semibold text-white">
+            {(report as any).toolbox?.workflow?.title ?? "适合你的AI协作流程"}
+          </h2>
+        </div>
+
+        {(report as any).toolbox?.workflow?.steps && (report as any).toolbox.workflow.steps.length > 0 ? (
+          <div className="space-y-3">
+            {(report as any).toolbox.workflow.steps.map((step: any, index: number) => (
+              <div key={index} className="flex gap-3">
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: strongestAccent }}
+                >
+                  {step.step}
+                </span>
+                <div className="flex-1">
+                  <p className="text-[13px] font-semibold text-white">{step.action}</p>
+                  <p className="mt-1 text-[12px] leading-[1.5] text-slate-300">{step.detail}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{step.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[13px] text-slate-400">暂无工作流</p>
+        )}
+
+        {(report as any).toolbox?.workflow?.totalTime && (
+          <div className="rounded-[8px] p-3 text-center" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <p className="text-[12px] text-slate-300">
+              总时间：{(report as any).toolbox.workflow.totalTime}
+            </p>
+          </div>
+        )}
       </div>
     </SlideShell>,
   ];

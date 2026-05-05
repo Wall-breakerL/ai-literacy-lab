@@ -67,9 +67,14 @@ function toScorePercent(score: number, scoreMax = DIMENSION_SCORE_MAX): number {
 }
 
 export function scoreAnswer(answer: QuestionnaireAnswer): number {
-  if (answer.skipped || answer.score == null) return SKIPPED_SCORE;
-  const raw = clampRawScore(answer.score);
+  if (isSkippedQuestionnaireAnswer(answer)) return SKIPPED_SCORE;
+  const rawScore = answer.score;
+  const raw = clampRawScore(typeof rawScore === "number" ? rawScore : SKIPPED_SCORE);
   return answer.reverse ? LIKERT_MAX - raw : raw;
+}
+
+export function isSkippedQuestionnaireAnswer(answer: QuestionnaireAnswer): boolean {
+  return answer.skipped === true || answer.score == null;
 }
 
 function getConfidence(score: number, answeredCount: number) {
@@ -97,7 +102,7 @@ export function scoreQuestionnaireAnswers(answers: QuestionnaireAnswer[]): Dimen
   return DIMENSIONS.map((dimension) => {
     const meta = DIMENSION_META[dimension];
     const dimensionAnswers = answers.filter((answer) => answer.dimension === dimension);
-    const answered = dimensionAnswers.filter((answer) => !answer.skipped && answer.score != null);
+    const answered = dimensionAnswers.filter((answer) => !isSkippedQuestionnaireAnswer(answer));
     const skippedCount = dimensionAnswers.length - answered.length;
     const scored = dimensionAnswers.map(scoreAnswer);
     const score =

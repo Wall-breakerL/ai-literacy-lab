@@ -27,8 +27,9 @@ import {
   normalizeMidDialogueVisibleText,
   RESEARCHER_TOOL_SYSTEM,
 } from "@/lib/researcher";
-import { resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
+import { isSkippedQuestionnaireAnswer, resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
+import { getQuestionnaireLoadingProgress, getReportLoadingProgress } from "@/lib/loadingProgress";
 import type { AgentBOutput, Dimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
@@ -179,7 +180,9 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(scoreAnswer(answer("Relation", 0, false)) === 0, "正向题 0 应贡献 0 分");
     }),
     test("AI-MBTI", "不了解 / 没想好按 2.5 计分", () => {
-      assert(scoreAnswer(answer("Epistemic", null, false)) === 2.5, "跳过题应贡献中位数 2.5");
+      const skipped = answer("Epistemic", null, false);
+      assert(isSkippedQuestionnaireAnswer(skipped), "跳过题应可被 UI 明确识别");
+      assert(scoreAnswer(skipped) === 2.5, "跳过题应贡献中位数 2.5");
       const scored = scoreQuestionnaireAnswers([
         answer("Relation", 5),
         answer("Relation", null),
@@ -621,7 +624,7 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       };
       const stem = buildQuestionStem(q);
       assert(stem.label === "任务场景", "场景题 label 应为任务场景");
-      assert(stem.stem.startsWith("在科研写作遇到结构不清时"), `题面不自然：${stem.stem}`);
+      assert(stem.stem === "我会先让 AI 给出几种路径，再选择其中一种继续打磨。", `题面不应额外拼接场景：${stem.stem}`);
     }),
     test("AI-MBTI", "问卷题面直接使用自包含题干", () => {
       // 通用题：直接使用
@@ -656,6 +659,21 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       });
       assert(specific.stem === "在写产品需求文档过程中，我习惯先列大纲，再让 AI 帮我细化。", `具体题应直接使用：${specific.stem}`);
       assert(specific.label === "真实场景", `具体题标签错误：${specific.label}`);
+    }),
+    test("AI-MBTI", "加载进度曲线匹配真实等待时长", () => {
+      const q30 = getQuestionnaireLoadingProgress(30_000);
+      const q60 = getQuestionnaireLoadingProgress(60_000);
+      const q90 = getQuestionnaireLoadingProgress(90_000);
+      assert(q30 >= 50 && q30 <= 65, `问卷 30s 应已过半，实际 ${q30}`);
+      assert(q60 >= 88 && q60 <= 92, `问卷 60s 应接近 90%，实际 ${q60}`);
+      assert(q90 <= 95, `问卷等待态不应超过 95%，实际 ${q90}`);
+
+      const r40 = getReportLoadingProgress(40_000);
+      const r60 = getReportLoadingProgress(60_000);
+      const r90 = getReportLoadingProgress(90_000);
+      assert(r40 >= 65 && r40 <= 78, `报告 40s 应进入中后段，实际 ${r40}`);
+      assert(r60 >= 88 && r60 <= 93, `报告 60s 应接近完成但不到 95%，实际 ${r60}`);
+      assert(r90 <= 95, `报告等待态不应超过 95%，实际 ${r90}`);
     }),
     test("AI-MBTI", "targetContext 兜底", () => {
       const inferred = inferTargetContextFromMessages([

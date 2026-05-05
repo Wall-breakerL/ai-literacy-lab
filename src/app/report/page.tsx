@@ -22,7 +22,7 @@ import {
   getReportTaskLabel,
   hasAwkwardReportContextText,
 } from "@/lib/reportDisplayContext";
-import { scoreAnswer } from "@/lib/reportScoring";
+import { isSkippedQuestionnaireAnswer, scoreAnswer } from "@/lib/reportScoring";
 import { flattenBatchAnswers, isSessionState } from "@/lib/sessionState";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import {
@@ -87,6 +87,7 @@ interface AnswerScoreDetail {
   indexInBatch: number;
   contribution: number | null;
   rawPercent: number | null;
+  skipped: boolean;
 }
 
 interface AnswerBatchDetail {
@@ -190,6 +191,7 @@ function buildScoreAudit(args: {
       indexInBatch: index + 1,
       contribution: scoreAnswer(answer),
       rawPercent: rawScorePercent(answer.score),
+      skipped: isSkippedQuestionnaireAnswer(answer),
     })),
   }));
   const flatDetails = batches.flatMap((batch) => batch.answers);
@@ -197,6 +199,7 @@ function buildScoreAudit(args: {
   const dimensions = report.dimensions.map((dimension) => {
     const answers = flatDetails.filter((item) => item.answer.dimension === dimension.dimension);
     const contributions = answers
+      .filter((item) => !item.skipped)
       .map((item) => item.contribution)
       .filter((score): score is number => typeof score === "number");
     return {
@@ -211,7 +214,7 @@ function buildScoreAudit(args: {
   });
 
   const totalQuestions = flatDetails.length;
-  const skippedQuestions = flatDetails.filter((item) => item.contribution == null).length;
+  const skippedQuestions = flatDetails.filter((item) => item.skipped).length;
   return {
     batches,
     dimensions,
@@ -703,6 +706,164 @@ export default function ReportPage() {
 
   const fullReport = (
     <div className="space-y-6">
+      {/* 新增：风格画像 */}
+      {(report as any).styleProfile && (
+        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-white">你的协作风格画像</h2>
+
+          {/* 你是这样用AI的 */}
+          {(report as any).styleProfile.behaviors && (
+            <div className="space-y-3">
+              <p className="text-[14px] font-semibold text-slate-400">你是这样用AI的</p>
+              {(report as any).styleProfile.behaviors.map((behavior: any, index: number) => (
+                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                  <p className="text-[15px] text-near-white">{behavior.behavior}</p>
+                  <p className="mt-2 text-[12px] text-slate-400">
+                    基于：{behavior.basedOn} · 证据：{behavior.evidence}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 对比 */}
+          {(report as any).styleProfile.comparison && (
+            <div className="space-y-3">
+              <p className="text-[14px] font-semibold text-slate-400">
+                对比：{(report as any).styleProfile.comparison.scenario}
+              </p>
+              {(report as any).styleProfile.comparison.styles.map((style: any, index: number) => (
+                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                  <p className="mb-2 text-[15px] font-semibold text-near-white">{style.type}</p>
+                  <p className="mb-2 text-[14px] text-light-gray">{style.approach}</p>
+                  <div className="flex gap-4 text-[13px]">
+                    <span className="text-green-400">✓ {style.pros}</span>
+                    <span className="text-orange-400">✗ {style.cons}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 独特组合 */}
+          {(report as any).styleProfile.uniqueness && (
+            <div className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+              <p className="mb-2 text-[15px] font-semibold text-near-white">
+                {(report as any).styleProfile.uniqueness.combination}
+              </p>
+              <p className="mb-2 text-[13px] text-slate-400">
+                {(report as any).styleProfile.uniqueness.percentage}
+              </p>
+              <p className="text-[13px] text-slate-400">
+                相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 新增：问题诊断 */}
+      {(report as any).problems && (report as any).problems.length > 0 && (
+        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-white">你可能遇到的问题</h2>
+          {(report as any).problems.map((problem: any, index: number) => (
+            <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4 space-y-3">
+              <h3 className="text-[16px] font-semibold text-near-white">{problem.title}</h3>
+              <div>
+                <p className="text-[12px] font-semibold text-slate-400">症状</p>
+                <p className="text-[14px] text-light-gray">{problem.symptom}</p>
+              </div>
+              <div>
+                <p className="text-[12px] font-semibold text-slate-400">为什么</p>
+                <p className="text-[14px] text-light-gray">{problem.why}</p>
+              </div>
+              <div>
+                <p className="text-[12px] font-semibold text-slate-400">怎么改</p>
+                <p className="text-[14px] text-light-gray">{problem.howToFix.immediate}</p>
+                <pre className="mt-2 text-[13px] text-slate-300 whitespace-pre-wrap">{problem.howToFix.example}</pre>
+                <p className="mt-2 text-[13px] text-green-400">→ {problem.howToFix.expectedResult}</p>
+              </div>
+              <p className="text-[12px] text-slate-500">基于：{problem.basedOn}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* 新增：工具箱 */}
+      {(report as any).toolbox && (
+        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-white">适合你的AI工具箱</h2>
+
+          {/* Prompt模板 */}
+          {(report as any).toolbox.promptTemplates && (
+            <div className="space-y-3">
+              <p className="text-[14px] font-semibold text-slate-400">Prompt模板</p>
+              {(report as any).toolbox.promptTemplates.map((template: any, index: number) => (
+                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[15px] font-semibold text-near-white">{template.title}</p>
+                    <div className="flex gap-1">
+                      {template.tags.map((tag: string, i: number) => (
+                        <span key={i} className="rounded-[4px] bg-raycast-blue/20 px-2 py-0.5 text-[11px] text-raycast-blue">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mb-2 text-[13px] text-slate-400">{template.useCase}</p>
+                  <pre className="rounded-[6px] bg-black/30 p-3 text-[13px] text-light-gray whitespace-pre-wrap">
+                    {template.prompt}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Checklist */}
+          {(report as any).toolbox.checklists && (
+            <div className="space-y-3">
+              <p className="text-[14px] font-semibold text-slate-400">Checklist</p>
+              {(report as any).toolbox.checklists.map((checklist: any, index: number) => (
+                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                  <p className="mb-2 text-[15px] font-semibold text-near-white">{checklist.title}</p>
+                  <ul className="space-y-1">
+                    {checklist.items.map((item: string, i: number) => (
+                      <li key={i} className="text-[14px] text-light-gray">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 工作流 */}
+          {(report as any).toolbox.workflow && (
+            <div className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+              <p className="mb-3 text-[15px] font-semibold text-near-white">
+                {(report as any).toolbox.workflow.title}
+              </p>
+              <div className="space-y-2">
+                {(report as any).toolbox.workflow.steps.map((step: any, index: number) => (
+                  <div key={index} className="flex gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-raycast-blue/20 text-[12px] font-semibold text-raycast-blue">
+                      {step.step}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-semibold text-near-white">{step.action}</p>
+                      <p className="text-[13px] text-slate-400">{step.detail}</p>
+                      <p className="text-[12px] text-slate-500">{step.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[13px] text-slate-400">
+                总时间：{(report as any).toolbox.workflow.totalTime} · 基于：{(report as any).toolbox.workflow.basedOn}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="space-y-4">
         <h2 className="text-[20px] font-semibold text-white">深度维度解析</h2>
         {report.dimensions.map((dim, i) => (
@@ -775,7 +936,7 @@ export default function ReportPage() {
                 <div className="mt-4 space-y-3">
                   {batch.answers.map((item) => {
                     const answer = item.answer;
-                    const skipped = item.contribution == null;
+                    const skipped = item.skipped;
                     return (
                       <div
                         key={`${batch.key}-${item.indexInBatch}-${answer.dimension}-${answer.question}`}
@@ -789,15 +950,18 @@ export default function ReportPage() {
                             <span className="rounded-[6px] border border-white/10 px-2 py-1">
                               {report.dimensions.find((dim) => dim.dimension === answer.dimension)?.label ?? answer.dimension}
                             </span>
-                            <span
-                              className="rounded-[6px] border px-2 py-1"
-                              style={answer.reverse
-                                ? { borderColor: "rgba(251,191,36,0.3)", color: "#fbbf24", backgroundColor: "rgba(251,191,36,0.08)" }
-                                : { borderColor: "rgba(85,179,255,0.3)", color: "#55b3ff", backgroundColor: "rgba(85,179,255,0.08)" }
-                              }
-                            >
-                              {answer.reverse ? "反向题" : "正向题"}
-                            </span>
+                            {answer.reverse ? (
+                              <span
+                                className="rounded-[6px] border px-2 py-1"
+                                style={{
+                                  borderColor: "rgba(251,191,36,0.3)",
+                                  color: "#fbbf24",
+                                  backgroundColor: "rgba(251,191,36,0.08)",
+                                }}
+                              >
+                                反向题
+                              </span>
+                            ) : null}
                           </div>
                           <p className="text-[13px] text-light-gray">
                             {skipped

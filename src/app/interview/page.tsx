@@ -201,7 +201,6 @@ export default function InterviewPage() {
   if (phase === "generating" || phase === "loading") {
     return (
       <QuestionnaireGenerating
-        estimatedDuration={REQUEST_TIMEOUT_MS}
         isReady={isQuestionnaireReady}
         onComplete={() => setPhase("answering")}
       />
