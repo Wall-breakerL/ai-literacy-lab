@@ -751,9 +751,6 @@ export default function ReportPage() {
               <p className="mb-2 text-[15px] font-semibold text-near-white">
                 {(report as any).styleProfile.uniqueness.combination}
               </p>
-              <p className="mb-2 text-[13px] text-slate-400">
-                {(report as any).styleProfile.uniqueness.percentage}
-              </p>
               <p className="text-[13px] text-slate-400">
                 相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
               </p>

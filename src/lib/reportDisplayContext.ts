@@ -15,6 +15,7 @@ const GENERIC_RECENT_USES = new Set([
 ]);
 
 const PERSONALITY_NEXT_ACTIONS: Record<string, string> = {
+  BALANCED: "下次先选一个最近真实任务，让 AI 给出两种推进方式，你只判断哪种更像自己。",
   IFAG: "下次先让 AI 画出整体结构和关键风险，再从最高风险的一块开始细化。",
   IFAL: "下次先让 AI 把目标拆成蓝图、步骤和验收标准，再逐块推进。",
   IFTG: "下次先让 AI 列出它最不确定的 3 个判断，你只检查这些关键点。",

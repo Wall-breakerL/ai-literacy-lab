@@ -124,9 +124,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Relation",
       scenario: "做事",
-      question: "做事时，我期待 AI 主动提醒我可能忽略的问题。",
+      question: "做事时，我更习惯直接给 AI 明确指令，让它按要求快速产出结果。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Workflow",
@@ -138,9 +138,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Workflow",
       scenario: "完成任务",
-      question: "完成任务前，我会先定好步骤，再让 AI 帮我推进。",
+      question: "完成任务时，我更喜欢先让 AI 探索几个方向，再决定怎么推进。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Epistemic",
@@ -152,9 +152,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Epistemic",
       scenario: "做判断",
-      question: "做判断时，我会让 AI 说明依据，再决定是否采用。",
+      question: "做判断时，AI 给出的结论只要读起来合理，我通常会先采用再说。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "RepairScope",
@@ -166,9 +166,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "RepairScope",
       scenario: "出错时",
-      question: "结果偏离预期时，我会换个角度重新向 AI 说明。",
+      question: "结果偏离预期时，我习惯在现有内容上一点点调整，保留还能用的部分。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
   ],
   hybrid_batch2: [
@@ -182,9 +182,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Relation",
       scenario: "当前任务",
-      question: "做当前任务时，我希望 AI 主动指出我没考虑到的边界。",
+      question: "做当前任务时，我更希望 AI 听清楚指令后直接执行，少主动扩展边界。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Workflow",
@@ -196,9 +196,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Workflow",
       scenario: "当前任务",
-      question: "推进当前任务前，我会先让 AI 复述目标和交付标准。",
+      question: "推进当前任务时，我更愿意先看 AI 的初稿，再从结果里反推目标和标准。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Epistemic",
@@ -210,9 +210,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "Epistemic",
       scenario: "当前任务",
-      question: "做当前任务时，AI 的关键建议我会先核对再采用。",
+      question: "做当前任务时，AI 的关键建议只要能解决眼前问题，我通常会直接推进。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "RepairScope",
@@ -224,9 +224,9 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
     {
       dimension: "RepairScope",
       scenario: "当前任务",
-      question: "当前任务越改越乱时，我倾向于重开对话重新说明。",
+      question: "当前任务越改越乱时，我会先定位最小问题点，尽量不重开整体对话。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
   ],
 };

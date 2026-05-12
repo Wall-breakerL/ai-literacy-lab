@@ -125,7 +125,7 @@ function assertHybridTotalBalance(questions: QuestionnaireQuestion[]) {
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert(items.length === 4, `总卷每维应有 4 题：${dimension}`);
-    assert(items.filter((question) => question.reverse).length === 0, `总卷每维不应有反向题：${dimension}`);
+    assert(items.filter((question) => question.reverse).length === 2, `总卷每维应有 2 道反向题：${dimension}`);
   }
 }
 
@@ -204,6 +204,27 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(scored.every((dimension) => dimension.confidence === "high"), "远离中点应为 high confidence");
       assert(scored.every((dimension) => dimension.score === 20), "4 道 5 分题应计为 20");
       assert(scored.every((dimension) => dimension.scorePercent === 100), "满分百分比应为 100");
+    }),
+    test("AI-MBTI", "双向锚定计分能区分高端和低端倾向", () => {
+      const highEnd = scoreQuestionnaireAnswers([
+        answer("Workflow", 5, false),
+        answer("Workflow", 5, false),
+        answer("Workflow", 0, true),
+        answer("Workflow", 0, true),
+      ]);
+      const lowEnd = scoreQuestionnaireAnswers([
+        answer("Workflow", 0, false),
+        answer("Workflow", 0, false),
+        answer("Workflow", 5, true),
+        answer("Workflow", 5, true),
+      ]);
+
+      const highWorkflow = highEnd.find((item) => item.dimension === "Workflow");
+      const lowWorkflow = lowEnd.find((item) => item.dimension === "Workflow");
+      assert(highWorkflow?.tendencyLabel === "框架型", `高端锚定应判为框架型，实际 ${highWorkflow?.tendencyLabel}`);
+      assert(highWorkflow?.score === 20, `高端锚定应为 20/20，实际 ${highWorkflow?.score}`);
+      assert(lowWorkflow?.tendencyLabel === "探索型", `低端锚定应判为探索型，实际 ${lowWorkflow?.tendencyLabel}`);
+      assert(lowWorkflow?.score === 0, `低端锚定应为 0/20，实际 ${lowWorkflow?.score}`);
     }),
     test("AI-MBTI", "Phase 6 confidence 阈值", () => {
       const scored = scoreQuestionnaireAnswers([
@@ -300,13 +321,13 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assertHybridBatchShape(first, "hybrid_batch1 fallback", {
         count: 8,
         perDimension: 2,
-        reversePerDimension: 0,
+        reversePerDimension: 1,
         questionTypes: { universal: 4, semi_specific: 4, specific: 0 },
       });
       assertHybridBatchShape(second, "hybrid_batch2 fallback", {
         count: 8,
         perDimension: 2,
-        reversePerDimension: 0,
+        reversePerDimension: 1,
         questionTypes: { universal: 0, semi_specific: 4, specific: 4 },
       });
       assert(validateQuestionnaireBatch(first, "hybrid_batch1"), "hybrid_batch1 fallback 应合法");
@@ -358,24 +379,24 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(firstPrompt.includes("总题数：8 题"), "第一轮 prompt 应保留题数");
       assert(firstPrompt.includes("通用题 4 道 + 半具体题 4 道"), "第一轮 prompt 应保留题型分布");
       assert(firstPrompt.includes("Relation / Workflow / Epistemic / RepairScope 各 2 题"), "第一部分 prompt 应保留每维题数");
-      assert(firstPrompt.includes("正反向分布：全部 reverse=false"), "第一轮 prompt 应保留全正向合约");
+      assert(firstPrompt.includes("每个维度 1 题 reverse=false，1 题 reverse=true"), "第一轮 prompt 应声明双向锚定合约");
       assert(firstPrompt.includes("计分方式：用户选择 0-5 分，跳过按 2.5 分计算"), "第一轮 prompt 应保留计分合约");
       assert(secondPrompt.includes("第二轮问卷（8题）"), "第二轮 prompt 应使用自然批次名称");
       assert(secondPrompt.includes("半具体题 4 道 + 具体题 4 道"), "第二轮 prompt 应保留题型分布");
-      assert(secondPrompt.includes("正反向分布：全部 reverse=false"), "第二轮 prompt 应保留全正向合约");
+      assert(secondPrompt.includes("每个维度 1 题 reverse=false，1 题 reverse=true"), "第二轮 prompt 应声明双向锚定合约");
     }),
     test("AI-MBTI", "Phase 6 batch validator 强制新正反向结构", () => {
       const invalidFirst = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question, index) => (
-        index === 1 ? { ...question, reverse: true } : question
+        index === 1 ? { ...question, reverse: false } : question
       ));
       const invalidSecond = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question, index) => (
-        index === 0 ? { ...question, reverse: true } : question
+        index === 1 ? { ...question, reverse: false } : question
       ));
 
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 全正向应合法");
-      assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 出现反向题应非法");
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 全正向应合法");
-      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 出现反向题应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 每维 1 正 1 反应合法");
+      assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 缺少反向题应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 每维 1 正 1 反应合法");
+      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 缺少反向题应非法");
     }),
     test("AI-MBTI", "Phase 6 prompt 优化分离自然对话与结构化输出", () => {
       assert(RESEARCHER_TOOL_SYSTEM.includes("双重职责"), "system prompt 应明确对话者与分析者两种职责");
@@ -502,6 +523,19 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         ...repeatedAnswers("RepairScope", 4, 5),
       ]);
       assert(getPersonalityCode(scored) === "CFAG", `预期 CFAG，实际 ${getPersonalityCode(scored)}`);
+    }),
+    test("AI-MBTI", "低区分度中点答案不强行判为董事长", () => {
+      const scored = scoreQuestionnaireAnswers(
+        DIMENSIONS.flatMap((dimension) => [
+          answer(dimension, 2),
+          answer(dimension, 3),
+          answer(dimension, 2),
+          answer(dimension, 3),
+        ])
+      );
+      const code = getPersonalityCode(scored);
+      assert(code === "BALANCED", `中点答案应返回 BALANCED，实际 ${code}`);
+      assert(getPersonalityProfile(code).name === "待观察型", "BALANCED 应返回中性画像");
     }),
     test("AI-MBTI", "16 型人格配置完整", () => {
       const codes = Object.keys(PERSONALITY_PROFILES);

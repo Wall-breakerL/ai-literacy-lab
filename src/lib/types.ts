@@ -211,7 +211,7 @@ export interface QuestionnaireQuestion {
   /** 通用题写「通用」；半具体/具体题写任务或场景标签。 */
   scenario: string;
   questionType?: "universal" | "semi_specific" | "specific";
-  /** 旧版兼容字段；新 active 流程固定 false。 */
+  /** true 表示该题高分指向维度低端（工具型、探索型、信任型、局部型）；计分时自动翻转。 */
   reverse?: boolean;
 }
 

@@ -64,6 +64,6 @@ export const REPORT_SYSTEM = `你是一位AI协作风格分析专家，负责根
 
 ## AI-MBTI 维度定义
 Relation: Instrumental(工具型,0%) ↔ Collaborative(伙伴型,100%)
-Workflow: Framed(框架型,0%) ↔ Exploratory(探索型,100%)
-Epistemic: Auditing(审计型,0%) ↔ Trusting(信任型,100%)
-RepairScope: Global(全局型,0%) ↔ Local(局部型,100%)`;
+Workflow: Exploratory(探索型,0%) ↔ Framed(框架型,100%)
+Epistemic: Trusting(信任型,0%) ↔ Auditing(审计型,100%)
+RepairScope: Local(局部型,0%) ↔ Global(全局型,100%)`;
