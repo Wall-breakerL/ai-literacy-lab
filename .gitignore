@@ -35,6 +35,8 @@ next-env.d.ts
 Minimax_Info
 .local-debug/
 .playwright-cli/
+data/
+output/
 
 # local image-generation workspace; runtime avatar assets live under public/
 /avatars/

@@ -30,6 +30,11 @@ import {
 import { isSkippedQuestionnaireAnswer, resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
 import { getQuestionnaireLoadingProgress, getReportLoadingProgress } from "@/lib/loadingProgress";
+import {
+  buildPublicAnalyticsSummary,
+  sanitizeTestResultPayload,
+  sanitizeVisitPayload,
+} from "@/lib/analytics/shared";
 import type { AgentBOutput, Dimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
@@ -716,6 +721,66 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       const normalized = normalizeTargetContext(undefined, inferred);
       assert(normalized.role.includes("医生"), `role 推断异常：${normalized.role}`);
       assert(normalized.recentUse.includes("GPT"), `recentUse 推断异常：${normalized.recentUse}`);
+    }),
+    test("AI-MBTI", "analytics 访问 payload 清洗", () => {
+      const sanitized = sanitizeVisitPayload({
+        visitId: "visit-1",
+        visitorId: "visitor-1",
+        path: "/report?x=1",
+        referrer: "https://example.com/path?a=1",
+        occurredAt: "2026-05-13T10:00:00.000Z",
+      });
+
+      assert(sanitized.ok, sanitized.ok ? "OK" : sanitized.error);
+      if (sanitized.ok) {
+        assert(sanitized.visit.path === "/report", `path 应去除 query，实际 ${sanitized.visit.path}`);
+        assert(sanitized.visit.referrerHost === "example.com", `referrer host 应解析，实际 ${sanitized.visit.referrerHost}`);
+      }
+    }),
+    test("AI-MBTI", "analytics 测试结果保留问卷样本但不收流程事件", () => {
+      const sanitized = sanitizeTestResultPayload({
+        resultId: "result-1",
+        visitorId: "visitor-1",
+        sessionId: "session_1_abc",
+        role: "产品经理",
+        tools: ["ChatGPT", "Claude"],
+        personalityCode: "CEAL",
+        personalityName: "外交官",
+        dimensions: [{ dimension: "Relation", score: 16, scorePercent: 80, tendencyLabel: "伙伴型" }],
+        questionnaireSamples: [{
+          batchKey: "batch1",
+          index: 1,
+          dimension: "Relation",
+          question: "当 AI 主动补充思路时，你通常会继续让它展开吗？",
+          scenario: "需求讨论",
+          reverse: false,
+          score: 4,
+          skipped: false,
+        }],
+        feedbackText: "不应该被保留",
+        completedAt: "2026-05-13T10:00:00.000Z",
+      });
+
+      assert(sanitized.ok, sanitized.ok ? "OK" : sanitized.error);
+      if (sanitized.ok) {
+        assert(sanitized.result.role === "产品经理", "测试结果应保留职业");
+        assert(sanitized.result.personalityCode === "CEAL", "测试结果应保留人格 code");
+        assert(sanitized.result.questionnaireSamples.length === 1, "测试结果应保留问卷样本");
+        assert(sanitized.result.questionnaireSamples[0].score === 4, "问卷样本应保留选择分数");
+        assert(!("feedbackText" in sanitized.result), "测试结果不应保留反馈正文");
+      }
+    }),
+    test("AI-MBTI", "analytics summary 使用访问人数作为公开主数字", () => {
+      const summary = buildPublicAnalyticsSummary({
+        total_visitors: 1280,
+        today_visitors: 47,
+        total_visits: 2140,
+        completed_tests_total: 320,
+      }, "2026-05-13T10:00:00.000Z");
+      assert(summary.totalVisitors === 1280, "公开 summary 应包含累计访问人数");
+      assert(summary.todayVisitors === 47, "公开 summary 应包含今日访问人数");
+      assert(summary.totalVisits === 2140, "公开 summary 应包含累计访问次数");
+      assert(summary.completedTestsTotal === 320, "公开 summary 可包含累计完成测试数");
     }),
   ];
 }

@@ -29,6 +29,7 @@ import {
   isRetryableApiFailure,
   sleepAbortable,
 } from "@/lib/clientApiRetry";
+import { recordTestResult } from "@/lib/analytics/client";
 
 const REPORT_MAX_ATTEMPTS = 2;
 const REPORT_REQUEST_TIMEOUT_MS = 75_000;
@@ -222,6 +223,21 @@ function buildScoreAudit(args: {
     answeredQuestions: totalQuestions - skippedQuestions,
     skippedQuestions,
   };
+}
+
+function buildQuestionnaireSamples(questionnaireAnswers: QuestionnaireAnswer[], sessionState?: SessionState) {
+  return resolveAnswerBatchEntries(questionnaireAnswers, sessionState).flatMap(([batchKey, answers]) =>
+    answers.map((answer, index) => ({
+      batchKey,
+      index: index + 1,
+      dimension: answer.dimension,
+      question: answer.question,
+      scenario: answer.scenario,
+      reverse: answer.reverse ?? false,
+      score: answer.score,
+      skipped: Boolean(answer.skipped || answer.score == null),
+    }))
+  );
 }
 
 function timeoutSignal(ms: number): AbortSignal {
@@ -568,7 +584,6 @@ export default function ReportPage() {
 
       let failureCount = 0;
       let lastErr = "生成报告失败，请稍后再试。";
-
       for (let attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
         if (cancelled) return;
         try {
@@ -633,6 +648,22 @@ export default function ReportPage() {
           if (cancelled) return;
           setReport(data);
           setScoreAudit(buildScoreAudit({ report: data, questionnaireAnswers, sessionState }));
+          if (sessionState && data.personality) {
+            recordTestResult({
+              sessionId: sessionState.sessionId,
+              role: targetContext?.role ?? sessionState.background.role,
+              tools: targetContext?.tools ?? sessionState.background.tools,
+              personalityCode: data.personality.code,
+              personalityName: data.personality.name,
+              dimensions: data.dimensions.map((dimension) => ({
+                dimension: dimension.dimension,
+                score: dimension.score,
+                scorePercent: dimension.scorePercent,
+                tendencyLabel: dimension.tendencyLabel,
+              })),
+              questionnaireSamples: buildQuestionnaireSamples(questionnaireAnswers, sessionState),
+            });
+          }
           setReportReady(true);
           return;
         } catch (err) {
