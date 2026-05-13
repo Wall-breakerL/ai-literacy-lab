@@ -465,9 +465,6 @@ export function ReportStoryExperience({
             <p className="text-[14px] font-semibold text-white">
               {(report as any).styleProfile.uniqueness.combination}
             </p>
-            <p className="mt-2 text-[12px] text-slate-300">
-              {(report as any).styleProfile.uniqueness.percentage}
-            </p>
             <p className="mt-2 text-[11px] text-slate-400">
               相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
             </p>

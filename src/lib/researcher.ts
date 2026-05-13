@@ -427,6 +427,7 @@ ${guidance}
 ✓ scenario=”写产品需求文档”，question=”写产品需求文档时，我习惯先列大纲，再让 AI 帮我细化。”
 ✓ scenario=”优化 React 性能”，question=”在优化 React 性能过程中，我会先验证 AI 给的方案。”
 ✗ scenario=”写产品需求文档”，question=”我习惯先列大纲，再让 AI 帮我细化。”（缺少场景描述）
+
 </question_examples>${retry}`;
 }
 

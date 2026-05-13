@@ -16,6 +16,10 @@
     "selfcheck:fallback-10r": "SELFCHECK_ROUNDS=10 node scripts/selfcheck-fallback-5r.mjs"
   },
   "dependencies": {
+    "@aliyun-sls/web-sts-plugin": "^0.3.9",
+    "@aliyun-sls/web-track-browser": "^0.3.9",
+    "@arms/rum-browser": "^0.1.8",
+    "better-sqlite3": "^12.10.0",
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.8",
     "lucide-react": "^0.364.0",
@@ -28,6 +32,7 @@
     "tailwind-merge": "^2.2.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

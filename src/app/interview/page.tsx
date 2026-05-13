@@ -67,7 +67,7 @@ function answerFromQuestion(question: QuestionnaireQuestion, score: number | nul
     dimension: question.dimension,
     question: question.question,
     scenario: question.scenario,
-    reverse: false,
+    reverse: question.reverse ?? false,
     score,
     skipped: score == null,
     skipReason: score == null ? "unsure_or_not_applicable" : undefined,

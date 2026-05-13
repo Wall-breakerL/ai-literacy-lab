@@ -142,15 +142,11 @@ const GENERATE_REPORT_TOOL: LlmTool = {
           uniqueness: {
             type: "object",
             additionalProperties: false,
-            required: ["combination", "percentage", "similarRoles"],
+            required: ["combination", "similarRoles"],
             properties: {
               combination: {
                 type: "string",
                 description: "用户的倾向组合，如'框架型 + 审计型'",
-              },
-              percentage: {
-                type: "string",
-                description: "稀有度，如'约15%的用户和你类似'",
               },
               similarRoles: {
                 type: "array",
@@ -806,7 +802,6 @@ type GeneratedReportDraft = {
     };
     uniqueness?: {
       combination: string;
-      percentage: string;
       similarRoles: string[];
     };
   };

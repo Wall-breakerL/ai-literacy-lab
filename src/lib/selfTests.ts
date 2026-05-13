@@ -30,6 +30,11 @@ import {
 import { isSkippedQuestionnaireAnswer, resolveReportQuestionnaireAnswers, scoreAnswer, scoreQuestionnaireAnswers } from "@/lib/reportScoring";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
 import { getQuestionnaireLoadingProgress, getReportLoadingProgress } from "@/lib/loadingProgress";
+import {
+  buildPublicAnalyticsSummary,
+  sanitizeTestResultPayload,
+  sanitizeVisitPayload,
+} from "@/lib/analytics/shared";
 import type { AgentBOutput, Dimension, Message, QuestionnaireAnswer, QuestionnaireQuestion, SessionState } from "@/lib/types";
 
 export interface SelfTestResult {
@@ -205,6 +210,27 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(scored.every((dimension) => dimension.score === 20), "4 道 5 分题应计为 20");
       assert(scored.every((dimension) => dimension.scorePercent === 100), "满分百分比应为 100");
     }),
+    test("AI-MBTI", "双向锚定计分能区分高端和低端倾向", () => {
+      const highEnd = scoreQuestionnaireAnswers([
+        answer("Workflow", 5, false),
+        answer("Workflow", 5, false),
+        answer("Workflow", 0, true),
+        answer("Workflow", 0, true),
+      ]);
+      const lowEnd = scoreQuestionnaireAnswers([
+        answer("Workflow", 0, false),
+        answer("Workflow", 0, false),
+        answer("Workflow", 5, true),
+        answer("Workflow", 5, true),
+      ]);
+
+      const highWorkflow = highEnd.find((item) => item.dimension === "Workflow");
+      const lowWorkflow = lowEnd.find((item) => item.dimension === "Workflow");
+      assert(highWorkflow?.tendencyLabel === "框架型", `高端锚定应判为框架型，实际 ${highWorkflow?.tendencyLabel}`);
+      assert(highWorkflow?.score === 20, `高端锚定应为 20/20，实际 ${highWorkflow?.score}`);
+      assert(lowWorkflow?.tendencyLabel === "探索型", `低端锚定应判为探索型，实际 ${lowWorkflow?.tendencyLabel}`);
+      assert(lowWorkflow?.score === 0, `低端锚定应为 0/20，实际 ${lowWorkflow?.score}`);
+    }),
     test("AI-MBTI", "Phase 6 confidence 阈值", () => {
       const scored = scoreQuestionnaireAnswers([
         ...repeatedAnswers("Relation", 4, 5),
@@ -358,18 +384,18 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(firstPrompt.includes("总题数：8 题"), "第一轮 prompt 应保留题数");
       assert(firstPrompt.includes("通用题 4 道 + 半具体题 4 道"), "第一轮 prompt 应保留题型分布");
       assert(firstPrompt.includes("Relation / Workflow / Epistemic / RepairScope 各 2 题"), "第一部分 prompt 应保留每维题数");
-      assert(firstPrompt.includes("正反向分布：全部 reverse=false"), "第一轮 prompt 应保留全正向合约");
+      assert(firstPrompt.includes("正反向分布：全部 reverse=false"), "第一轮 prompt 应声明全正向合约");
       assert(firstPrompt.includes("计分方式：用户选择 0-5 分，跳过按 2.5 分计算"), "第一轮 prompt 应保留计分合约");
       assert(secondPrompt.includes("第二轮问卷（8题）"), "第二轮 prompt 应使用自然批次名称");
       assert(secondPrompt.includes("半具体题 4 道 + 具体题 4 道"), "第二轮 prompt 应保留题型分布");
-      assert(secondPrompt.includes("正反向分布：全部 reverse=false"), "第二轮 prompt 应保留全正向合约");
+      assert(secondPrompt.includes("正反向分布：全部 reverse=false"), "第二轮 prompt 应声明全正向合约");
     }),
-    test("AI-MBTI", "Phase 6 batch validator 强制新正反向结构", () => {
+    test("AI-MBTI", "Phase 6 batch validator 强制 active 全正向结构", () => {
       const invalidFirst = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question, index) => (
         index === 1 ? { ...question, reverse: true } : question
       ));
       const invalidSecond = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question, index) => (
-        index === 0 ? { ...question, reverse: true } : question
+        index === 1 ? { ...question, reverse: true } : question
       ));
 
       assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 全正向应合法");
@@ -502,6 +528,19 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         ...repeatedAnswers("RepairScope", 4, 5),
       ]);
       assert(getPersonalityCode(scored) === "CFAG", `预期 CFAG，实际 ${getPersonalityCode(scored)}`);
+    }),
+    test("AI-MBTI", "低区分度中点答案不强行判为董事长", () => {
+      const scored = scoreQuestionnaireAnswers(
+        DIMENSIONS.flatMap((dimension) => [
+          answer(dimension, 2),
+          answer(dimension, 3),
+          answer(dimension, 2),
+          answer(dimension, 3),
+        ])
+      );
+      const code = getPersonalityCode(scored);
+      assert(code === "BALANCED", `中点答案应返回 BALANCED，实际 ${code}`);
+      assert(getPersonalityProfile(code).name === "待观察型", "BALANCED 应返回中性画像");
     }),
     test("AI-MBTI", "16 型人格配置完整", () => {
       const codes = Object.keys(PERSONALITY_PROFILES);
@@ -682,6 +721,66 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       const normalized = normalizeTargetContext(undefined, inferred);
       assert(normalized.role.includes("医生"), `role 推断异常：${normalized.role}`);
       assert(normalized.recentUse.includes("GPT"), `recentUse 推断异常：${normalized.recentUse}`);
+    }),
+    test("AI-MBTI", "analytics 访问 payload 清洗", () => {
+      const sanitized = sanitizeVisitPayload({
+        visitId: "visit-1",
+        visitorId: "visitor-1",
+        path: "/report?x=1",
+        referrer: "https://example.com/path?a=1",
+        occurredAt: "2026-05-13T10:00:00.000Z",
+      });
+
+      assert(sanitized.ok, sanitized.ok ? "OK" : sanitized.error);
+      if (sanitized.ok) {
+        assert(sanitized.visit.path === "/report", `path 应去除 query，实际 ${sanitized.visit.path}`);
+        assert(sanitized.visit.referrerHost === "example.com", `referrer host 应解析，实际 ${sanitized.visit.referrerHost}`);
+      }
+    }),
+    test("AI-MBTI", "analytics 测试结果保留问卷样本但不收流程事件", () => {
+      const sanitized = sanitizeTestResultPayload({
+        resultId: "result-1",
+        visitorId: "visitor-1",
+        sessionId: "session_1_abc",
+        role: "产品经理",
+        tools: ["ChatGPT", "Claude"],
+        personalityCode: "CEAL",
+        personalityName: "外交官",
+        dimensions: [{ dimension: "Relation", score: 16, scorePercent: 80, tendencyLabel: "伙伴型" }],
+        questionnaireSamples: [{
+          batchKey: "batch1",
+          index: 1,
+          dimension: "Relation",
+          question: "当 AI 主动补充思路时，你通常会继续让它展开吗？",
+          scenario: "需求讨论",
+          reverse: false,
+          score: 4,
+          skipped: false,
+        }],
+        feedbackText: "不应该被保留",
+        completedAt: "2026-05-13T10:00:00.000Z",
+      });
+
+      assert(sanitized.ok, sanitized.ok ? "OK" : sanitized.error);
+      if (sanitized.ok) {
+        assert(sanitized.result.role === "产品经理", "测试结果应保留职业");
+        assert(sanitized.result.personalityCode === "CEAL", "测试结果应保留人格 code");
+        assert(sanitized.result.questionnaireSamples.length === 1, "测试结果应保留问卷样本");
+        assert(sanitized.result.questionnaireSamples[0].score === 4, "问卷样本应保留选择分数");
+        assert(!("feedbackText" in sanitized.result), "测试结果不应保留反馈正文");
+      }
+    }),
+    test("AI-MBTI", "analytics summary 使用访问人数作为公开主数字", () => {
+      const summary = buildPublicAnalyticsSummary({
+        total_visitors: 1280,
+        today_visitors: 47,
+        total_visits: 2140,
+        completed_tests_total: 320,
+      }, "2026-05-13T10:00:00.000Z");
+      assert(summary.totalVisitors === 1280, "公开 summary 应包含累计访问人数");
+      assert(summary.todayVisitors === 47, "公开 summary 应包含今日访问人数");
+      assert(summary.totalVisits === 2140, "公开 summary 应包含累计访问次数");
+      assert(summary.completedTestsTotal === 320, "公开 summary 可包含累计完成测试数");
     }),
   ];
 }
