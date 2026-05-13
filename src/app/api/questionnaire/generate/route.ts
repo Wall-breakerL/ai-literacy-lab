@@ -396,14 +396,14 @@ function validateBatchForRoute(
 ): string | undefined {
   if (!validateQuestionnaireBatch(questions, batchMode)) {
     const expected = batchMode === "hybrid_batch1"
-      ? "8 题、四维各 2 题、全正向、4 道通用题 + 4 道半具体题"
-      : "8 题、四维各 2 题、全正向、4 道半具体题 + 4 道具体题";
+      ? "8 题、四维各 2 题、每维 1 正 1 反、4 道通用题 + 4 道半具体题"
+      : "8 题、四维各 2 题、每维 1 正 1 反、4 道半具体题 + 4 道具体题";
     return `${batchMode} 必须是 ${expected}，并满足该部分的场景和正反向规则。实际输出：${describeQuestionnaireBatchShape(questions)}。`;
   }
   if (batchMode === "hybrid_batch2" && existingQuestions.length >= 8) {
     const total = [...existingQuestions, ...questions];
     if (!validateQuestionnaireTotal(total)) {
-      return "两部分合计必须是 16 题；每维 4 题、全正向，并且题型为 4 通用 + 8 半具体 + 4 具体。";
+      return "两部分合计必须是 16 题；每维 4 题、每维 2 正 2 反，并且题型为 4 通用 + 8 半具体 + 4 具体。";
     }
   }
   return undefined;
@@ -509,7 +509,7 @@ function normalizeGeneratedQuestions(
       ...question,
       questionType: question.questionType ?? inferredType,
       scenario: (question.questionType ?? inferredType) === "universal" ? "通用" : question.scenario,
-      reverse: false,
+      reverse: typeof question.reverse === "boolean" ? question.reverse : false,
     };
   });
 }

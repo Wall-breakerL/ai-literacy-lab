@@ -58,7 +58,7 @@ function makeAnswers(questions, scores) {
       dimension: question.dimension,
       question: question.question,
       scenario: question.scenario,
-      reverse: false,
+      reverse: question.reverse ?? false,
       score,
       skipped: score == null,
       ...(score == null ? { skipReason: "unsure_or_not_applicable" } : {}),
@@ -92,7 +92,7 @@ function assertQuestion(question, label) {
   assertOneOf(question.dimension, dimensions, `${label}.dimension`);
   assertText(question.question, `${label}.question`);
   assertText(question.scenario, `${label}.scenario`);
-  assert.equal(question.reverse, false, `${label}.reverse must be false`);
+  assert.equal(typeof question.reverse, "boolean", `${label}.reverse must be boolean`);
   assertOneOf(question.questionType, ["universal", "semi_specific", "specific"], `${label}.questionType`);
 }
 
@@ -119,6 +119,11 @@ function assertQuestionBatch(questions, mode, label) {
   for (const dimension of dimensions) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert.equal(items.length, 2, `${label} must include 2 ${dimension} questions`);
+    assert.equal(
+      items.filter((question) => question.reverse).length,
+      1,
+      `${label} must include 1 reverse ${dimension} question`
+    );
   }
 }
 

@@ -530,6 +530,7 @@ ${detailedPrompt}
 不要输出 personality / targetContext / avatarPrompt / colors。
 collaborationSignature 只输出 detail；headline 会由服务端从 personality.signatureHeadline 固定注入。
 dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据会由服务端合并。
+问卷中的“反向题”已经由服务端计分逻辑翻转处理；你只需引用题目和用户选择作为证据，不要重新计算或解释原始分数。
 每个 dimensions.analysis 必须具体解释判断依据：至少包含分数/有效回答数量/一条用户原话或题目证据，不能是空字符串。`;
 
     const reportRequestBase = {

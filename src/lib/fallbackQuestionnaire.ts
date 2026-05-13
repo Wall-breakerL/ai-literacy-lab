@@ -126,7 +126,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "做事",
       question: "做事时，我更习惯直接给 AI 明确指令，让它按要求快速产出结果。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Workflow",
@@ -140,7 +140,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "完成任务",
       question: "完成任务时，我更喜欢先让 AI 探索几个方向，再决定怎么推进。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Epistemic",
@@ -154,7 +154,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "做判断",
       question: "做判断时，AI 给出的结论只要读起来合理，我通常会先采用再说。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "RepairScope",
@@ -168,7 +168,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "出错时",
       question: "结果偏离预期时，我习惯在现有内容上一点点调整，保留还能用的部分。",
       questionType: "semi_specific",
-      reverse: false,
+      reverse: true,
     },
   ],
   hybrid_batch2: [
@@ -184,7 +184,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "当前任务",
       question: "做当前任务时，我更希望 AI 听清楚指令后直接执行，少主动扩展边界。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Workflow",
@@ -198,7 +198,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "当前任务",
       question: "推进当前任务时，我更愿意先看 AI 的初稿，再从结果里反推目标和标准。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "Epistemic",
@@ -212,7 +212,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "当前任务",
       question: "做当前任务时，AI 的关键建议只要能解决眼前问题，我通常会直接推进。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
     {
       dimension: "RepairScope",
@@ -226,7 +226,7 @@ export const FALLBACK_QUESTIONNAIRE_BATCHES: Record<QuestionnaireBatchMode, Ques
       scenario: "当前任务",
       question: "当前任务越改越乱时，我会先定位最小问题点，尽量不重开整体对话。",
       questionType: "specific",
-      reverse: false,
+      reverse: true,
     },
   ],
 };

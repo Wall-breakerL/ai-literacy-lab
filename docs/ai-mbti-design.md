@@ -88,7 +88,7 @@ interface ScenarioGuidance {
 
 - 用户选择 0-5 分。
 - `reverse=false`：按原始 0-5 分累加。
-- `reverse=true`：legacy 兼容路径中按 `5 - score` 计分，active 主流程不生成反向题。
+- `reverse=true`：active 和 legacy 路径都按 `5 - score` 计分；active 主流程每批每维 1 道正向题 + 1 道反向题。
 - 「不了解 / 没想好」是 skip，但按 2.5 分贡献中位数，不计入有效题数。
 - 每个维度满分 20 分，报告同时输出 `scorePercent` 供展示。
 - confidence 同时看有效题数和分数离中点的距离；有效题不足或接近中点时降为 low。

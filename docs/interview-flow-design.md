@@ -39,7 +39,7 @@
 - 第一部分四个维度各 2 题，每维 1 道 `universal` + 1 道 `semi_specific`。
 - 第二部分四个维度各 2 题，每维 1 道 `semi_specific` + 1 道 `specific`。
 - 两部分合计后，每个维度必须 4 题。
-- active 主流程全部 `reverse=false`。
+- 每部分每个维度必须 1 道 `reverse=false` + 1 道 `reverse=true`；两部分合计每维 2 正 2 反。
 - 场景题优先绑定用户上下文；抽象颗粒度下可以降低职业细节，但仍要能让用户代入。
 
 校验失败时会触发一次重试；仍失败则使用本地 fallback batch。
@@ -70,7 +70,7 @@
 
 - 量表为 0-5 分。
 - `reverse=false`：按原始 0-5 分累加。
-- `reverse=true`：legacy 兼容路径中按 `5 - score` 计分，active 主流程不生成反向题。
+- `reverse=true`：按 `5 - score` 计分；active 主流程每维一半题目为反向题。
 - 「不了解 / 没想好」按 2.5 分贡献中位数，但不计入有效题数。
 - 每维满分 20 分，报告同时使用 `scorePercent` 展示百分比。
 - confidence 同时看有效题数和分数离中点的距离；有效题不足或接近中点时降为 low。
