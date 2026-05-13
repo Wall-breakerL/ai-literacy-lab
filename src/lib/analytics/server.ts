@@ -124,8 +124,8 @@ export async function readAdminAnalyticsSummary(input: {
       (select count(*) from analytics_visitors) as total_visitors,
       (select count(*) from analytics_visit_days where metric_date = date('now', 'localtime')) as today_visitors,
       (select coalesce(sum(visit_count), 0) from analytics_visitors) as total_visits,
-      (select count(*) from test_results where date(completed_at) between date(?) and date(?)) as completed_tests,
-      (select count(*) from questionnaire_samples where date(created_at) between date(?) and date(?)) as questionnaire_samples
+      (select count(*) from test_results where date(completed_at, 'localtime') between date(?) and date(?)) as completed_tests,
+      (select count(*) from questionnaire_samples where date(created_at, 'localtime') between date(?) and date(?)) as questionnaire_samples
   `).get(range.from, range.to, range.from, range.to) as {
     total_visitors?: number;
     today_visitors?: number;
@@ -137,7 +137,7 @@ export async function readAdminAnalyticsSummary(input: {
   const personalityRows = database.prepare(`
     select personality_code, personality_name, count(*) as count
     from test_results
-    where date(completed_at) between date(?) and date(?)
+    where date(completed_at, 'localtime') between date(?) and date(?)
     group by personality_code, personality_name
     order by count(*) desc, personality_code asc
     limit 32
@@ -153,7 +153,7 @@ export async function readAdminAnalyticsSummary(input: {
       count(distinct visitor_hash) as visitors,
       count(*) as completed_tests
     from test_results
-    where date(completed_at) between date(?) and date(?)
+    where date(completed_at, 'localtime') between date(?) and date(?)
     group by role
     order by count(*) desc, role asc
     limit 24
@@ -242,7 +242,7 @@ function upsertVisitor(database: AnalyticsDb, visit: SanitizedVisit, visitorHash
 function upsertVisitDay(database: AnalyticsDb, visit: SanitizedVisit, visitorHash: string) {
   database.prepare(`
     insert into analytics_visit_days (metric_date, visitor_hash, visit_count, first_seen_at, last_seen_at)
-    values (date(?), ?, 1, ?, ?)
+    values (date(?, 'localtime'), ?, 1, ?, ?)
     on conflict(metric_date, visitor_hash) do update set
       visit_count = analytics_visit_days.visit_count + 1,
       last_seen_at = max(analytics_visit_days.last_seen_at, excluded.last_seen_at)
