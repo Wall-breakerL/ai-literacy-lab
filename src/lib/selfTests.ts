@@ -130,7 +130,7 @@ function assertHybridTotalBalance(questions: QuestionnaireQuestion[]) {
   for (const dimension of DIMENSIONS) {
     const items = questions.filter((question) => question.dimension === dimension);
     assert(items.length === 4, `总卷每维应有 4 题：${dimension}`);
-    assert(items.filter((question) => question.reverse).length === 0, `总卷每维不应有反向题：${dimension}`);
+    assert(items.filter((question) => question.reverse).length === 2, `总卷每维应有 2 道反向题：${dimension}`);
   }
 }
 
@@ -326,13 +326,13 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assertHybridBatchShape(first, "hybrid_batch1 fallback", {
         count: 8,
         perDimension: 2,
-        reversePerDimension: 0,
+        reversePerDimension: 1,
         questionTypes: { universal: 4, semi_specific: 4, specific: 0 },
       });
       assertHybridBatchShape(second, "hybrid_batch2 fallback", {
         count: 8,
         perDimension: 2,
-        reversePerDimension: 0,
+        reversePerDimension: 1,
         questionTypes: { universal: 0, semi_specific: 4, specific: 4 },
       });
       assert(validateQuestionnaireBatch(first, "hybrid_batch1"), "hybrid_batch1 fallback 应合法");
@@ -384,24 +384,25 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(firstPrompt.includes("总题数：8 题"), "第一轮 prompt 应保留题数");
       assert(firstPrompt.includes("通用题 4 道 + 半具体题 4 道"), "第一轮 prompt 应保留题型分布");
       assert(firstPrompt.includes("Relation / Workflow / Epistemic / RepairScope 各 2 题"), "第一部分 prompt 应保留每维题数");
-      assert(firstPrompt.includes("正反向分布：全部 reverse=false"), "第一轮 prompt 应声明全正向合约");
+      assert(firstPrompt.includes("每个维度 1 题 reverse=false，1 题 reverse=true"), "第一轮 prompt 应声明正反向合约");
+      assert(firstPrompt.includes("反向题"), "第一轮 prompt 应给出反向题写法约束");
       assert(firstPrompt.includes("计分方式：用户选择 0-5 分，跳过按 2.5 分计算"), "第一轮 prompt 应保留计分合约");
       assert(secondPrompt.includes("第二轮问卷（8题）"), "第二轮 prompt 应使用自然批次名称");
       assert(secondPrompt.includes("半具体题 4 道 + 具体题 4 道"), "第二轮 prompt 应保留题型分布");
-      assert(secondPrompt.includes("正反向分布：全部 reverse=false"), "第二轮 prompt 应声明全正向合约");
+      assert(secondPrompt.includes("每个维度 1 题 reverse=false，1 题 reverse=true"), "第二轮 prompt 应声明正反向合约");
     }),
-    test("AI-MBTI", "Phase 6 batch validator 强制 active 全正向结构", () => {
+    test("AI-MBTI", "Phase 6 batch validator 强制 active 正反向结构", () => {
       const invalidFirst = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question, index) => (
-        index === 1 ? { ...question, reverse: true } : question
+        index === 1 ? { ...question, reverse: false } : question
       ));
       const invalidSecond = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question, index) => (
-        index === 1 ? { ...question, reverse: true } : question
+        index === 1 ? { ...question, reverse: false } : question
       ));
 
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 全正向应合法");
-      assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 出现反向题应非法");
-      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 全正向应合法");
-      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 出现反向题应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1, "hybrid_batch1"), "batch1 每维 1 正 1 反应合法");
+      assert(!validateQuestionnaireBatch(invalidFirst, "hybrid_batch1"), "batch1 缺少反向题应非法");
+      assert(validateQuestionnaireBatch(FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2, "hybrid_batch2"), "batch2 每维 1 正 1 反应合法");
+      assert(!validateQuestionnaireBatch(invalidSecond, "hybrid_batch2"), "batch2 缺少反向题应非法");
     }),
     test("AI-MBTI", "Phase 6 prompt 优化分离自然对话与结构化输出", () => {
       assert(RESEARCHER_TOOL_SYSTEM.includes("双重职责"), "system prompt 应明确对话者与分析者两种职责");

@@ -99,7 +99,9 @@ Workflow: Framed 框架型 ↔ Exploratory 探索型
 Epistemic: Auditing 审计型 ↔ Trusting 信任型
 RepairScope: Global 全局重评 ↔ Local 局部调整
 
-active 流程全部 reverse=false：用户越认同，越靠近 Collaborative / Framed / Auditing / Global。
+active 流程双向锚定：每个维度各 1 题 reverse=false（高分=高端）+ 1 题 reverse=true（高分=低端）。
+reverse=false：认同度高 -> Collaborative / Framed / Auditing / Global。
+reverse=true：认同度高 -> Instrumental / Exploratory / Trusting / Local（计分层自动翻转）。
 </scoring_model_for_internal_use>`;
 
 const targetContextSchema = {
@@ -381,12 +383,15 @@ batchMode: ${batchMode}
 总题数：8 题
 维度分布：Relation / Workflow / Epistemic / RepairScope 各 2 题
 题目类型分布：${questionTypes}
-正反向分布：全部 reverse=false
+正反向分布：每个维度 1 题 reverse=false，1 题 reverse=true；每批共 4 题 reverse=false + 4 题 reverse=true
 计分方式：用户选择 0-5 分，跳过按 2.5 分计算
 </batch_contract>
 
 <direction_contract>
-全部正向：认同度高 -> Relation=Collaborative、Workflow=Framed、Epistemic=Auditing、RepairScope=Global。
+双向锚定：
+- reverse=false 题：认同度高 -> Relation=Collaborative、Workflow=Framed、Epistemic=Auditing、RepairScope=Global。
+- reverse=true 题：认同度高 -> Relation=Instrumental、Workflow=Exploratory、Epistemic=Trusting、RepairScope=Local，计分时会自动翻转。
+每个维度必须各出 1 题 reverse=false 和 1 题 reverse=true；两类题都要写成自然的一阶陈述，不要写成“我不会……”这类否定题。
 </direction_contract>
 
 <user_context>
@@ -428,6 +433,12 @@ ${guidance}
 ✓ scenario=”优化 React 性能”，question=”在优化 React 性能过程中，我会先验证 AI 给的方案。”
 ✗ scenario=”写产品需求文档”，question=”我习惯先列大纲，再让 AI 帮我细化。”（缺少场景描述）
 
+【反向题（reverse=true，描述低端行为，仍然要自然正向表达）】
+✓ dimension=”Relation”，reverse=true，question=”做事时，我更习惯直接给 AI 明确指令，让它按要求快速产出结果。”
+✓ dimension=”Workflow”，reverse=true，question=”完成任务时，我更喜欢先让 AI 探索几个方向，再决定怎么推进。”
+✓ dimension=”Epistemic”，reverse=true，question=”做判断时，AI 给出的结论只要读起来合理，我通常会先采用再说。”
+✓ dimension=”RepairScope”，reverse=true，question=”结果偏离预期时，我习惯在现有内容上一点点调整，保留还能用的部分。”
+✗ reverse=true，question=”我不会先验证 AI 的答案。”（否定句，不符合要求）
 </question_examples>${retry}`;
 }
 
@@ -611,8 +622,8 @@ ${history || "（尚无用户发言，请仍基于可得的访谈官开场等信
 旧版兼容问卷硬性要求：
 1. nextQuestions 长度只能是 16。
 2. Relation / Workflow / Epistemic / RepairScope 各 4 题。
-3. active 新流程不使用反向题；旧版兼容题也优先全部 reverse=false。
-4. reverse=false 代表认同该题时更靠近：Collaborative / Framed / Auditing / Global。
+3. 旧版兼容路径优先沿用 active 流程的双向锚定：每维 2 题 reverse=false + 2 题 reverse=true。
+4. reverse=false 代表认同该题时更靠近：Collaborative / Framed / Auditing / Global；reverse=true 代表认同该题时更靠近：Instrumental / Exploratory / Trusting / Local。
 6. 每题尽量绑定 targetContext；每个维度至少 2 题绑定用户目标或近期使用场景。
 7. scenario 是 8～24 字短场景短语，不要写完整段落；question 是第一人称倾向陈述，不重复 scenario。
 8. 不要编造用户明显没有经历过的场景；目标缺失时，围绕 recentUse 出题。`;

@@ -12,6 +12,7 @@
 const baseUrl = (process.env.BASE_URL || process.env.TEST_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const pauseMs = Number.parseInt(process.env.SELFCHECK_PAUSE_MS ?? "600", 10) || 600;
 const roundsCap = Math.max(1, Math.min(Number.parseInt(process.env.SELFCHECK_ROUNDS ?? "10", 10) || 10, 99));
+const dimensions = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 
 const personas = [
   {
@@ -165,13 +166,18 @@ function isQuestionnaireOk(data, batchMode) {
   if (!data || typeof data !== "object") return false;
   if (data.batchMode !== batchMode) return false;
   if (!Array.isArray(data.questions) || data.questions.length !== 8) return false;
-  return data.questions.every(
+  const shapeOk = data.questions.every(
     (question) =>
       question &&
       typeof question.question === "string" &&
-      question.reverse === false &&
+      typeof question.reverse === "boolean" &&
       ["universal", "semi_specific", "specific"].includes(question.questionType)
   );
+  if (!shapeOk) return false;
+  return dimensions.every((dimension) => {
+    const items = data.questions.filter((question) => question.dimension === dimension);
+    return items.length === 2 && items.filter((question) => question.reverse).length === 1;
+  });
 }
 
 async function runQuestionnaire(persona, sessionId) {

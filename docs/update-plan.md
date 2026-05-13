@@ -539,7 +539,7 @@ batchMode: hybrid_batch1
 题目类型分布：
   - 通用题：4 题（每个维度 1 题）
   - 半具体题：4 题（每个维度 1 题）
-正反向分布：全部 reverse=false（8 道正向题）
+正反向分布：每个维度 1 题 reverse=false + 1 题 reverse=true（共 4 正向 + 4 反向）
 计分方式：用户选择 0-5 分，跳过按 2.5 分计算
 </questionnaire_contract>
 ```
@@ -897,12 +897,12 @@ batchMode: hybrid_batch1
 题目类型分布：
   - 通用题：4 题（每个维度 1 题）
   - 半具体题：4 题（每个维度 1 题）
-正反向分布：全部 reverse=false（8 道正向题）
+正反向分布：每个维度 1 题 reverse=false + 1 题 reverse=true（共 4 正向 + 4 反向）
 计分方式：用户选择 0-5 分，跳过按 2.5 分计算
 </questionnaire_contract>
 
 <dimensions>
-四个维度及其倾向（全部正向题，认同度高 → 右侧倾向）：
+四个维度及其倾向（正向题认同度高 → 右侧倾向；反向题认同度高 → 左侧倾向）：
 
 1. Relation（人机关系）
    0 分 ← Instrumental（工具型）：把 AI 当执行工具
@@ -959,7 +959,7 @@ batchMode: hybrid_batch1
 2. 长度适中：题干 ≤50 字，scenario ≤10 字
 3. 自然表达：像用户自己会说的话
 4. 避免模板化：禁止连续 3 题使用相同句式
-5. 倾向清晰：认同度高 = 5 分 = 右侧倾向
+5. 倾向清晰：reverse=false 时认同度高 = 5 分 = 右侧倾向；reverse=true 时认同度高 = 5 分 = 左侧倾向
 
 正反例：
 ❌ "当我在使用 AI 进行代码编写的过程中，我倾向于先进行整体架构的规划"
@@ -982,7 +982,7 @@ ${recentUse}
 - batchMode: "hybrid_batch1"
 - nextQuestions: 8 题，维度分布 Relation/Workflow/Epistemic/RepairScope 各 2 题
 - 每个维度：1 通用题（scenario="通用"）+ 1 半具体题（scenario=任务类型）
-- 全部 reverse=false
+- 每个维度 1 题 reverse=false + 1 题 reverse=true
 - userFacingMessage: ≤50 字，不解释维度和计分
 </output_requirements>`;
 }
@@ -2064,7 +2064,7 @@ Body: {
 | 题目类型 | 4 通用 + 4 半具体 | 4 半具体 + 4 具体 |
 | 题干长度 | ≤30 字（建议） | ≤50 字 |
 | 输入信息 | role + recentUse + tools | 第一轮全部 + 中途反馈 |
-| 关键约束 | 全正向，覆盖四维 | 全正向，避免重复，回应反馈 |
+| 关键约束 | 每维 1 正 1 反，覆盖四维 | 每维 1 正 1 反，避免重复，回应反馈 |
 
 #### 3. 题目类型在第二轮的定义
 
@@ -2116,7 +2116,7 @@ batchMode: hybrid_batch2
 题目类型分布：
   - 半具体题：4 题（每个维度 1 题）
   - 具体题：4 题（每个维度 1 题）
-正反向分布：全部 reverse=false
+正反向分布：每个维度 1 题 reverse=false + 1 题 reverse=true
 计分方式：用户选择 0-5 分，跳过按 2.5 分计算
 </batch2_contract>
 ```
@@ -2125,7 +2125,7 @@ batchMode: hybrid_batch2
 
 ```xml
 <batch1_context>
-用户在第一轮已经回答了以下 8 题（全正向题）：
+用户在第一轮已经回答了以下 8 题（每维 1 正向题 + 1 反向题）：
 
 【第一轮题目和答案】
 1. [Relation/通用] 我倾向于把 AI 当成讨论伙伴...

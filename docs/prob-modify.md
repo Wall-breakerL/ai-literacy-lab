@@ -2,43 +2,48 @@
 
 ## 当前结论
 
-本轮不在 active 主流程中引入反向题。
+active 主流程正式引入反向题。
 
-active 流程保持：
+active 流程保持 16 题结构不变：
 
 - `hybrid_batch1`：8 题，四维各 2 题，4 道通用题 + 4 道半具体题。
 - `hybrid_batch2`：8 题，四维各 2 题，4 道半具体题 + 4 道具体题。
-- 两批合计 16 题。
-- 所有 active 题目均为 `reverse: false`。
+- 每批每个维度 1 道 `reverse=false` + 1 道 `reverse=true`。
+- 两批合计后，每个维度 4 题，其中 2 正向、2 反向。
 
-`reverse: true` 只作为 legacy 兼容计分能力保留。报告计分仍支持旧数据里的反向题，但新生成的 active 问卷不生成反向题。
+`reverse=true` 表示该题高分指向维度低端，计分时由服务端自动使用 `5 - score` 翻转。题目文案仍必须是自然的一阶陈述，不能写成否定句、陷阱题或绕弯题。
 
-## 为什么不采用反向题方案
+## 为什么需要反向题
 
-之前的方案希望通过“每维 2 正 2 反”缓解用户全选高分导致 CFAG 偏多的问题。但实际落地时会带来三个风险：
+之前 active 问卷全部是 `reverse=false`。如果用户对“看起来正确”的好习惯都倾向高分，例如主动讨论、先定框架、验证输出、重新描述问题，四个维度会一起偏高，最终容易集中到 CFAG/董事长。
 
-1. 题目可读性下降：反向题容易写成否定句、绕弯题或陷阱题。
-2. 生成稳定性下降：模型需要同时满足场景、题型、维度和正反向分布，失败后更容易走 fallback。
-3. 代码合同冲突：当前生成归一化会强制 `reverse=false`，如果 prompt 和校验继续要求反向题，会导致模型输出被校验打回。
+正反向平均后，同一维度会同时测两端行为：
 
-因此当前修复方向是保持 active 全正向，并通过报告评分和低区分度保护减少“董事长”误判。
+- 高端行为：认同度高会增加该维度分数。
+- 低端行为：认同度高会降低该维度分数。
+
+这样全选高分不会再天然推高所有维度；用户必须在两端行为上表现出一致倾向，分数才会明显偏向某一端。
+
+## 四维度方向
+
+- Relation：高分 Collaborative 伙伴型；低分 Instrumental 工具型。
+- Workflow：高分 Framed 框架型；低分 Exploratory 探索型。
+- Epistemic：高分 Auditing 审计型；低分 Trusting 信任型。
+- RepairScope：高分 Global 全局重评型；低分 Local 局部调整型。
 
 ## 代码合同
 
 需要保持一致的地方：
 
-- `src/lib/researcher.ts`：问卷 prompt 明确“正反向分布：全部 reverse=false”。
-- `src/lib/questionnaireValidation.ts`：active batch 和 16 题总卷都要求每维反向题数量为 0。
-- `src/app/api/questionnaire/generate/route.ts`：校验错误提示使用“全正向”。
-- `src/lib/fallbackQuestionnaire.ts`：`FALLBACK_QUESTIONNAIRE_BATCHES` 全部 `reverse=false`。
-- `src/lib/reportScoring.ts`：继续兼容 legacy `reverse=true`，使用 `5 - score` 翻转。
+- `src/lib/researcher.ts`：问卷 prompt 明确“每个维度 1 题 reverse=false，1 题 reverse=true”。
+- `src/lib/fallbackQuestionnaire.ts`：`FALLBACK_QUESTIONNAIRE_BATCHES` 每批每维 1 正 1 反。
+- `src/lib/questionnaireValidation.ts`：active batch 要求每维 1 道反向题；16 题总卷要求每维 2 道反向题。
+- `src/app/api/questionnaire/generate/route.ts`：归一化保留模型输出的 `reverse`，最终校验负责拦截分布错误。
+- `src/lib/reportScoring.ts`：`reverse=true` 使用 `5 - score` 翻转。
+- `src/app/api/report/route.ts`：报告 prompt 提醒模型不要重算反向题分数，服务端已合并确定性分数。
 
-## 后续如果重新考虑反向题
+## 验证方式
 
-只有在重新设计题库、题面质量校验和 A/B 数据验证后，才应重新引入 active 反向题。届时必须同时修改：
-
-- prompt 合同。
-- fallback 题库。
-- batch 校验。
-- self-tests 和 smoke tests。
-- 报告解释文案，避免用户感觉题目互相矛盾。
+- 浏览器 self-test 应覆盖 fallback 结构、prompt 合同、batch validator 和反向题计分。
+- API smoke 应覆盖两批问卷生成和报告生成。
+- 手动检查全选高分、全选低分、正反向一致倾向时的人格分布是否更合理。
