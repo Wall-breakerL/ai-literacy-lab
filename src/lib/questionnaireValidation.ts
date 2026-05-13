@@ -43,12 +43,11 @@ export function validateQuestionnaireQuestions(
   }
 
   const expectedPerDimension = questions.length / DIMENSIONS.length;
-  const expectedReversePerDimension = expectedPerDimension / 2;
   return (
     DIMENSIONS.every((dimension) => {
       const count = counts.get(dimension) ?? 0;
       const reverse = reverseCounts.get(dimension) ?? 0;
-      return count === expectedPerDimension && reverse === expectedReversePerDimension;
+      return count === expectedPerDimension && reverse === 0;
     }) && validateQuestionnaireTotal(questions)
   );
 }
@@ -65,7 +64,7 @@ export function validateQuestionnaireBatch(
 
   if (questions.length !== expectedCount) return false;
   if (!validateQuestionShapeAndDirection(questions, expectedPerDimension)) return false;
-  if (!validateReverseDistribution(questions, 1)) return false;
+  if (!validateReverseDistribution(questions, 0)) return false;
 
   return validateQuestionTypeDistribution(questions, mode);
 }
@@ -76,7 +75,7 @@ export function validateQuestionnaireTotal(
   if (!Array.isArray(questions)) return false;
   if (questions.length !== 16) return false;
   if (!validateQuestionShapeAndDirection(questions, 4)) return false;
-  if (!validateReverseDistribution(questions, 2)) return false;
+  if (!validateReverseDistribution(questions, 0)) return false;
   const universal = questions.filter((question) => question.questionType === "universal").length;
   const semiSpecific = questions.filter((question) => question.questionType === "semi_specific").length;
   const specific = questions.filter((question) => question.questionType === "specific").length;
