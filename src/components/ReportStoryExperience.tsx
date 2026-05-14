@@ -35,6 +35,7 @@ type ReportStoryExperienceProps = {
   manifestoText: string;
   signature?: { headline: string; detail: string } | null;
   fullReport: ReactNode;
+  feedbackPanel?: ReactNode;
 };
 
 type DimensionMeta = {
@@ -169,6 +170,10 @@ function downloadBlob(blob: Blob, filename: string) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia("(pointer: coarse)").matches;
 }
 
 function withShareTimeout(promise: Promise<void>, timeoutMs = 45_000) {
@@ -389,11 +394,13 @@ export function ReportStoryExperience({
   manifestoText,
   signature,
   fullReport,
+  feedbackPanel,
 }: ReportStoryExperienceProps) {
   const router = useRouter();
   const [slideIndex, setSlideIndex] = useState(0);
   const [showPoster, setShowPoster] = useState(false);
   const [showFullReport, setShowFullReport] = useState(false);
+  const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [sharingPoster, setSharingPoster] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
@@ -459,7 +466,7 @@ export function ReportStoryExperience({
   };
 
   const revealFeedback = () => {
-    setShowFullReport(true);
+    setShowFeedbackPanel((value) => !value);
     window.setTimeout(() => {
       document.getElementById("report-feedback-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
@@ -469,12 +476,13 @@ export function ReportStoryExperience({
     if (!posterRef.current || sharingPoster) return;
     setSharingPoster(true);
     setShareStatus("");
+    const mobileBrowser = isMobileBrowser();
 
     try {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(posterRef.current, {
         backgroundColor: null,
-        scale: Math.min(3, window.devicePixelRatio || 2),
+        scale: Math.min(mobileBrowser ? 2 : 3, window.devicePixelRatio || 2),
         useCORS: true,
       });
       const blob = await canvasToBlob(canvas);
@@ -490,6 +498,8 @@ export function ReportStoryExperience({
       if (navigator.share && nav.canShare?.(shareData)) {
         await withShareTimeout(navigator.share(shareData));
         setShareStatus("已打开系统分享面板。");
+      } else if (mobileBrowser) {
+        setShareStatus("当前手机浏览器不支持直接分享图片，请使用系统截图保存海报。");
       } else {
         downloadBlob(blob, filename);
         setShareStatus("当前浏览器不支持直接分享，已下载海报图片。");
@@ -499,6 +509,10 @@ export function ReportStoryExperience({
         setShareStatus("已取消分享。");
       } else {
         console.error("Poster share failed:", error);
+        if (mobileBrowser) {
+          setShareStatus("海报图片生成或分享失败，请使用系统截图保存海报。");
+          return;
+        }
         setShareStatus("分享失败，已尝试下载海报图片。");
         try {
           if (posterRef.current) {
@@ -790,7 +804,7 @@ export function ReportStoryExperience({
                 type="button"
                 onClick={handleSharePoster}
                 disabled={sharingPoster}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.08] px-2 text-[12px] font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.12] disabled:cursor-wait disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-raycast-blue/40 bg-raycast-blue/15 px-2 text-[12px] font-semibold text-raycast-blue transition hover:border-raycast-blue/60 hover:bg-raycast-blue/20 disabled:cursor-wait disabled:opacity-60"
               >
                 <Share2 className="h-3.5 w-3.5" />
                 {sharingPoster ? "生成中" : "分享"}
@@ -806,7 +820,7 @@ export function ReportStoryExperience({
               <button
                 type="button"
                 onClick={revealFeedback}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.08] px-2 text-[12px] font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.12]"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-[rgba(95,201,146,0.4)] bg-[rgba(95,201,146,0.15)] px-2 text-[12px] font-semibold text-[#5fc992] transition hover:border-[rgba(95,201,146,0.62)] hover:bg-[rgba(95,201,146,0.2)]"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 反馈
@@ -817,6 +831,7 @@ export function ReportStoryExperience({
         )}
       </div>
       {showFullReport ? <div className="mx-auto mt-10 max-w-3xl">{fullReport}</div> : null}
+      {showFeedbackPanel && feedbackPanel ? <div className="mx-auto mt-10 max-w-3xl">{feedbackPanel}</div> : null}
     </main>
   );
 }
@@ -862,7 +877,7 @@ function PosterPreview({
       <div className="pointer-events-none absolute bottom-10 left-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
       <div className="pointer-events-none absolute bottom-10 right-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
 
-      <div className="relative flex h-full flex-col p-5 pb-5">
+      <div className="relative flex h-full flex-col p-4">
         {/* 顶部：头像 + 印章 + 人格名 */}
         <div className="flex min-h-[100px] items-start gap-3.5">
           <PersonalityAvatar profile={report.personality} size={92} />
@@ -887,7 +902,7 @@ function PosterPreview({
         </div>
 
         {/* tagline:书法体引文 */}
-        <div className="relative mt-4 flex min-h-[44px] items-center px-2">
+        <div className="relative mt-2 flex min-h-[44px] items-center px-2">
           {tagline ? (
             <>
             <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-0 flex items-center gap-3">
@@ -906,7 +921,7 @@ function PosterPreview({
           </div>
 
         {/* 古典分隔 */}
-        <div className="my-5 flex items-center gap-3">
+        <div className="my-3 flex items-center gap-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-white/10" />
           <div className="h-1.5 w-1.5 rotate-45 bg-amber-200/55" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/20 to-white/10" />
@@ -920,20 +935,20 @@ function PosterPreview({
         </div>
 
         {/* 标签 */}
-        <div className="mt-5 flex h-[30px] flex-wrap gap-2 overflow-hidden">
+        <div className="mt-3 flex min-h-[24px] flex-wrap gap-2">
           {tags.map((tag) => (
             <TagBadge key={tag.label} label={tag.label} color={tag.color} />
           ))}
         </div>
 
         {/* 底部分隔 */}
-        <div className="mt-auto flex items-center gap-3 pt-4">
+        <div className="mt-auto flex items-center gap-3 pt-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-white/[0.08]" />
           <div className="h-1 w-1 rotate-45 bg-amber-200/40" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/15 to-white/[0.08]" />
         </div>
 
-        <div className="mt-3 min-h-[84px] rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3">
+        <div className="mt-2 rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3">
           <p className="text-[10px] uppercase tracking-[0.28em] text-amber-100/55">Golden Line</p>
           <p className="mt-2 font-serif-cn text-[13px] leading-relaxed text-amber-50/90" style={twoLineClamp}>
             「{goldenLine}」
