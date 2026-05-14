@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check:llm": "node scripts/check-qwen-api.mjs",
     "check:llm-tools": "node scripts/check-llm-tools.mjs",
+    "debug:questionnaire-batch2": "node scripts/debug-questionnaire-batch2.mjs",
     "test:browser": "node scripts/run-test-lab-browser.mjs",
     "smoke:phase6-phase7": "node scripts/smoke-phase6-phase7.mjs",
     "selfcheck:fallback-5r": "SELFCHECK_ROUNDS=5 node scripts/selfcheck-fallback-5r.mjs",
