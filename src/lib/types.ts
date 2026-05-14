@@ -182,6 +182,46 @@ export interface CollaborationSignature {
   detail: string;
 }
 
+export interface ReportStyleBehavior {
+  behavior: string;
+  basedOn?: string;
+  evidence?: string;
+}
+
+export interface ReportStyleProfile {
+  behaviors?: ReportStyleBehavior[];
+  strengths?: string[];
+  weaknesses?: string[];
+  /** Legacy field kept for older saved reports; new UI does not render it. */
+  uniqueness?: {
+    combination?: string;
+    similarRoles?: string[];
+  };
+}
+
+export interface ReportProblem {
+  title?: string;
+  symptom?: string;
+  why?: string;
+  howToFix?: {
+    immediate?: string;
+    example?: string;
+    expectedResult?: string;
+  };
+  basedOn?: string;
+}
+
+export interface ReportToolbox {
+  promptTemplates?: Array<PromptTemplate & { tags?: string[] }>;
+  checklists?: Array<{ title: string; items: string[] }>;
+  workflow?: {
+    title: string;
+    steps: Array<{ step: number; action: string; detail: string; time: string }>;
+    totalTime: string;
+    basedOn?: string;
+  };
+}
+
 export type FeedbackSentiment = "positive" | "mixed" | "negative";
 export type FeedbackPriority = "low" | "medium" | "high";
 export type FeedbackType =
@@ -192,10 +232,15 @@ export type FeedbackType =
   | "positive_signal";
 
 export interface FinalReport {
+  selectedScenario?: string;
   summary: string;
   tags: string[];
   targetContext?: TargetContext;
   personality?: PersonalityProfile;
+  styleProfile?: ReportStyleProfile;
+  /** Legacy model field kept for display fallback only. New reports should prefer styleProfile.weaknesses. */
+  problems?: ReportProblem[];
+  toolbox?: ReportToolbox;
   styleOverview?: ReportStyleOverview;
   collaborationManifesto?: string;
   collaborationSignature?: CollaborationSignature;

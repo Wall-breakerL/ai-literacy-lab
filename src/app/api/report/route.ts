@@ -66,109 +66,47 @@ const GENERATE_REPORT_TOOL: LlmTool = {
       styleProfile: {
         type: "object",
         additionalProperties: false,
-        required: ["behaviors", "uniqueness"],
+        required: ["behaviors", "strengths", "weaknesses"],
         properties: {
           behaviors: {
             type: "array",
-            minItems: 3,
-            maxItems: 4,
+            minItems: 1,
+            maxItems: 2,
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["behavior", "basedOn", "evidence"],
+              required: ["behavior"],
               properties: {
                 behavior: {
                   type: "string",
-                  minLength: 20,
-                  maxLength: 80,
-                  description: "具体行为描述，如'你习惯先把目标和边界说清楚，再让AI开始工作'",
-                },
-                basedOn: {
-                  type: "string",
-                  description: "基于哪个维度，如'框架型 75分'",
-                },
-                evidence: {
-                  type: "string",
-                  description: "证据，引用用户原话或题目回答",
+                  minLength: 28,
+                  maxLength: 110,
+                  description: "面向用户的一段协作风格描述，不要写'基于'、'证据'、分数字样或技术性标注。",
                 },
               },
             },
           },
-          uniqueness: {
-            type: "object",
-            additionalProperties: false,
-            required: ["combination", "similarRoles"],
-            properties: {
-              combination: {
-                type: "string",
-                description: "用户的倾向组合，如'框架型 + 审计型'",
-              },
-              similarRoles: {
-                type: "array",
-                minItems: 2,
-                maxItems: 4,
-                items: { type: "string" },
-                description: "相似用户群体，如['产品经理', '技术架构师']",
-              },
-            },
-          },
-        },
-      },
-      problems: {
-        type: "array",
-        minItems: 3,
-        maxItems: 3,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["title", "symptom", "why", "howToFix", "basedOn"],
-          properties: {
-            title: {
+          strengths: {
+            type: "array",
+            minItems: 2,
+            maxItems: 3,
+            items: {
               type: "string",
-              minLength: 10,
-              maxLength: 30,
-              description: "问题标题，简短有力，如'AI总是给不出你想要的结果'",
-            },
-            symptom: {
-              type: "string",
-              minLength: 30,
+              minLength: 18,
               maxLength: 80,
-              description: "症状描述，用户能感知到的现象",
             },
-            why: {
+            description: "该用户协作风格的 2-3 条优点，每条一句话，直接描述正向行为价值。",
+          },
+          weaknesses: {
+            type: "array",
+            minItems: 2,
+            maxItems: 3,
+            items: {
               type: "string",
-              minLength: 40,
-              maxLength: 100,
-              description: "原因解释，基于用户的倾向组合",
+              minLength: 18,
+              maxLength: 80,
             },
-            howToFix: {
-              type: "object",
-              additionalProperties: false,
-              required: ["immediate", "example", "expectedResult"],
-              properties: {
-                immediate: {
-                  type: "string",
-                  minLength: 30,
-                  maxLength: 80,
-                  description: "立刻可以尝试的动作",
-                },
-                example: {
-                  type: "string",
-                  minLength: 50,
-                  description: "具体例子，用 ❌ 错误做法 vs ✅ 正确做法 的格式",
-                },
-                expectedResult: {
-                  type: "string",
-                  minLength: 20,
-                  maxLength: 50,
-                  description: "预期效果",
-                },
-              },
-            },
-            basedOn: {
-              type: "string",
-              description: "基于哪些倾向，如'框架型 75分 + 审计型 80分'",
-            },
+            description: "该用户协作风格的 2-3 条风险或缺点，每条一句话，直接描述可能踩的坑。",
           },
         },
       },
@@ -627,6 +565,7 @@ function buildFallbackReport(
       .map((dimension) => dimension.tendencyLabel),
     targetContext: normalizedTargetContext,
     personality,
+    styleProfile: buildFallbackStyleProfile(portableArtifacts.styleOverview.corePattern, scoredDimensions),
     styleOverview: portableArtifacts.styleOverview,
     collaborationManifesto: portableArtifacts.collaborationManifesto,
     collaborationSignature: portableArtifacts.collaborationSignature,
@@ -648,6 +587,79 @@ function buildFallbackReport(
       advice: "",
     })),
   };
+}
+
+function buildFallbackStyleProfile(
+  corePattern: string,
+  scoredDimensions: ReturnType<typeof scoreQuestionnaireAnswers>
+) {
+  const strongest = scoredDimensions
+    .slice()
+    .sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50))
+    .slice(0, 3);
+  const strengths = strongest.map((dimension) => fallbackStrengthForDimension(dimension.dimension, dimension.score));
+  const weaknesses = strongest.map((dimension) => fallbackWeaknessForDimension(dimension.dimension, dimension.score));
+  return {
+    behaviors: [
+      {
+        behavior: corePattern || "你会根据当前任务不断调整 AI 的角色、边界和输出方式，让协作更贴近自己的真实工作场景。",
+      },
+    ],
+    strengths: strengths.length >= 2 ? strengths : [
+      "你能根据任务状态调整和 AI 的配合方式，不会只依赖单一用法。",
+      "你已经形成了一套可复用的协作习惯，适合继续打磨成稳定流程。",
+    ],
+    weaknesses: weaknesses.length >= 2 ? weaknesses : [
+      "如果任务目标变化较快，原有协作习惯可能会让你忽略新的约束。",
+      "如果缺少中途检查，AI 输出可能看起来顺畅但偏离真实需求。",
+    ],
+  };
+}
+
+function fallbackStrengthForDimension(dimension: Dimension, score: number) {
+  const high = score >= 50;
+  const copy: Record<Dimension, { low: string; high: string }> = {
+    Relation: {
+      low: "你能把 AI 当作明确的执行工具，指令边界通常比较清楚。",
+      high: "你愿意让 AI 参与讨论，容易从对话中获得新的角度。",
+    },
+    Workflow: {
+      low: "你能在不确定时先探索可能性，适合处理开放型任务。",
+      high: "你会先搭好结构和规则，复杂任务更容易被稳定推进。",
+    },
+    Epistemic: {
+      low: "你采纳信息的速度较快，适合需要快速启动和快速试错的场景。",
+      high: "你会主动检查 AI 输出，关键事实和逻辑更不容易被放过。",
+    },
+    RepairScope: {
+      low: "你擅长小步修正，能保留已有产出并持续打磨。",
+      high: "你愿意在方向不对时整体重开，能避免在错误结构上越改越远。",
+    },
+  };
+  return high ? copy[dimension].high : copy[dimension].low;
+}
+
+function fallbackWeaknessForDimension(dimension: Dimension, score: number) {
+  const high = score >= 50;
+  const copy: Record<Dimension, { low: string; high: string }> = {
+    Relation: {
+      low: "如果只把 AI 当作执行器，可能会错过它帮助补充思路的价值。",
+      high: "如果讨论过多，任务可能变成不断发散，迟迟不进入执行。",
+    },
+    Workflow: {
+      low: "如果一直探索，方案容易变多但难以收束到一个可执行版本。",
+      high: "如果框架定得太满，AI 的补充空间会被压缩，结果可能不够新。",
+    },
+    Epistemic: {
+      low: "如果太快接受输出，隐藏错误可能到后期才暴露出来。",
+      high: "如果检查成本过高，协作可能变成反复挑错而不是推进任务。",
+    },
+    RepairScope: {
+      low: "如果只做局部修补，整体结构问题可能会被保留下来。",
+      high: "如果频繁推倒重来，前面已经有效的工作容易被浪费。",
+    },
+  };
+  return high ? copy[dimension].high : copy[dimension].low;
 }
 
 function withSessionQuoteEvidence(
@@ -751,13 +763,15 @@ function summarizeReportToolInputShape(input: Record<string, unknown>) {
 type GeneratedReportDraft = {
   selectedScenario?: string;
   styleProfile?: {
-    behaviors?: Array<{behavior: string; basedOn: string; evidence: string}>;
+    behaviors?: Array<{behavior: string; basedOn?: string; evidence?: string}>;
+    strengths?: string[];
+    weaknesses?: string[];
     comparison?: {
       scenario: string;
       styles: Array<{type: string; approach: string; pros: string; cons: string}>;
     };
     uniqueness?: {
-      combination: string;
+      combination?: string;
       similarRoles: string[];
     };
   };
@@ -837,9 +851,7 @@ function normalizeGeneratedReportDraft(value: unknown): GeneratedReportDraft | n
   if (!summary) return null;
   return {
     selectedScenario: toText(record.selectedScenario),
-    styleProfile: record.styleProfile && typeof record.styleProfile === "object"
-      ? record.styleProfile as GeneratedReportDraft["styleProfile"]
-      : undefined,
+    styleProfile: normalizeStyleProfile(record.styleProfile),
     problems: Array.isArray(record.problems)
       ? record.problems as GeneratedReportDraft["problems"]
       : undefined,
@@ -857,6 +869,38 @@ function normalizeGeneratedReportDraft(value: unknown): GeneratedReportDraft | n
     recommendations: normalizeRecommendations(record.recommendations),
     promptTemplates: normalizePromptTemplates(record.promptTemplates ?? record.prompts),
     dimensions: normalizeGeneratedDimensions(record.dimensions),
+  };
+}
+
+function normalizeStyleProfile(value: unknown): GeneratedReportDraft["styleProfile"] | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const behaviors = Array.isArray(record.behaviors)
+    ? record.behaviors
+        .map((item) => {
+          const behaviorRecord = asRecord(item);
+          const behavior = toText(behaviorRecord?.behavior);
+          if (!behavior) return null;
+          return {
+            behavior,
+            basedOn: toText(behaviorRecord?.basedOn),
+            evidence: toText(behaviorRecord?.evidence),
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .slice(0, 4)
+    : undefined;
+  const uniqueness = asRecord(record.uniqueness);
+  return {
+    behaviors,
+    strengths: normalizeTextList(record.strengths).slice(0, 3),
+    weaknesses: normalizeTextList(record.weaknesses).slice(0, 3),
+    uniqueness: uniqueness
+      ? {
+          combination: toText(uniqueness.combination),
+          similarRoles: normalizeTextList(uniqueness.similarRoles).slice(0, 4),
+        }
+      : undefined,
   };
 }
 
