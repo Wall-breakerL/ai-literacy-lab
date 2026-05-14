@@ -30,6 +30,7 @@ import {
   sleepAbortable,
 } from "@/lib/clientApiRetry";
 import { recordTestResult } from "@/lib/analytics/client";
+import { buildStyleProfileDisplay } from "@/lib/styleProfileDisplay";
 
 const REPORT_MAX_ATTEMPTS = 2;
 const REPORT_REQUEST_TIMEOUT_MS = 75_000;
@@ -114,17 +115,6 @@ interface ScoreAudit {
   answeredQuestions: number;
   skippedQuestions: number;
 }
-
-type StyleBehavior = {
-  behavior?: string;
-  basedOn?: string;
-  evidence?: string;
-};
-
-type StyleUniqueness = {
-  combination?: string;
-  similarRoles?: string[];
-};
 
 function firstText(...values: Array<string | undefined | null>) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim() ?? "";
@@ -747,78 +737,46 @@ export default function ReportPage() {
   );
   const uiReport = report as ReportPageModel;
   const styleOverview = buildStyleOverview(uiReport, strongest);
+  const styleProfileDisplay = buildStyleProfileDisplay(uiReport);
   const manifestoText = buildManifestoText(uiReport);
   const signature = buildSignature(uiReport);
   const isBalancedPersonality = report.personality?.code === "BALANCED" || report.personality?.name?.includes("待观察");
 
   const fullReport = (
     <div className="space-y-6">
-      {/* 新增：风格画像 */}
-      {(report as any).styleProfile && (
-        <section className="space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
-          <h2 className="text-[20px] font-semibold text-near-white">你的协作风格画像</h2>
-
-          {/* 你是这样用AI的 */}
-          {(report as any).styleProfile.behaviors && (
-            <div className="space-y-3">
-              <p className="text-[14px] font-semibold text-dim-gray">你是这样用AI的</p>
-              {((report as any).styleProfile.behaviors as StyleBehavior[]).map((behavior, index) => (
-                <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4">
-                  <p className="text-[15px] text-near-white">{behavior.behavior}</p>
-                  <p className="mt-2 text-[12px] text-dim-gray">
-                    基于：{behavior.basedOn} · 证据：{behavior.evidence}
-                  </p>
-                </div>
+      <section className="space-y-5 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
+        <div>
+          <p className="mb-2 text-[12px] font-semibold uppercase text-raycast-blue">协作风格画像</p>
+          <h2 className="text-[20px] font-semibold text-near-white">你是这样和 AI 配合的</h2>
+        </div>
+        <p className="rounded-[8px] border border-border/70 bg-card-surface p-4 text-[15px] leading-relaxed text-near-white">
+          {styleProfileDisplay.description}
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-[8px] border border-[rgba(95,201,146,0.28)] bg-[rgba(95,201,146,0.08)] p-4">
+            <p className="text-[14px] font-semibold text-[#5fc992]">优点</p>
+            <div className="mt-3 space-y-3">
+              {styleProfileDisplay.strengths.map((item, index) => (
+                <p key={`${item}-${index}`} className="flex gap-2 text-[14px] leading-relaxed text-light-gray">
+                  <span className="mt-[2px] text-[#5fc992]">✓</span>
+                  <span>{item}</span>
+                </p>
               ))}
             </div>
-          )}
-
-          {/* 独特组合 */}
-          {(report as any).styleProfile.uniqueness && (
-            <div className="rounded-[8px] border border-raycast-blue/25 bg-card-surface p-4">
-              <p className="mb-2 text-[15px] font-semibold text-near-white">
-                {((report as any).styleProfile.uniqueness as StyleUniqueness).combination}
-              </p>
-              {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.map((role) => (
-                    <span key={role} className="rounded-full border border-border/70 bg-surface-200/60 px-2.5 py-1 text-[12px] text-light-gray">
-                      {role}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+          </div>
+          <div className="rounded-[8px] border border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.08)] p-4">
+            <p className="text-[14px] font-semibold text-[#f97316]">风险</p>
+            <div className="mt-3 space-y-3">
+              {styleProfileDisplay.weaknesses.map((item, index) => (
+                <p key={`${item}-${index}`} className="flex gap-2 text-[14px] leading-relaxed text-light-gray">
+                  <span className="mt-[2px] text-[#f97316]">✗</span>
+                  <span>{item}</span>
+                </p>
+              ))}
             </div>
-          )}
-        </section>
-      )}
-
-      {/* 新增：问题诊断 */}
-      {(report as any).problems && (report as any).problems.length > 0 && (
-        <section className="space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
-          <h2 className="text-[20px] font-semibold text-near-white">你可能遇到的问题</h2>
-          {(report as any).problems.map((problem: any, index: number) => (
-            <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4 space-y-3">
-              <h3 className="text-[16px] font-semibold text-near-white">{problem.title}</h3>
-              <div>
-                <p className="text-[12px] font-semibold text-dim-gray">症状</p>
-                <p className="text-[14px] text-light-gray">{problem.symptom}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-semibold text-dim-gray">为什么</p>
-                <p className="text-[14px] text-light-gray">{problem.why}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-semibold text-dim-gray">怎么改</p>
-                <p className="text-[14px] text-light-gray">{problem.howToFix.immediate}</p>
-                <pre className="mt-2 text-[13px] text-light-gray whitespace-pre-wrap">{problem.howToFix.example}</pre>
-                <p className="mt-2 text-[13px] text-green-400">→ {problem.howToFix.expectedResult}</p>
-              </div>
-              <p className="text-[12px] text-medium-gray">基于：{problem.basedOn}</p>
-            </div>
-          ))}
-        </section>
-      )}
+          </div>
+        </div>
+      </section>
 
       {/* 新增：工具箱 */}
       {(report as any).toolbox && (
@@ -888,7 +846,7 @@ export default function ReportPage() {
                 ))}
               </div>
               <p className="mt-3 text-[13px] text-dim-gray">
-                总时间：{(report as any).toolbox.workflow.totalTime} · 基于：{(report as any).toolbox.workflow.basedOn}
+                总时间：{(report as any).toolbox.workflow.totalTime}
               </p>
             </div>
           )}

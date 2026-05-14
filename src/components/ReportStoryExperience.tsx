@@ -8,6 +8,7 @@ import type { MutableRefObject, ReactNode } from "react";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
 import { getPersonalityTraits } from "@/lib/personalityProfiles";
 import { getFallbackPromptTemplate } from "@/lib/reportDisplayContext";
+import { buildStyleProfileDisplay } from "@/lib/styleProfileDisplay";
 import type { Dimension, DimensionReport, FinalReport, PersonalityProfile, PromptTemplate } from "@/lib/types";
 
 type ReportPageModel = FinalReport & {
@@ -45,17 +46,6 @@ type DimensionMeta = {
   highLetter: string;
   lowColor: string;
   highColor: string;
-};
-
-type StyleBehavior = {
-  behavior?: string;
-  basedOn?: string;
-  evidence?: string;
-};
-
-type StyleUniqueness = {
-  combination?: string;
-  similarRoles?: string[];
 };
 
 const DIMENSION_META: Record<Dimension, DimensionMeta> = {
@@ -409,44 +399,18 @@ export function ReportStoryExperience({
   const posterRef = useRef<HTMLElement | null>(null);
 
   const strongest = useMemo(() => strongestDimension(report.dimensions), [report.dimensions]);
-  const strongestMeta = DIMENSION_META[strongest.dimension];
   const strongestAccent = getSpectrumAccent(strongest);
   const tags = useMemo(() => visibleTags(report), [report]);
   const promptTemplate = useMemo(() => getPromptTemplate(report), [report]);
   const corePattern = insights[0]?.value ?? compactText(report.summary, 120);
   const fitScenario = insights[1]?.value ?? report.targetContext?.recentUse ?? "复杂任务推进";
   const nextAction = insights[2]?.value ?? "下次先让 AI 复述目标，再列出关键假设。";
+  const styleProfileDisplay = useMemo(() => buildStyleProfileDisplay(report), [report]);
 
   // 人格主题色
   const pPrimary = report.personality?.colors?.primary ?? "#55b3ff";
   const pSecondary = report.personality?.colors?.secondary ?? "#0f172a";
   const pAccent = report.personality?.colors?.accent ?? "#ffbc33";
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (showPoster) return;
-      if (event.key === "ArrowLeft") setSlideIndex((value) => Math.max(0, value - 1));
-      if (event.key === "ArrowRight") {
-        setSlideIndex((value) => {
-          if (value >= 5) {
-            setShowPoster(true);
-            return value;
-          }
-          return value + 1;
-        });
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showPoster]);
-
-  const goNext = () => {
-    if (slideIndex >= 5) {
-      setShowPoster(true);
-      return;
-    }
-    setSlideIndex((value) => value + 1);
-  };
 
   const copyPrompt = async () => {
     // 优先使用toolbox中的第一个prompt模板
@@ -570,72 +534,42 @@ export function ReportStoryExperience({
           <h2 className="mt-2 text-[24px] font-semibold text-white">你的协作风格画像</h2>
         </div>
 
-        {(report as any).styleProfile?.behaviors && (
-          <div className="space-y-3">
-            {((report as any).styleProfile.behaviors as StyleBehavior[]).slice(0, 3).map((behavior, index) => (
-              <div
-                key={`${behavior.behavior ?? "behavior"}-${index}`}
-                className="rounded-[8px] p-3"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-              >
-                <p className="text-[13px] font-semibold leading-[1.5] text-white">{behavior.behavior}</p>
-                <p className="mt-2 text-[11px] leading-[1.5] text-slate-400">
-                  {behavior.basedOn ? `基于：${behavior.basedOn}` : null}
-                  {behavior.basedOn && behavior.evidence ? " · " : null}
-                  {behavior.evidence ? `证据：${behavior.evidence}` : null}
-                </p>
+        <div
+          className="rounded-[10px] p-4"
+          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <p className="text-[14px] font-semibold leading-[1.65] text-white">
+            {styleProfileDisplay.description}
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[8px] border border-[rgba(95,201,146,0.22)] bg-[rgba(95,201,146,0.08)] p-3">
+              <p className="text-[12px] font-semibold text-[#5fc992]">优点</p>
+              <div className="mt-3 space-y-2.5">
+                {styleProfileDisplay.strengths.map((item, index) => (
+                  <p key={`${item}-${index}`} className="flex gap-2 text-[12px] leading-[1.55] text-emerald-100/90">
+                    <span className="mt-[1px] text-[#5fc992]">✓</span>
+                    <span>{item}</span>
+                  </p>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="rounded-[8px] border border-[rgba(249,115,22,0.24)] bg-[rgba(249,115,22,0.08)] p-3">
+              <p className="text-[12px] font-semibold text-[#f97316]">风险</p>
+              <div className="mt-3 space-y-2.5">
+                {styleProfileDisplay.weaknesses.map((item, index) => (
+                  <p key={`${item}-${index}`} className="flex gap-2 text-[12px] leading-[1.55] text-orange-100/90">
+                    <span className="mt-[1px] text-[#f97316]">✗</span>
+                    <span>{item}</span>
+                  </p>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
-
-        {/* 独特组合 */}
-        {(report as any).styleProfile?.uniqueness && (
-          <div className="rounded-[8px] p-4" style={{ background: `linear-gradient(135deg, ${strongestMeta.lowColor}15, ${strongestMeta.highColor}15)`, border: "1px solid rgba(255,255,255,0.08)" }}>
-            <p className="text-[14px] font-semibold text-white">
-              {((report as any).styleProfile.uniqueness as StyleUniqueness).combination}
-            </p>
-            {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.length ? (
-              <p className="mt-2 text-[11px] text-slate-400">
-                相似用户：{((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.join("、")}
-              </p>
-            ) : null}
-          </div>
-        )}
-      </div>
-    </SlideShell>,
-
-    // 第4页：问题诊断
-    <SlideShell key="problems" primary={pPrimary} secondary={pSecondary}>
-      <div className="space-y-6">
-        <div>
-          <p className="text-[12px] font-semibold text-slate-400">WATCH OUT</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-white">你可能遇到的问题</h2>
         </div>
-
-        {(report as any).problems && (report as any).problems.length > 0 ? (
-          <div className="space-y-4">
-            {(report as any).problems.slice(0, 2).map((problem: any, index: number) => (
-              <div key={index} className="space-y-3 rounded-[8px] p-4" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <h3 className="text-[15px] font-semibold text-white">{problem.title}</h3>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400">症状</p>
-                  <p className="mt-1 text-[12px] leading-[1.6] text-slate-300">{problem.symptom}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400">怎么改</p>
-                  <p className="mt-1 text-[12px] leading-[1.6] text-slate-300">{problem.howToFix.immediate}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[13px] text-slate-400">暂无问题诊断</p>
-        )}
       </div>
     </SlideShell>,
 
-    // 第5页：工具箱
+    // 第4页：工具箱
     <SlideShell key="toolbox" primary={pPrimary} secondary={pSecondary}>
       <div className="space-y-6">
         <div>
@@ -731,6 +665,34 @@ export function ReportStoryExperience({
       </div>
     </SlideShell>,
   ];
+
+  const lastSlideIndex = slides.length - 1;
+
+  const goNext = () => {
+    if (slideIndex >= lastSlideIndex) {
+      setShowPoster(true);
+      return;
+    }
+    setSlideIndex((value) => value + 1);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (showPoster) return;
+      if (event.key === "ArrowLeft") setSlideIndex((value) => Math.max(0, value - 1));
+      if (event.key === "ArrowRight") {
+        setSlideIndex((value) => {
+          if (value >= lastSlideIndex) {
+            setShowPoster(true);
+            return value;
+          }
+          return value + 1;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lastSlideIndex, showPoster]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#0f172a] to-[#1e293b] px-4 py-8 sm:px-6">
