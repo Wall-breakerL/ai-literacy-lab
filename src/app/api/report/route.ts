@@ -56,6 +56,7 @@ const GENERATE_REPORT_TOOL: LlmTool = {
       "recommendations",
       "promptTemplates",
       "dimensions",
+      "toolbox",
     ],
     properties: {
       selectedScenario: {

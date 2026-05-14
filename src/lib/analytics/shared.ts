@@ -32,6 +32,8 @@ export type TestResultPayload = {
   }>;
   questionnaireSamples: QuestionnaireSamplePayload[];
   completedAt: string;
+  /** 走了 fallback 问卷的 batch 列表，如 ["batch1"]、["batch2"]，未走 fallback 时为空数组 */
+  fallbackBatches?: string[];
 };
 
 export type QuestionnaireSamplePayload = {
@@ -152,6 +154,10 @@ export function sanitizeTestResultPayload(value: unknown):
   if (!completedAt) return { ok: false, error: "invalid completedAt" };
   if (!dimensions.length) return { ok: false, error: "missing dimensions" };
 
+  const fallbackBatches = Array.isArray(input.fallbackBatches)
+    ? input.fallbackBatches.map((b) => cleanString(b, 24)).filter(Boolean)
+    : [];
+
   return {
     ok: true,
     result: {
@@ -165,6 +171,7 @@ export function sanitizeTestResultPayload(value: unknown):
       dimensions,
       questionnaireSamples,
       completedAt,
+      fallbackBatches,
     },
   };
 }

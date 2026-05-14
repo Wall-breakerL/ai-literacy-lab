@@ -441,6 +441,7 @@ export function ReportStoryExperience({
     setSharingPoster(true);
     setShareStatus("");
     const mobileBrowser = isMobileBrowser();
+    let downloaded = false;
 
     try {
       const html2canvas = (await import("html2canvas")).default;
@@ -466,6 +467,7 @@ export function ReportStoryExperience({
         setShareStatus("当前手机浏览器不支持直接分享图片，请使用系统截图保存海报。");
       } else {
         downloadBlob(blob, filename);
+        downloaded = true;
         setShareStatus("当前浏览器不支持直接分享，已下载海报图片。");
       }
     } catch (error) {
@@ -477,6 +479,7 @@ export function ReportStoryExperience({
           setShareStatus("海报图片生成或分享失败，请使用系统截图保存海报。");
           return;
         }
+        if (downloaded) return;
         setShareStatus("分享失败，已尝试下载海报图片。");
         try {
           if (posterRef.current) {

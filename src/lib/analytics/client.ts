@@ -58,11 +58,20 @@ export function recordTestResult(payload: Omit<TestResultPayload, "resultId" | "
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "1");
 
+  let fallbackBatches: string[] = [];
+  try {
+    const raw = sessionStorage.getItem("ai_mbti_fallback_batches");
+    if (raw) fallbackBatches = JSON.parse(raw) as string[];
+  } catch {
+    // ignore
+  }
+
   const fullPayload: TestResultPayload = {
     ...payload,
     resultId: randomId("result"),
     visitorId,
     completedAt: new Date().toISOString(),
+    fallbackBatches,
   };
 
   if (process.env.NEXT_PUBLIC_ANALYTICS_DEBUG === "1") {
