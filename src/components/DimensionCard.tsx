@@ -69,6 +69,10 @@ function DimensionSpectrumBar({ report, index }: { report: DimensionReport; inde
   );
 }
 
+function isObservationLabel(label?: string) {
+  return Boolean(label && /待观察|信号较弱|不明显/.test(label));
+}
+
 export function DimensionCard({ report, index }: DimensionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const meta = DIMENSION_META[report.dimension];
@@ -109,6 +113,11 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
             <span className="mt-1 break-words text-[12px] text-dim-gray">
               基于 {answeredCount} 道有效回答 · {confidenceLabel}
             </span>
+            {isObservationLabel(report.tendencyLabel) ? (
+              <span className="mt-2 text-[12px] leading-relaxed text-dim-gray">
+                正反向题得分相近，该维度信号较弱。
+              </span>
+            ) : null}
           </div>
         </div>
 

@@ -46,6 +46,17 @@ type DimensionMeta = {
   highColor: string;
 };
 
+type StyleBehavior = {
+  behavior?: string;
+  basedOn?: string;
+  evidence?: string;
+};
+
+type StyleUniqueness = {
+  combination?: string;
+  similarRoles?: string[];
+};
+
 const DIMENSION_META: Record<Dimension, DimensionMeta> = {
   Relation: {
     lowLabel: "工具型",
@@ -545,20 +556,20 @@ export function ReportStoryExperience({
           <h2 className="mt-2 text-[24px] font-semibold text-white">你的协作风格画像</h2>
         </div>
 
-        {/* 对比：不同风格的人会怎么做 */}
-        {(report as any).styleProfile?.comparison && (report as any).styleProfile.comparison.styles && (
+        {(report as any).styleProfile?.behaviors && (
           <div className="space-y-3">
-            <p className="text-[13px] font-semibold text-slate-300">
-              {(report as any).styleProfile.comparison.scenario}
-            </p>
-            {(report as any).styleProfile.comparison.styles.slice(0, 2).map((style: any, index: number) => (
-              <div key={index} className="space-y-2 rounded-[8px] p-3" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <p className="text-[13px] font-semibold text-white">{style.type}</p>
-                <p className="text-[12px] leading-[1.6] text-slate-300">{style.approach}</p>
-                <div className="flex gap-3 text-[11px]">
-                  <span className="text-green-400">✓ {style.pros}</span>
-                  <span className="text-orange-400">✗ {style.cons}</span>
-                </div>
+            {((report as any).styleProfile.behaviors as StyleBehavior[]).slice(0, 3).map((behavior, index) => (
+              <div
+                key={`${behavior.behavior ?? "behavior"}-${index}`}
+                className="rounded-[8px] p-3"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                <p className="text-[13px] font-semibold leading-[1.5] text-white">{behavior.behavior}</p>
+                <p className="mt-2 text-[11px] leading-[1.5] text-slate-400">
+                  {behavior.basedOn ? `基于：${behavior.basedOn}` : null}
+                  {behavior.basedOn && behavior.evidence ? " · " : null}
+                  {behavior.evidence ? `证据：${behavior.evidence}` : null}
+                </p>
               </div>
             ))}
           </div>
@@ -568,11 +579,13 @@ export function ReportStoryExperience({
         {(report as any).styleProfile?.uniqueness && (
           <div className="rounded-[8px] p-4" style={{ background: `linear-gradient(135deg, ${strongestMeta.lowColor}15, ${strongestMeta.highColor}15)`, border: "1px solid rgba(255,255,255,0.08)" }}>
             <p className="text-[14px] font-semibold text-white">
-              {(report as any).styleProfile.uniqueness.combination}
+              {((report as any).styleProfile.uniqueness as StyleUniqueness).combination}
             </p>
-            <p className="mt-2 text-[11px] text-slate-400">
-              相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
-            </p>
+            {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.length ? (
+              <p className="mt-2 text-[11px] text-slate-400">
+                相似用户：{((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.join("、")}
+              </p>
+            ) : null}
           </div>
         )}
       </div>

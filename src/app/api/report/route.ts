@@ -61,12 +61,12 @@ const GENERATE_REPORT_TOOL: LlmTool = {
       selectedScenario: {
         type: "string",
         minLength: 4,
-        description: "根据场景选择指导推断出的具体场景，用于风格对比和Prompt模板。不要包含占位符或'根据...'等表述。",
+        description: "根据场景选择指导推断出的具体场景，用于问题诊断和Prompt模板。不要包含占位符或'根据...'等表述。",
       },
       styleProfile: {
         type: "object",
         additionalProperties: false,
-        required: ["behaviors", "comparison", "uniqueness"],
+        required: ["behaviors", "uniqueness"],
         properties: {
           behaviors: {
             type: "array",
@@ -90,51 +90,6 @@ const GENERATE_REPORT_TOOL: LlmTool = {
                 evidence: {
                   type: "string",
                   description: "证据，引用用户原话或题目回答",
-                },
-              },
-            },
-          },
-          comparison: {
-            type: "object",
-            additionalProperties: false,
-            required: ["scenario", "styles"],
-            properties: {
-              scenario: {
-                type: "string",
-                description: "对比使用的场景，必须和selectedScenario一致",
-              },
-              styles: {
-                type: "array",
-                minItems: 2,
-                maxItems: 3,
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["type", "approach", "pros", "cons"],
-                  properties: {
-                    type: {
-                      type: "string",
-                      description: "风格类型，如'你的风格（框架型+审计型）'",
-                    },
-                    approach: {
-                      type: "string",
-                      minLength: 50,
-                      maxLength: 120,
-                      description: "具体做法，50-120字",
-                    },
-                    pros: {
-                      type: "string",
-                      minLength: 20,
-                      maxLength: 60,
-                      description: "优势，20-60字",
-                    },
-                    cons: {
-                      type: "string",
-                      minLength: 20,
-                      maxLength: 60,
-                      description: "风险，20-60字",
-                    },
-                  },
                 },
               },
             },
