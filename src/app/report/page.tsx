@@ -411,7 +411,7 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
   };
 
   return (
-    <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+    <section id="report-feedback-panel" className="scroll-mt-6 space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="mb-2 text-[12px] font-semibold uppercase text-raycast-blue">反馈入口</p>

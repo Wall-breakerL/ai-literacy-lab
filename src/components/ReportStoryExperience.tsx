@@ -1,8 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy } from "lucide-react";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, FileText, MessageCircle, Share2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject, ReactNode } from "react";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
 import { getPersonalityTraits } from "@/lib/personalityProfiles";
 import { getFallbackPromptTemplate } from "@/lib/reportDisplayContext";
@@ -123,6 +125,48 @@ function getPromptTemplate(report: ReportPageModel): PromptTemplate {
 function getSpectrumAccent(dimension: DimensionReport) {
   const meta = DIMENSION_META[dimension.dimension];
   return displayScore(dimension) >= 50 ? meta.highColor : meta.lowColor;
+}
+
+const twoLineClamp = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+} as const;
+
+function posterFileName(report: ReportPageModel) {
+  const code = report.personality?.code ?? "AI-MBTI";
+  const name = report.personality?.name ?? "poster";
+  return `ai-mbti-${code}-${name}`.replace(/[\\/:*?"<>|\s]+/g, "-").toLowerCase();
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("海报图片生成失败。"));
+    }, "image/png");
+  });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function withShareTimeout(promise: Promise<void>, timeoutMs = 45_000) {
+  return Promise.race([
+    promise,
+    new Promise<void>((_, reject) => {
+      window.setTimeout(() => reject(new Error("share_timeout")), timeoutMs);
+    }),
+  ]);
 }
 
 function SpectrumBar({
@@ -335,12 +379,16 @@ export function ReportStoryExperience({
   signature,
   fullReport,
 }: ReportStoryExperienceProps) {
+  const router = useRouter();
   const [slideIndex, setSlideIndex] = useState(0);
   const [showPoster, setShowPoster] = useState(false);
   const [showFullReport, setShowFullReport] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [sharingPoster, setSharingPoster] = useState(false);
+  const [shareStatus, setShareStatus] = useState("");
   const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
+  const posterRef = useRef<HTMLElement | null>(null);
 
   const strongest = useMemo(() => strongestDimension(report.dimensions), [report.dimensions]);
   const strongestMeta = DIMENSION_META[strongest.dimension];
@@ -397,6 +445,63 @@ export function ReportStoryExperience({
     if (Math.abs(delta) < 48) return;
     if (delta < 0) goNext();
     if (delta > 0) setSlideIndex((value) => Math.max(0, value - 1));
+  };
+
+  const revealFeedback = () => {
+    setShowFullReport(true);
+    window.setTimeout(() => {
+      document.getElementById("report-feedback-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  const handleSharePoster = async () => {
+    if (!posterRef.current || sharingPoster) return;
+    setSharingPoster(true);
+    setShareStatus("");
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(posterRef.current, {
+        backgroundColor: null,
+        scale: Math.min(3, window.devicePixelRatio || 2),
+        useCORS: true,
+      });
+      const blob = await canvasToBlob(canvas);
+      const filename = `${posterFileName(report)}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+      const shareData: ShareData = {
+        title: `${report.personality?.name ?? "AI-MBTI"} · AI-MBTI 协作画像`,
+        text: "我的 AI-MBTI 协作画像",
+        files: [file],
+      };
+      const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+
+      if (navigator.share && nav.canShare?.(shareData)) {
+        await withShareTimeout(navigator.share(shareData));
+        setShareStatus("已打开系统分享面板。");
+      } else {
+        downloadBlob(blob, filename);
+        setShareStatus("当前浏览器不支持直接分享，已下载海报图片。");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setShareStatus("已取消分享。");
+      } else {
+        console.error("Poster share failed:", error);
+        setShareStatus("分享失败，已尝试下载海报图片。");
+        try {
+          if (posterRef.current) {
+            const html2canvas = (await import("html2canvas")).default;
+            const canvas = await html2canvas(posterRef.current, { backgroundColor: null, scale: 2, useCORS: true });
+            downloadBlob(await canvasToBlob(canvas), `${posterFileName(report)}.png`);
+          }
+        } catch {
+          setShareStatus("海报图片生成失败，请稍后再试。");
+        }
+      }
+    } finally {
+      setSharingPoster(false);
+    }
   };
 
   const slides = [
@@ -622,7 +727,7 @@ export function ReportStoryExperience({
                 上一页
               </button>
               <div className="flex items-center gap-2">
-                {[0, 1, 2, 3, 4].map((index) => (
+                {slides.map((_, index) => (
                   <button
                     key={index}
                     type="button"
@@ -642,27 +747,59 @@ export function ReportStoryExperience({
                 className="flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-white"
                 style={{ backgroundColor: pPrimary }}
               >
-                {slideIndex === 4 ? "查看海报" : "下一页"}
+                {slideIndex === slides.length - 1 ? "查看海报" : "下一页"}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </section>
         ) : (
-          <section>
-            <PosterPreview
-              report={report}
-              tags={tags}
-            />
-            <div className="mt-5 flex justify-center">
+          <section className="flex min-h-[calc(100svh-4rem)] flex-col">
+            <div className="mb-3 flex h-10 items-center justify-between">
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 text-[12px] font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                首页
+              </button>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/35">Result Poster</span>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <PosterPreview
+                report={report}
+                tags={tags.slice(0, 3)}
+                posterRef={posterRef}
+              />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={handleSharePoster}
+                disabled={sharingPoster}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.08] px-2 text-[12px] font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.12] disabled:cursor-wait disabled:opacity-60"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                {sharingPoster ? "生成中" : "分享"}
+              </button>
               <button
                 type="button"
                 onClick={() => setShowFullReport((value) => !value)}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[16px] font-semibold text-slate-950 shadow-[0_4px_24px_rgba(255,255,255,0.18)] transition-all hover:bg-slate-100 hover:shadow-[0_4px_32px_rgba(255,255,255,0.28)]"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-white px-2 text-[12px] font-semibold text-slate-950 shadow-[0_4px_18px_rgba(255,255,255,0.16)] transition hover:bg-slate-100"
               >
-                查看完整维度解读
-                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${showFullReport ? "rotate-180" : ""}`} />
+                <FileText className="h-3.5 w-3.5" />
+                完整报告
+              </button>
+              <button
+                type="button"
+                onClick={revealFeedback}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 bg-white/[0.08] px-2 text-[12px] font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.12]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                反馈
               </button>
             </div>
+            {shareStatus ? <p className="mt-2 text-center text-[11px] leading-relaxed text-white/45">{shareStatus}</p> : null}
           </section>
         )}
       </div>
@@ -675,9 +812,11 @@ export function ReportStoryExperience({
 function PosterPreview({
   report,
   tags,
+  posterRef,
 }: {
   report: ReportPageModel;
   tags: Array<{ label: string; color: string }>;
+  posterRef: MutableRefObject<HTMLElement | null>;
 }) {
   const code = report.personality?.code ?? "AI-MBTI";
   const name = report.personality?.name ?? "AI 协作画像";
@@ -686,7 +825,9 @@ function PosterPreview({
 
   return (
     <article
+      ref={posterRef}
       className="relative aspect-[9/16] overflow-hidden rounded-[10px] border border-white/10 bg-gradient-to-b from-[#0a0d14] via-[#11151c] to-[#0c0f15] text-white shadow-[0_30px_90px_rgba(8,10,16,0.55)]"
+      style={{ width: "min(100%, calc((100svh - 144px) * 9 / 16))" }}
       onContextMenu={(event) => {
         event.currentTarget.dataset.saveHint = "true";
       }}
@@ -708,10 +849,10 @@ function PosterPreview({
       <div className="pointer-events-none absolute bottom-10 left-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
       <div className="pointer-events-none absolute bottom-10 right-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
 
-      <div className="relative p-6 pb-8">
+      <div className="relative flex h-full flex-col p-5 pb-5">
         {/* 顶部：头像 + 印章 + 人格名 */}
-        <div className="flex items-start gap-4">
-          <PersonalityAvatar profile={report.personality} size={116} />
+        <div className="flex min-h-[100px] items-start gap-3.5">
+          <PersonalityAvatar profile={report.personality} size={92} />
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex rotate-[-2deg] items-center justify-center rounded-[3px] bg-gradient-to-br from-[#c0392b] to-[#8b1e1e] px-2.5 py-[3px] font-serif-cn text-[12px] font-bold tracking-[0.18em] text-white shadow-[0_2px_10px_rgba(192,57,43,0.45),inset_0_0_0_1px_rgba(255,255,255,0.12)] [text-shadow:0_1px_0_rgba(0,0,0,0.25)]">
@@ -723,62 +864,70 @@ function PosterPreview({
             </div>
 
             {/* 毛笔体人格名 */}
-            <h1 className="mt-3 break-words bg-gradient-to-b from-[#fdf6e3] via-[#f1e3c0] to-[#cdb27d] bg-clip-text font-brush text-[42px] font-normal leading-[1.05] tracking-[0.04em] text-transparent drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]">
+            <h1
+              className="mt-2 break-words bg-gradient-to-b from-[#fdf6e3] via-[#f1e3c0] to-[#cdb27d] bg-clip-text font-brush text-[36px] font-normal leading-[1.05] tracking-[0.04em] text-transparent drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]"
+              style={twoLineClamp}
+            >
               {name}
             </h1>
           </div>
         </div>
 
         {/* tagline:书法体引文 */}
-        {tagline ? (
-          <div className="relative mt-7 px-2">
+        <div className="relative mt-4 flex min-h-[44px] items-center px-2">
+          {tagline ? (
+            <>
             <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-0 flex items-center gap-3">
               <div className="h-px flex-1 bg-gradient-to-r from-transparent to-amber-200/30" />
               <div className="h-1 w-1 rotate-45 bg-amber-200/45" />
               <div className="h-px flex-1 bg-gradient-to-l from-transparent to-amber-200/30" />
             </div>
-            <p className="relative z-10 mx-auto max-w-[88%] bg-[#0c0f15] px-3 text-center font-serif-cn text-[14px] italic leading-relaxed text-amber-50/90">
+            <p
+              className="relative z-10 mx-auto max-w-[88%] bg-[#0c0f15] px-3 text-center font-serif-cn text-[13px] italic leading-relaxed text-amber-50/90"
+              style={twoLineClamp}
+            >
               「{tagline}」
             </p>
+            </>
+          ) : null}
           </div>
-        ) : null}
 
         {/* 古典分隔 */}
-        <div className="my-8 flex items-center gap-3">
+        <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-white/10" />
           <div className="h-1.5 w-1.5 rotate-45 bg-amber-200/55" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/20 to-white/10" />
         </div>
 
         {/* 光谱 */}
-        <div className="space-y-4">
+        <div className="space-y-2.5">
           {report.dimensions.map((dimension, index) => (
             <SpectrumBar key={dimension.dimension} dimension={dimension} showScore compact index={index} />
           ))}
         </div>
 
         {/* 标签 */}
-        <div className="mt-7 flex flex-wrap gap-2">
+        <div className="mt-5 flex h-[30px] flex-wrap gap-2 overflow-hidden">
           {tags.map((tag) => (
             <TagBadge key={tag.label} label={tag.label} color={tag.color} />
           ))}
         </div>
 
         {/* 底部分隔 */}
-        <div className="mt-5 flex items-center gap-3 sm:mt-9">
+        <div className="mt-auto flex items-center gap-3 pt-4">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-white/[0.08]" />
           <div className="h-1 w-1 rotate-45 bg-amber-200/40" />
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/15 to-white/[0.08]" />
         </div>
 
-        <div className="mt-3 rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3.5 sm:mt-6">
+        <div className="mt-3 min-h-[84px] rounded-[8px] border border-amber-100/10 bg-gradient-to-b from-amber-100/[0.06] to-transparent px-4 py-3">
           <p className="text-[10px] uppercase tracking-[0.28em] text-amber-100/55">Golden Line</p>
-          <p className="mt-2 font-serif-cn text-[14px] leading-relaxed text-amber-50/90">
+          <p className="mt-2 font-serif-cn text-[13px] leading-relaxed text-amber-50/90" style={twoLineClamp}>
             「{goldenLine}」
           </p>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <p className="font-serif-cn text-[11px] tracking-wide text-white/65">AI-MBTI · 协作画像</p>
         </div>
       </div>
