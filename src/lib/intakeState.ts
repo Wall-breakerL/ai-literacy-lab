@@ -41,7 +41,7 @@ export function createSessionStateFromIntake(form: IntakeForm): SessionState {
 
 export function validateIntakeForm(form: IntakeForm): string | null {
   if (!cleanText(form.role)) return "请填写职业或身份。";
-  if (!cleanText(form.recentUse)) return "请描述一个具体的 AI 使用经历。";
+  if (!cleanText(form.recentUse)) return "请选择或补充一个 AI 使用场景。";
   if (normalizeTools(form.tools).length === 0) return "请选择至少一个常用 AI 工具。";
   return null;
 }

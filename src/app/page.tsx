@@ -185,19 +185,14 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.9 + index * 0.1 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group relative bg-surface-100/50 backdrop-blur-sm p-6 rounded-2xl border border-white/5 hover:border-white/10 transition-all"
+              className="relative bg-surface-100/50 backdrop-blur-sm p-6 rounded-2xl border border-white/5"
               style={{
                 boxShadow: `0 0 0 1px ${feature.color}15, 0 8px 24px rgba(0,0,0,0.4)`,
               }}
             >
-              <div
-                className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity blur-xl"
-                style={{ background: `radial-gradient(circle at center, ${feature.color}20, transparent 70%)` }}
-              />
               <div className="relative">
                 <feature.icon
-                  className="w-8 h-8 mb-3 transition-transform group-hover:scale-110"
+                  className="w-8 h-8 mb-3"
                   style={{ color: feature.color }}
                 />
                 <h3 className="text-near-white font-semibold text-lg mb-2">{feature.title}</h3>
