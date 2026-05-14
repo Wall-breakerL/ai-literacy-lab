@@ -9,6 +9,7 @@ import {
 } from "@/lib/llm";
 import { getFallbackQuestionnaireBatch } from "@/lib/fallbackQuestionnaire";
 import { questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
+import { normalizeGeneratedQuestionBatch } from "@/lib/questionnaireBatchNormalize";
 import {
   findSimilarQuestionText,
   validateQuestionnaireBatch,
@@ -267,7 +268,7 @@ async function generateWithOneRetry({
       scenarioGuidance,
       retryReason,
     });
-    const questions = normalizeGeneratedQuestions(output?.nextQuestions ?? [], batchMode);
+    const questions = normalizeGeneratedQuestionBatch(output?.nextQuestions ?? [], batchMode);
     const hardValidationIssue = validateBatchForRoute(questions, batchMode, existingQuestions);
     const duplicateIssue = hardValidationIssue
       ? undefined
@@ -509,28 +510,6 @@ function parseQuestionnaireQuestions(value: unknown): QuestionnaireQuestion[] {
       questionType,
       reverse: typeof record.reverse === "boolean" ? record.reverse : false,
     }];
-  });
-}
-
-function normalizeGeneratedQuestions(
-  questions: QuestionnaireQuestion[],
-  batchMode: QuestionnaireBatchMode
-): QuestionnaireQuestion[] {
-  const seenByDimension = new Map<Dimension, number>();
-  return questions.map((question) => {
-    const dimension = question.dimension;
-    const count = seenByDimension.get(dimension) ?? 0;
-    seenByDimension.set(dimension, count + 1);
-    const inferredType =
-      batchMode === "hybrid_batch1"
-        ? count === 0 ? "universal" : "semi_specific"
-        : count === 0 ? "semi_specific" : "specific";
-    return {
-      ...question,
-      questionType: question.questionType ?? inferredType,
-      scenario: (question.questionType ?? inferredType) === "universal" ? "通用" : question.scenario,
-      reverse: typeof question.reverse === "boolean" ? question.reverse : false,
-    };
   });
 }
 

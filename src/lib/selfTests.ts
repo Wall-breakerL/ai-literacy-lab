@@ -6,6 +6,7 @@ import {
 import { createSessionStateFromIntake } from "@/lib/intakeState";
 import { buildScenarioGuidanceFromForm } from "@/lib/midFeedbackState";
 import { buildQuestionStem } from "@/lib/questionText";
+import { normalizeGeneratedQuestionBatch } from "@/lib/questionnaireBatchNormalize";
 import {
   findSimilarQuestionText,
   isSpecificScenario,
@@ -350,6 +351,45 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(isSpecificScenario("写代码"), "三字但明确的中文任务场景应被接受");
       assert(isSpecificScenario("写代码时"), "短但明确的中文任务场景应被接受");
       assert(validateQuestionnaireBatch(genericScenarioBatch, "hybrid_batch2"), "hybrid batch 现已允许泛场景");
+    }),
+    test("AI-MBTI", "Phase 6 第二轮模型题型标签归一化", () => {
+      const modelLabeledBatch: QuestionnaireQuestion[] = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch2.map((question) => ({
+        ...question,
+        questionType: "specific",
+      }));
+      const normalized = normalizeGeneratedQuestionBatch(modelLabeledBatch, "hybrid_batch2");
+
+      assertHybridBatchShape(normalized, "hybrid_batch2 normalized", {
+        count: 8,
+        perDimension: 2,
+        reversePerDimension: 1,
+        questionTypes: { universal: 0, semi_specific: 4, specific: 4 },
+      });
+      assert(validateQuestionnaireBatch(normalized, "hybrid_batch2"), "batch2 归一化后应合法");
+      assert(
+        normalized.every((question, index) => question.question === modelLabeledBatch[index]?.question),
+        "归一化不应改写题干"
+      );
+    }),
+    test("AI-MBTI", "Phase 6 第一轮通用题槽位归一化", () => {
+      const modelLabeledBatch: QuestionnaireQuestion[] = FALLBACK_QUESTIONNAIRE_BATCHES.hybrid_batch1.map((question) => ({
+        ...question,
+        scenario: "模型给出的场景",
+        questionType: "specific",
+      }));
+      const normalized = normalizeGeneratedQuestionBatch(modelLabeledBatch, "hybrid_batch1");
+
+      assertHybridBatchShape(normalized, "hybrid_batch1 normalized", {
+        count: 8,
+        perDimension: 2,
+        reversePerDimension: 1,
+        questionTypes: { universal: 4, semi_specific: 4, specific: 0 },
+      });
+      assert(validateQuestionnaireBatch(normalized, "hybrid_batch1"), "batch1 归一化后应合法");
+      assert(
+        normalized.filter((question) => question.questionType === "universal").every((question) => question.scenario === "通用"),
+        "第一轮通用题场景应强制为通用"
+      );
     }),
     test("AI-MBTI", "Phase 6 问卷去重检测", () => {
       const similar = findSimilarQuestionText(
