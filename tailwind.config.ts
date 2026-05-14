@@ -5,22 +5,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        void: "#07080a",
-        "surface-100": "#101111",
-        "surface-200": "#1b1c1e",
-        "card-surface": "#1b1c1e",
+        void: "rgb(var(--color-void) / <alpha-value>)",
+        "surface-100": "rgb(var(--color-surface-100) / <alpha-value>)",
+        "surface-200": "rgb(var(--color-surface-200) / <alpha-value>)",
+        "card-surface": "rgb(var(--color-card-surface) / <alpha-value>)",
         "raycast-red": "#FF6363",
         "raycast-blue": "#55b3ff",
         "raycast-green": "#5fc992",
         "raycast-yellow": "#ffbc33",
-        "near-white": "#f9f9f9",
-        "light-gray": "#cecece",
-        silver: "#c0c0c0",
-        "medium-gray": "#9c9c9d",
-        "dim-gray": "#6a6b6c",
-        "dark-gray": "#434345",
-        border: "#252829",
-        "dark-border": "#2f3031",
+        "near-white": "rgb(var(--color-near-white) / <alpha-value>)",
+        "light-gray": "rgb(var(--color-light-gray) / <alpha-value>)",
+        silver: "rgb(var(--color-silver) / <alpha-value>)",
+        "medium-gray": "rgb(var(--color-medium-gray) / <alpha-value>)",
+        "dim-gray": "rgb(var(--color-dim-gray) / <alpha-value>)",
+        "dark-gray": "rgb(var(--color-dark-gray) / <alpha-value>)",
+        border: "rgb(var(--color-border) / <alpha-value>)",
+        "dark-border": "rgb(var(--color-dark-border) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "Inter Fallback", "system-ui", "sans-serif"],
@@ -47,10 +47,8 @@ const config: Config = {
         "raycast-small": "0.4px",
       },
       boxShadow: {
-        "card-ring":
-          "rgb(27, 28, 30) 0px 0px 0px 1px, rgb(7, 8, 10) 0px 0px 0px 1px inset",
-        "button-native":
-          "rgba(255,255,255,0.05) 0px 1px 0px 0px inset, rgba(255,255,255,0.25) 0px 0px 0px 1px, rgba(0,0,0,0.2) 0px -1px 0px 0px inset",
+        "card-ring": "var(--shadow-card-ring)",
+        "button-native": "var(--shadow-button-native)",
         floating:
           "rgba(0,0,0,0.5) 0px 0px 0px 2px, rgba(255,255,255,0.19) 0px 0px 14px",
         "warm-glow": "rgba(215,201,175,0.05) 0px 0px 20px 5px",

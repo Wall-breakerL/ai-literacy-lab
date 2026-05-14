@@ -87,7 +87,7 @@ export function QuestionnaireCard({
         <div className="text-[12px] text-dim-gray font-medium tracking-[0.2px]">
           第 {index + 1} 题 / 共 {total} 题
         </div>
-        <div className="flex-1 h-1.5 bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden relative">
+        <div className="flex-1 h-1.5 bg-surface-200 rounded-full overflow-hidden relative">
           <motion.div
             className="h-full rounded-full relative"
             style={{
@@ -116,7 +116,7 @@ export function QuestionnaireCard({
       </div>
 
       {/* Card */}
-      <div className="bg-surface-100 p-8 rounded-[20px] shadow-card-ring border border-[rgba(255,255,255,0.06)] relative overflow-hidden">
+      <div className="bg-surface-100 p-8 rounded-[20px] shadow-card-ring border border-border/70 relative overflow-hidden">
         <motion.div
           className="absolute top-0 right-0 w-[200px] h-[200px] bg-[rgba(85,179,255,0.03)] rounded-full blur-[60px] pointer-events-none"
           animate={{
@@ -165,7 +165,7 @@ export function QuestionnaireCard({
                   ${
                     selectedScore === score
                       ? "bg-raycast-blue text-void border-raycast-blue shadow-[0_0_20px_rgba(85,179,255,0.6)]"
-                      : "bg-surface-100 border-[rgba(255,255,255,0.08)] text-light-gray hover:border-raycast-blue hover:text-near-white hover:shadow-[0_0_12px_rgba(85,179,255,0.3)]"
+                      : "bg-surface-100 border-border/70 text-light-gray hover:border-raycast-blue hover:text-near-white hover:shadow-[0_0_12px_rgba(85,179,255,0.3)]"
                   }
                 `}
               >
@@ -210,7 +210,7 @@ export function QuestionnaireCard({
               ${
                 selectedScore === "skip"
                   ? "bg-card-surface text-near-white border-raycast-yellow"
-                  : "bg-transparent border-[rgba(255,255,255,0.08)] text-dim-gray hover:text-light-gray hover:border-[rgba(255,255,255,0.16)]"
+                  : "bg-transparent border-border/70 text-dim-gray hover:text-light-gray hover:border-raycast-blue/40"
               }
             `}
           >
@@ -231,7 +231,7 @@ export function QuestionnaireCard({
                 onPrevious(hasSelection ? selectedAnswer : undefined);
               }}
               disabled={isFirst}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-transparent text-[14px] font-semibold text-dim-gray transition-all hover:border-[rgba(255,255,255,0.18)] hover:text-light-gray disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[rgba(255,255,255,0.08)] disabled:hover:text-dim-gray"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-border/70 bg-transparent text-[14px] font-semibold text-dim-gray transition-all hover:border-raycast-blue/40 hover:text-light-gray disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border/70 disabled:hover:text-dim-gray"
             >
               <ArrowLeft className="h-4 w-4" />
               上一题
@@ -240,7 +240,7 @@ export function QuestionnaireCard({
               type="button"
               onClick={() => hasSelection && onNext(selectedAnswer)}
               disabled={!hasSelection}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-white/10 bg-[hsla(0,0%,100%,0.9)] text-[14px] font-semibold text-[#18191a] shadow-button-native transition-all hover:bg-white disabled:cursor-not-allowed disabled:bg-surface-100 disabled:text-dim-gray disabled:shadow-none"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-border/70 bg-near-white text-[14px] font-semibold text-void shadow-button-native transition-all hover:bg-light-gray disabled:cursor-not-allowed disabled:bg-surface-100 disabled:text-dim-gray disabled:shadow-none"
             >
               {isLast ? (
                 <>
