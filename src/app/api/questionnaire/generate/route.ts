@@ -10,6 +10,7 @@ import {
 import { getFallbackQuestionnaireBatch } from "@/lib/fallbackQuestionnaire";
 import { questionnaireReadyMessageForBatchMode } from "@/lib/questionnaireReadyMessage";
 import {
+  findSimilarQuestionText,
   validateQuestionnaireBatch,
   validateQuestionnaireTotal,
 } from "@/lib/questionnaireValidation";
@@ -41,6 +42,7 @@ export const runtime = "nodejs";
 
 const BATCH_MODES: QuestionnaireBatchMode[] = ["hybrid_batch1", "hybrid_batch2"];
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
+const NEAR_DUPLICATE_RETRY_THRESHOLD = 0.98;
 const MID_DIALOGUE_STATUSES: MidDialogueStatus[] = [
   "confirmed",
   "refined",
@@ -168,6 +170,10 @@ export async function POST(req: NextRequest) {
     };
   }
 
+  if (source === "model" && result.validationIssue?.startsWith("题目疑似重复")) {
+    warnings.push(`保守去重提示：${result.validationIssue}`);
+  }
+
   const questions = result.questions;
   const validationIssue = validateBatchForRoute(questions, batchMode, source === "model" ? existingQuestions : []);
   if (validationIssue) {
@@ -262,7 +268,11 @@ async function generateWithOneRetry({
       retryReason,
     });
     const questions = normalizeGeneratedQuestions(output?.nextQuestions ?? [], batchMode);
-    const validationIssue = validateBatchForRoute(questions, batchMode, existingQuestions);
+    const hardValidationIssue = validateBatchForRoute(questions, batchMode, existingQuestions);
+    const duplicateIssue = hardValidationIssue
+      ? undefined
+      : findNearDuplicateQuestionIssue(questions, existingQuestions);
+    const validationIssue = hardValidationIssue ?? duplicateIssue;
     if (debugEnabled) {
       debugAttempts.push({
         attempt,
@@ -281,11 +291,12 @@ async function generateWithOneRetry({
         validationIssue,
       });
     }
-    if (!validationIssue) {
+    if (!hardValidationIssue && (!duplicateIssue || attempt === 1)) {
       return {
         questions,
         agentBOutput: output ?? undefined,
         retryCount: attempt,
+        validationIssue: duplicateIssue,
         modelUsed: model,
         debug: debugEnabled
           ? {
@@ -407,6 +418,15 @@ function validateBatchForRoute(
     }
   }
   return undefined;
+}
+
+function findNearDuplicateQuestionIssue(
+  questions: QuestionnaireQuestion[],
+  existingQuestions: QuestionnaireQuestion[]
+): string | undefined {
+  const similar = findSimilarQuestionText(questions, existingQuestions, NEAR_DUPLICATE_RETRY_THRESHOLD);
+  if (!similar) return undefined;
+  return `题目疑似重复（相似度 ${similar.similarity.toFixed(2)}）：「${truncateString(similar.question, 80)}」 vs 「${truncateString(similar.existingQuestion, 80)}」`;
 }
 
 function describeQuestionnaireBatchShape(questions: QuestionnaireQuestion[]): string {

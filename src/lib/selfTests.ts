@@ -368,6 +368,40 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       );
       assert(similar && similar.similarity >= 0.72, "高度相似题干应被检测出来");
     }),
+    test("AI-MBTI", "Phase 6 问卷去重阈值保持保守", () => {
+      const exact = findSimilarQuestionText(
+        [{
+          dimension: "Workflow",
+          scenario: "写需求文档",
+          question: "写需求文档时，我会先明确目标和边界，再让 AI 开始工作。",
+          reverse: false,
+        }],
+        [{
+          dimension: "Workflow",
+          scenario: "写需求文档",
+          question: "写需求文档时，我会先明确目标和边界，再让 AI 开始工作！",
+          reverse: false,
+        }],
+        0.98
+      );
+      const nearButNotExact = findSimilarQuestionText(
+        [{
+          dimension: "Workflow",
+          scenario: "写需求文档",
+          question: "写需求文档时，我会先明确目标和边界，再让 AI 开始工作。",
+          reverse: false,
+        }],
+        [{
+          dimension: "Workflow",
+          scenario: "写需求文档",
+          question: "写需求文档时，我会先明确任务结构，再让 AI 帮我扩展内容。",
+          reverse: false,
+        }],
+        0.98
+      );
+      assert(exact && exact.similarity >= 0.98, "标点不同但语义完全相同的题应被保守阈值捕获");
+      assert(!nearButNotExact, "只是同场景同维度但不完全相同的题不应被保守阈值拦截");
+    }),
     test("AI-MBTI", "Phase 6 prompt 优化保留问卷硬合约", () => {
       const firstPrompt = buildQuestionnaireBatchPrompt({
         sessionState: sessionState({ phase: "questionnaire_batch1" }),
