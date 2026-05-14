@@ -26,15 +26,47 @@ const ROLE_OPTIONS = [
   "销售/商务",
 ];
 
+const GENERIC_SCENARIOS = ["写作整理", "学习新知", "头脑风暴", "做PPT报告", "日常决策"];
+
+const ROLE_SCENARIOS: Record<string, string[]> = {
+  "程序员/开发者": ["写代码调试", "查错排障", "理解文档", "设计方案", "代码审查"],
+  "产品经理": ["写需求文档", "整理用户反馈", "竞品分析", "头脑风暴", "做汇报"],
+  "设计师": ["生成创意", "整理参考", "写设计说明", "优化文案", "做提案"],
+  "数据分析师": ["清洗数据", "写分析报告", "解释指标", "生成图表", "查询SQL"],
+  "编辑/运营": ["写文案", "改标题", "排内容计划", "整理素材", "做活动方案"],
+  "市场/营销": ["写营销文案", "用户洞察", "活动策划", "竞品分析", "复盘总结"],
+  "学生": ["课程学习", "整理笔记", "写作业", "准备考试", "做展示"],
+  "研究生/博士": ["读论文", "整理实验", "写论文", "改摘要", "准备汇报"],
+  "教师/讲师": ["备课设计", "出题批改", "整理讲义", "解释概念", "课堂活动"],
+  "咨询/顾问": ["行业研究", "写方案", "客户沟通", "整理访谈", "做汇报"],
+  "销售/商务": ["客户跟进", "写邮件", "整理话术", "分析线索", "做提案"],
+};
+
 export default function IntakePage() {
   const router = useRouter();
   const [role, setRole] = useState("");
   const [selectedRoleOption, setSelectedRoleOption] = useState<string | null>(null);
   const [customRole, setCustomRole] = useState("");
-  const [recentUse, setRecentUse] = useState("");
+  const [selectedScenarios, setSelectedScenarios] = useState<string[]>([]);
+  const [showCustomScenario, setShowCustomScenario] = useState(false);
+  const [customScenario, setCustomScenario] = useState("");
   const [tools, setTools] = useState<string[]>([]);
   const [customTool, setCustomTool] = useState("");
   const [error, setError] = useState("");
+
+  const scenarioOptions = useMemo(() => {
+    if (selectedRoleOption && selectedRoleOption !== "other") {
+      return ROLE_SCENARIOS[selectedRoleOption] ?? GENERIC_SCENARIOS;
+    }
+    return GENERIC_SCENARIOS;
+  }, [selectedRoleOption]);
+
+  const recentUse = useMemo(() => {
+    const values = [...selectedScenarios];
+    const custom = customScenario.trim();
+    if (custom) values.push(custom);
+    return values.join("、");
+  }, [customScenario, selectedScenarios]);
 
   const form: IntakeForm = useMemo(() => ({
     role: role.trim() || "",
@@ -42,8 +74,21 @@ export default function IntakePage() {
     tools: customTool.trim() ? [...tools, customTool.trim()] : tools,
   }), [customTool, recentUse, role, tools]);
 
+  const resetScenarios = () => {
+    setSelectedScenarios([]);
+    setCustomScenario("");
+    setShowCustomScenario(false);
+  };
+
   const toggleTool = (tool: string) => {
     setTools((current) => current.includes(tool) ? current.filter((item) => item !== tool) : [...current, tool]);
+  };
+
+  const toggleScenario = (scenario: string) => {
+    setSelectedScenarios((current) => {
+      if (current.includes(scenario)) return current.filter((item) => item !== scenario);
+      return [...current, scenario].slice(0, 2);
+    });
   };
 
   const submit = () => {
@@ -73,7 +118,7 @@ export default function IntakePage() {
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-raycast-blue">信息收集 / 1 of 4</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">先给测评一个真实起点</h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-dim-gray">
-            填一个具体 AI 使用经历，第一轮题目会直接围绕这个背景生成。
+            选择你的身份和常用场景，第一轮题目会直接围绕这个背景生成。
           </p>
         </div>
 
@@ -92,6 +137,7 @@ export default function IntakePage() {
                         setSelectedRoleOption(roleOption);
                         setRole(roleOption);
                         setCustomRole("");
+                        resetScenarios();
                       }}
                       className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                         selected
@@ -109,6 +155,7 @@ export default function IntakePage() {
                   onClick={() => {
                     setSelectedRoleOption("other");
                     setRole(customRole);
+                    resetScenarios();
                   }}
                   className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                     selectedRoleOption === "other"
@@ -134,16 +181,58 @@ export default function IntakePage() {
               )}
             </div>
 
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-light-gray">具体 AI 使用经历</span>
-              <textarea
-                value={recentUse}
-                onChange={(event) => setRecentUse(event.target.value)}
-                placeholder="请描述一个具体场景，比如你用 AI 做了什么、遇到了什么问题"
-                rows={4}
-                className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
-              />
-            </label>
+            <div className="grid gap-3">
+              <div>
+                <span className="text-sm font-semibold text-light-gray">你主要想让题目围绕哪些 AI 使用场景？</span>
+                <p className="mt-1 text-xs leading-relaxed text-dim-gray">
+                  这些词条会用来生成第一轮问卷，让题目更贴近你的真实使用方式。最多选 2 个，也可以自己补充。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {scenarioOptions.map((scenario) => {
+                  const selected = selectedScenarios.includes(scenario);
+                  return (
+                    <button
+                      key={scenario}
+                      type="button"
+                      onClick={() => toggleScenario(scenario)}
+                      className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
+                        selected
+                          ? "border-raycast-green bg-raycast-green/15 text-near-white shadow-[0_0_18px_rgba(95,201,146,0.16)]"
+                          : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                      }`}
+                    >
+                      {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                      {scenario}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showCustomScenario) setCustomScenario("");
+                    setShowCustomScenario((value) => !value);
+                  }}
+                  className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
+                    showCustomScenario
+                      ? "border-raycast-green bg-raycast-green/15 text-near-white shadow-[0_0_18px_rgba(95,201,146,0.16)]"
+                      : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                  }`}
+                >
+                  {showCustomScenario ? <Check className="h-3.5 w-3.5" /> : null}
+                  自己补充场景
+                </button>
+              </div>
+              {showCustomScenario ? (
+                <input
+                  value={customScenario}
+                  onChange={(event) => setCustomScenario(event.target.value)}
+                  placeholder="比如：写小红书文案、整理实验记录、准备面试回答"
+                  className="h-12 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-green"
+                  autoFocus
+                />
+              ) : null}
+            </div>
 
             <div className="grid gap-3">
               <span className="text-sm font-semibold text-light-gray">常用 AI 工具</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { QuestionnaireQuestion } from "@/lib/types";
@@ -15,7 +15,7 @@ interface QuestionnaireCardProps {
   onNext: (score: number | null) => void;
 }
 
-const SCALE_LABELS = ["肯定不会", "一般不会", "偶尔会", "经常会", "通常会", "肯定会"];
+const SCALE_LABELS = ["完全不同意", "不同意", "有点不同意", "有点同意", "同意", "完全同意"];
 
 export function QuestionnaireCard({
   question,
@@ -26,10 +26,23 @@ export function QuestionnaireCard({
   onNext,
 }: QuestionnaireCardProps) {
   const [selectedScore, setSelectedScore] = useState<number | "skip" | null>(null);
+  const autoAdvanceTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    if (autoAdvanceTimer.current) {
+      window.clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
     setSelectedScore(initialScore === undefined ? null : initialScore === null ? "skip" : initialScore);
   }, [initialScore, question.question, question.scenario, index]);
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimer.current) {
+        window.clearTimeout(autoAdvanceTimer.current);
+      }
+    };
+  }, []);
 
   const questionStem = buildQuestionStem(question);
   const hasSelection = selectedScore !== null;
@@ -38,10 +51,24 @@ export function QuestionnaireCard({
   const selectedAnswer = selectedScore === "skip" ? null : selectedScore;
 
   const handleSelect = (score: number) => {
+    if (autoAdvanceTimer.current) {
+      window.clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
     setSelectedScore(score);
+    if (!isLast) {
+      autoAdvanceTimer.current = window.setTimeout(() => {
+        autoAdvanceTimer.current = null;
+        onNext(score);
+      }, 300);
+    }
   };
 
   const handleSkip = () => {
+    if (autoAdvanceTimer.current) {
+      window.clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
     setSelectedScore("skip");
   };
 
@@ -118,7 +145,7 @@ export function QuestionnaireCard({
         {/* Scale */}
           <div className="space-y-3 relative z-10">
           <div className="text-[11px] text-dim-gray/90 mb-1">
-            下列数字表示认同程度（0–5），与题号无关
+            {isLast ? "下列数字表示认同程度（0–5），与题号无关" : "下列数字表示认同程度（0–5），选择后会自动进入下一题"}
           </div>
           <div className="flex justify-between text-[12px] text-dim-gray">
             <span>否定</span>
@@ -196,9 +223,15 @@ export function QuestionnaireCard({
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => onPrevious(hasSelection ? selectedAnswer : undefined)}
+              onClick={() => {
+                if (autoAdvanceTimer.current) {
+                  window.clearTimeout(autoAdvanceTimer.current);
+                  autoAdvanceTimer.current = null;
+                }
+                onPrevious(hasSelection ? selectedAnswer : undefined);
+              }}
               disabled={isFirst}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-transparent text-[14px] font-semibold text-light-gray transition-all hover:border-[rgba(255,255,255,0.18)] hover:text-near-white disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[rgba(255,255,255,0.08)] disabled:hover:text-light-gray"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-transparent text-[14px] font-semibold text-dim-gray transition-all hover:border-[rgba(255,255,255,0.18)] hover:text-light-gray disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[rgba(255,255,255,0.08)] disabled:hover:text-dim-gray"
             >
               <ArrowLeft className="h-4 w-4" />
               上一题

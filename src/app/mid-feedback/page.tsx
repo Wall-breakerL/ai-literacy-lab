@@ -13,12 +13,12 @@ import { applySessionStatePatch } from "@/lib/sessionState";
 import type { QuestionnaireAnswer, SessionState } from "@/lib/types";
 
 const SCALE_LABELS: Record<number, string> = {
-  0: "肯定不会",
-  1: "一般不会",
-  2: "偶尔会",
-  3: "经常会",
-  4: "通常会",
-  5: "肯定会",
+  0: "完全不同意",
+  1: "不同意",
+  2: "有点不同意",
+  3: "有点同意",
+  4: "同意",
+  5: "完全同意",
 };
 
 const FEELINGS: Array<{ value: MidFeedbackForm["overallFeeling"]; title: string; detail: string }> = [
@@ -43,6 +43,8 @@ export default function MidFeedbackPage() {
   const [issueText, setIssueText] = useState("");
   const [focusScenario, setFocusScenario] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [issueExpanded, setIssueExpanded] = useState(false);
+  const [focusExpanded, setFocusExpanded] = useState(false);
   const [error, setError] = useState("");
 
   const questions = useMemo(() => sessionState?.questionnaireBatches?.batch1 ?? [], [sessionState]);
@@ -116,80 +118,116 @@ export default function MidFeedbackPage() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-[16px] border border-white/10 bg-card-surface/80 p-4">
+          <div className="mt-6 grid gap-3">
             <button
               type="button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-expanded={expanded}
-              className="group flex w-full items-center justify-between gap-4 rounded-[14px] border border-raycast-blue/35 bg-gradient-to-r from-raycast-blue/20 via-white/[0.06] to-raycast-green/15 px-4 py-3.5 text-left shadow-[0_0_0_1px_rgba(85,179,255,0.08),0_18px_42px_rgba(85,179,255,0.10)] transition hover:border-raycast-blue/70 hover:from-raycast-blue/30 hover:to-raycast-green/25"
+              onClick={() => setIssueExpanded((value) => !value)}
+              aria-expanded={issueExpanded}
+              className="flex items-center justify-between gap-4 rounded-[14px] border border-white/10 bg-card-surface px-4 py-3.5 text-left transition hover:border-white/20"
             >
-              <span className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-raycast-blue/20 text-raycast-blue ring-1 ring-raycast-blue/30">
-                  <ListChecks className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-near-white">
-                    {expanded ? "收起刚才的 8 道题" : "查看刚才的 8 道题"}
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-dim-gray">
-                    对照题目和你的选择，快速标记不贴近的地方
-                  </span>
+              <span>
+                <span className="block text-sm font-semibold text-light-gray">我想说明不贴近的题目</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-dim-gray">
+                  可选填写，帮助第二轮避开不适合你的题目方向。
                 </span>
               </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs font-semibold text-light-gray">
-                  {questions.length || 8} 题
-                </span>
-                <ChevronDown className={`h-5 w-5 text-light-gray transition-transform group-hover:text-near-white ${expanded ? "rotate-180" : ""}`} />
-              </span>
+              <ChevronDown className={`h-5 w-5 shrink-0 text-dim-gray transition-transform ${issueExpanded ? "rotate-180" : ""}`} />
             </button>
-            {skippedCount >= 3 && !expanded ? (
-              <p className="mt-3 text-xs leading-relaxed text-dim-gray">
-                你刚才跳过了 {skippedCount} 题，如果想说明原因，可以点上面的按钮回看题目。
-              </p>
-            ) : null}
-            {expanded ? (
-              <div className="mt-4 grid gap-3">
-                {reviewItems.map(({ question, answer }, index) => (
-                  <div key={`${question.dimension}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
-                    <button
-                      type="button"
-                      onClick={() => insertQuestionRef(index + 1)}
-                      className="h-6 rounded bg-white/10 text-xs text-light-gray hover:bg-white/20"
-                    >
-                      {index + 1}
-                    </button>
-                    <div>
-                      <p className="text-sm leading-relaxed text-near-white">{question.question}</p>
-                      <p className="mt-1 text-xs text-dim-gray">{formatAnswer(answer)}</p>
-                    </div>
+
+            {issueExpanded ? (
+              <div className="rounded-[16px] border border-white/10 bg-card-surface/80 p-4">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((value) => !value)}
+                  aria-expanded={expanded}
+                  className="group flex w-full items-center justify-between gap-4 rounded-[14px] border border-raycast-blue/35 bg-gradient-to-r from-raycast-blue/20 via-white/[0.06] to-raycast-green/15 px-4 py-3.5 text-left shadow-[0_0_0_1px_rgba(85,179,255,0.08),0_18px_42px_rgba(85,179,255,0.10)] transition hover:border-raycast-blue/70 hover:from-raycast-blue/30 hover:to-raycast-green/25"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-raycast-blue/20 text-raycast-blue ring-1 ring-raycast-blue/30">
+                      <ListChecks className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-near-white">
+                        {expanded ? "收起刚才的 8 道题" : "查看刚才的 8 道题"}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-dim-gray">
+                        对照题目和你的选择，快速标记不贴近的地方
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs font-semibold text-light-gray">
+                      {questions.length || 8} 题
+                    </span>
+                    <ChevronDown className={`h-5 w-5 text-light-gray transition-transform group-hover:text-near-white ${expanded ? "rotate-180" : ""}`} />
+                  </span>
+                </button>
+                {skippedCount >= 3 && !expanded ? (
+                  <p className="mt-3 text-xs leading-relaxed text-dim-gray">
+                    你刚才跳过了 {skippedCount} 题，如果想说明原因，可以点上面的按钮回看题目。
+                  </p>
+                ) : null}
+                {expanded ? (
+                  <div className="mt-4 grid gap-3">
+                    {reviewItems.map(({ question, answer }, index) => (
+                      <div key={`${question.dimension}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => insertQuestionRef(index + 1)}
+                          className="h-6 rounded bg-white/10 text-xs text-light-gray hover:bg-white/20"
+                        >
+                          {index + 1}
+                        </button>
+                        <div>
+                          <p className="text-sm leading-relaxed text-near-white">{question.question}</p>
+                          <p className="mt-1 text-xs text-dim-gray">{formatAnswer(answer)}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : null}
+
+                <label className="mt-5 grid gap-2">
+                  <span className="text-sm font-semibold text-light-gray">有哪些题目让你觉得不清楚或不太贴近？</span>
+                  <textarea
+                    value={issueText}
+                    onChange={(event) => setIssueText(event.target.value)}
+                    placeholder="比如：第 3 题的场景我没遇到过 / 第 5 题问得太抽象了"
+                    rows={3}
+                    className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
+                  />
+                </label>
               </div>
             ) : null}
+
+            <button
+              type="button"
+              onClick={() => setFocusExpanded((value) => !value)}
+              aria-expanded={focusExpanded}
+              className="flex items-center justify-between gap-4 rounded-[14px] border border-white/10 bg-card-surface px-4 py-3.5 text-left transition hover:border-white/20"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-light-gray">我想指定第二轮方向</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-dim-gray">
+                  填写后，第二轮题目会更多围绕这个方向生成。
+                </span>
+              </span>
+              <ChevronDown className={`h-5 w-5 shrink-0 text-dim-gray transition-transform ${focusExpanded ? "rotate-180" : ""}`} />
+            </button>
+
+            {focusExpanded ? (
+              <label className="grid gap-2 rounded-[16px] border border-white/10 bg-card-surface/80 p-4">
+                <span className="text-sm font-semibold text-light-gray">第二轮你希望多看到哪类场景？</span>
+                <textarea
+                  value={focusScenario}
+                  onChange={(event) => setFocusScenario(event.target.value)}
+                  placeholder="比如：写需求文档、调试代码、做数据分析、和客户沟通..."
+                  rows={3}
+                  className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
+                />
+              </label>
+            ) : null}
           </div>
-
-          <label className="mt-5 grid gap-2">
-            <span className="text-sm font-semibold text-light-gray">有哪些题目让你觉得不清楚或不太贴近？（可选）</span>
-            <textarea
-              value={issueText}
-              onChange={(event) => setIssueText(event.target.value)}
-              placeholder="比如：第 3 题的场景我没遇到过 / 第 5 题问得太抽象了"
-              rows={3}
-              className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
-            />
-          </label>
-
-          <label className="mt-5 grid gap-2">
-            <span className="text-sm font-semibold text-light-gray">第二轮你希望多看到哪类场景？（可选）</span>
-            <textarea
-              value={focusScenario}
-              onChange={(event) => setFocusScenario(event.target.value)}
-              placeholder="比如：写需求文档、调试代码、做数据分析、和客户沟通..."
-              rows={3}
-              className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
-            />
-          </label>
 
           {error ? <p className="mt-5 text-sm text-raycast-red">{error}</p> : null}
 
