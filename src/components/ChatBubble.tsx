@@ -49,7 +49,7 @@ const mdComponents = {
   code: ({ className, children }: { className?: string; children?: ReactNode }) => {
     const inline = !className;
     return inline ? (
-      <code className="px-1 py-0.5 rounded bg-void text-[14px] font-mono text-raycast-blue border border-[rgba(255,255,255,0.08)]">
+      <code className="px-1 py-0.5 rounded bg-void text-[14px] font-mono text-raycast-blue border border-border/70">
         {children}
       </code>
     ) : (
@@ -57,7 +57,7 @@ const mdComponents = {
     );
   },
   pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="mb-2 p-3 rounded-lg bg-void border border-[rgba(255,255,255,0.08)] overflow-x-auto text-[14px] font-mono text-light-gray">
+    <pre className="mb-2 p-3 rounded-lg bg-void border border-border/70 overflow-x-auto text-[14px] font-mono text-light-gray">
       {children}
     </pre>
   ),
@@ -89,7 +89,7 @@ export function ChatBubble({
     >
       <div className={`flex max-w-[85%] gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
         <div className="flex-shrink-0 mt-1">
-          <div className="w-8 h-8 rounded-[8px] bg-card-surface shadow-card-ring flex items-center justify-center border border-[rgba(255,255,255,0.06)]">
+          <div className="w-8 h-8 rounded-[8px] bg-card-surface shadow-card-ring flex items-center justify-center border border-border/70">
             {isUser ? (
               <User className="w-4 h-4 text-medium-gray" />
             ) : (
@@ -114,7 +114,7 @@ export function ChatBubble({
             </p>
           )}
           <div
-            className={`px-5 py-3.5 rounded-[12px] shadow-card-ring border border-[rgba(255,255,255,0.06)] leading-[1.6] text-[16px] tracking-[0.2px]
+            className={`px-5 py-3.5 rounded-[12px] shadow-card-ring border border-border/70 leading-[1.6] text-[16px] tracking-[0.2px]
             ${
               isUser
                 ? "bg-surface-100 text-near-white"

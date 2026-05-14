@@ -51,7 +51,7 @@ function DimensionSpectrumBar({ report, index }: { report: DimensionReport; inde
         <span className="absolute left-0 top-1 h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.lowColor }} />
         <span className="absolute right-0 top-1 h-2.5 w-2.5 rounded-full" style={{ backgroundColor: meta.highColor }} />
         <motion.span
-          className={`absolute top-0 rounded-[3px] border-2 border-[#1e293b] ${isExtreme ? "animate-pulse" : ""}`}
+          className={`absolute top-0 rounded-[3px] border-2 border-surface-100 ${isExtreme ? "animate-pulse" : ""}`}
           initial={{ left: "50%" }}
           animate={{ left: `${score}%` }}
           transition={{ duration: 0.8, delay: index * 0.1 + 0.3, ease: "easeOut" }}
@@ -95,12 +95,12 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
-      className="bg-surface-100 rounded-[16px] border border-[rgba(255,255,255,0.06)] shadow-card-ring overflow-hidden hover:border-[rgba(85,179,255,0.3)] hover:shadow-glow-blue-sm transition-all duration-300"
+      className="bg-surface-100 rounded-[16px] border border-border/70 shadow-card-ring overflow-hidden hover:border-raycast-blue/40 hover:shadow-glow-blue-sm transition-all duration-300"
     >
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full min-w-0 items-center justify-between gap-4 p-6 text-left transition-colors hover:bg-[rgba(255,255,255,0.02)]"
+        className="flex w-full min-w-0 items-center justify-between gap-4 p-6 text-left transition-colors hover:bg-surface-200/50"
       >
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 flex-col">
@@ -144,7 +144,7 @@ export function DimensionCard({ report, index }: DimensionCardProps) {
             className="overflow-hidden"
           >
             <motion.div
-              className="px-6 pb-6 space-y-5 border-t border-[rgba(255,255,255,0.06)] pt-5"
+              className="px-6 pb-6 space-y-5 border-t border-border/70 pt-5"
               initial="hidden"
               animate="visible"
               variants={{

@@ -4,12 +4,12 @@ import type { Dimension, DimensionReport, QuestionnaireAnswer, SessionState } fr
 const DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
 
 const SCALE_LABELS: Record<number, string> = {
-  0: "肯定不会",
-  1: "一般不会",
-  2: "偶尔会",
-  3: "经常会",
-  4: "通常会",
-  5: "肯定会",
+  0: "完全不同意",
+  1: "不同意",
+  2: "有点不同意",
+  3: "有点同意",
+  4: "同意",
+  5: "完全同意",
 };
 const LIKERT_MIN = 0;
 const LIKERT_MAX = 5;

@@ -122,7 +122,7 @@ export default function IntakePage() {
           </p>
         </div>
 
-        <section className="rounded-[18px] border border-white/10 bg-surface-100/75 p-5 shadow-card-ring backdrop-blur-sm sm:p-7">
+        <section className="rounded-[18px] border border-border/70 bg-surface-100/75 p-5 shadow-card-ring backdrop-blur-sm sm:p-7">
           <div className="grid gap-5">
             <div className="grid gap-3">
               <span className="text-sm font-semibold text-light-gray">职业 / 身份</span>
@@ -142,7 +142,7 @@ export default function IntakePage() {
                       className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                         selected
                           ? "border-raycast-blue bg-raycast-blue/15 text-near-white shadow-[0_0_18px_rgba(85,179,255,0.18)]"
-                          : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                          : "border-border/70 bg-card-surface text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
                       }`}
                     >
                       {selected ? <Check className="h-3.5 w-3.5" /> : null}
@@ -160,7 +160,7 @@ export default function IntakePage() {
                   className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                     selectedRoleOption === "other"
                       ? "border-raycast-blue bg-raycast-blue/15 text-near-white shadow-[0_0_18px_rgba(85,179,255,0.18)]"
-                      : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                      : "border-border/70 bg-card-surface text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
                   }`}
                 >
                   {selectedRoleOption === "other" ? <Check className="h-3.5 w-3.5" /> : null}
@@ -175,7 +175,7 @@ export default function IntakePage() {
                     setRole(event.target.value);
                   }}
                   placeholder="请输入你的职业，例如：宠物美容师、自由职业者"
-                  className="h-12 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
+                  className="h-12 rounded-[10px] border border-border/70 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
                   autoFocus
                 />
               )}
@@ -199,7 +199,7 @@ export default function IntakePage() {
                       className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                         selected
                           ? "border-raycast-green bg-raycast-green/15 text-near-white shadow-[0_0_18px_rgba(95,201,146,0.16)]"
-                          : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                          : "border-border/70 bg-card-surface text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
                       }`}
                     >
                       {selected ? <Check className="h-3.5 w-3.5" /> : null}
@@ -216,7 +216,7 @@ export default function IntakePage() {
                   className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                     showCustomScenario
                       ? "border-raycast-green bg-raycast-green/15 text-near-white shadow-[0_0_18px_rgba(95,201,146,0.16)]"
-                      : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                      : "border-border/70 bg-card-surface text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
                   }`}
                 >
                   {showCustomScenario ? <Check className="h-3.5 w-3.5" /> : null}
@@ -228,7 +228,7 @@ export default function IntakePage() {
                   value={customScenario}
                   onChange={(event) => setCustomScenario(event.target.value)}
                   placeholder="比如：写小红书文案、整理实验记录、准备面试回答"
-                  className="h-12 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-green"
+                  className="h-12 rounded-[10px] border border-border/70 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-green"
                   autoFocus
                 />
               ) : null}
@@ -247,7 +247,7 @@ export default function IntakePage() {
                       className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
                         selected
                           ? "border-raycast-blue bg-raycast-blue/15 text-near-white shadow-[0_0_18px_rgba(85,179,255,0.18)]"
-                          : "border-white/10 bg-card-surface text-dim-gray hover:border-white/20 hover:text-light-gray"
+                          : "border-border/70 bg-card-surface text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
                       }`}
                     >
                       {selected ? <Check className="h-3.5 w-3.5" /> : null}
@@ -260,7 +260,7 @@ export default function IntakePage() {
                 value={customTool}
                 onChange={(event) => setCustomTool(event.target.value)}
                 placeholder="其他工具（可选）"
-                className="h-11 rounded-[10px] border border-white/10 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
+                className="h-11 rounded-[10px] border border-border/70 bg-card-surface px-4 text-sm text-near-white outline-none transition focus:border-raycast-blue"
               />
             </div>
           </div>
@@ -271,7 +271,7 @@ export default function IntakePage() {
             <button
               type="button"
               onClick={submit}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[12px] bg-white px-5 text-sm font-semibold text-void shadow-button-native transition hover:bg-light-gray"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[12px] bg-near-white px-5 text-sm font-semibold text-void shadow-button-native transition hover:bg-light-gray"
             >
               生成第一轮问卷
               <ArrowRight className="h-4 w-4" />

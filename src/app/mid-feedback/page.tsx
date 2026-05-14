@@ -95,7 +95,7 @@ export default function MidFeedbackPage() {
           <p className="mt-3 text-sm leading-relaxed text-dim-gray">你的反馈会让第二轮题目更贴近真实 AI 使用场景。</p>
         </div>
 
-        <section className="rounded-[18px] border border-white/10 bg-surface-100/75 p-5 shadow-card-ring backdrop-blur-sm sm:p-7">
+        <section className="rounded-[18px] border border-border/70 bg-surface-100/75 p-5 shadow-card-ring backdrop-blur-sm sm:p-7">
           <div className="grid gap-3">
             <p className="text-sm font-semibold text-light-gray">刚才的题目和你的真实情况贴近吗？</p>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -107,7 +107,7 @@ export default function MidFeedbackPage() {
                     type="button"
                     onClick={() => setOverallFeeling(item.value)}
                     className={`rounded-[12px] border p-4 text-left transition ${
-                      selected ? "border-raycast-blue bg-raycast-blue/15" : "border-white/10 bg-card-surface hover:border-white/20"
+                      selected ? "border-raycast-blue bg-raycast-blue/15" : "border-border/70 bg-card-surface hover:border-raycast-blue/40"
                     }`}
                   >
                     <span className="block text-sm font-semibold text-near-white">{item.title}</span>
@@ -123,7 +123,7 @@ export default function MidFeedbackPage() {
               type="button"
               onClick={() => setIssueExpanded((value) => !value)}
               aria-expanded={issueExpanded}
-              className="flex items-center justify-between gap-4 rounded-[14px] border border-white/10 bg-card-surface px-4 py-3.5 text-left transition hover:border-white/20"
+              className="flex items-center justify-between gap-4 rounded-[14px] border border-border/70 bg-card-surface px-4 py-3.5 text-left transition hover:border-raycast-blue/40"
             >
               <span>
                 <span className="block text-sm font-semibold text-light-gray">我想说明不贴近的题目</span>
@@ -135,7 +135,7 @@ export default function MidFeedbackPage() {
             </button>
 
             {issueExpanded ? (
-              <div className="rounded-[16px] border border-white/10 bg-card-surface/80 p-4">
+              <div className="rounded-[16px] border border-border/70 bg-card-surface p-4">
                 <button
                   type="button"
                   onClick={() => setExpanded((value) => !value)}
@@ -156,7 +156,7 @@ export default function MidFeedbackPage() {
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs font-semibold text-light-gray">
+                    <span className="rounded-full border border-border/70 bg-surface-200/70 px-2.5 py-1 text-xs font-semibold text-light-gray">
                       {questions.length || 8} 题
                     </span>
                     <ChevronDown className={`h-5 w-5 text-light-gray transition-transform group-hover:text-near-white ${expanded ? "rotate-180" : ""}`} />
@@ -170,11 +170,11 @@ export default function MidFeedbackPage() {
                 {expanded ? (
                   <div className="mt-4 grid gap-3">
                     {reviewItems.map(({ question, answer }, index) => (
-                      <div key={`${question.dimension}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+                      <div key={`${question.dimension}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 border-t border-border/70 pt-3 first:border-t-0 first:pt-0">
                         <button
                           type="button"
                           onClick={() => insertQuestionRef(index + 1)}
-                          className="h-6 rounded bg-white/10 text-xs text-light-gray hover:bg-white/20"
+                          className="h-6 rounded bg-surface-200/70 text-xs text-light-gray hover:bg-surface-200"
                         >
                           {index + 1}
                         </button>
@@ -194,7 +194,7 @@ export default function MidFeedbackPage() {
                     onChange={(event) => setIssueText(event.target.value)}
                     placeholder="比如：第 3 题的场景我没遇到过 / 第 5 题问得太抽象了"
                     rows={3}
-                    className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
+                    className="resize-none rounded-[10px] border border-border/70 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
                   />
                 </label>
               </div>
@@ -204,7 +204,7 @@ export default function MidFeedbackPage() {
               type="button"
               onClick={() => setFocusExpanded((value) => !value)}
               aria-expanded={focusExpanded}
-              className="flex items-center justify-between gap-4 rounded-[14px] border border-white/10 bg-card-surface px-4 py-3.5 text-left transition hover:border-white/20"
+              className="flex items-center justify-between gap-4 rounded-[14px] border border-border/70 bg-card-surface px-4 py-3.5 text-left transition hover:border-raycast-blue/40"
             >
               <span>
                 <span className="block text-sm font-semibold text-light-gray">我想指定第二轮方向</span>
@@ -216,14 +216,14 @@ export default function MidFeedbackPage() {
             </button>
 
             {focusExpanded ? (
-              <label className="grid gap-2 rounded-[16px] border border-white/10 bg-card-surface/80 p-4">
+              <label className="grid gap-2 rounded-[16px] border border-border/70 bg-card-surface p-4">
                 <span className="text-sm font-semibold text-light-gray">第二轮你希望多看到哪类场景？</span>
                 <textarea
                   value={focusScenario}
                   onChange={(event) => setFocusScenario(event.target.value)}
                   placeholder="比如：写需求文档、调试代码、做数据分析、和客户沟通..."
                   rows={3}
-                  className="resize-none rounded-[10px] border border-white/10 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
+                  className="resize-none rounded-[10px] border border-border/70 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
                 />
               </label>
             ) : null}
@@ -235,14 +235,14 @@ export default function MidFeedbackPage() {
             <button
               type="button"
               onClick={() => submit(true)}
-              className="h-12 rounded-[12px] border border-white/10 px-5 text-sm font-semibold text-dim-gray transition hover:text-light-gray"
+              className="h-12 rounded-[12px] border border-border/70 px-5 text-sm font-semibold text-dim-gray transition hover:text-light-gray"
             >
               跳过反馈
             </button>
             <button
               type="button"
               onClick={() => submit(false)}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[12px] bg-white px-5 text-sm font-semibold text-void shadow-button-native transition hover:bg-light-gray"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-[12px] bg-near-white px-5 text-sm font-semibold text-void shadow-button-native transition hover:bg-light-gray"
             >
               继续第二轮
               <ArrowRight className="h-4 w-4" />

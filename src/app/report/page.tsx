@@ -64,12 +64,12 @@ type ReportPageModel = FinalReport & {
 type DimensionItem = FinalReport["dimensions"][number];
 
 const SCALE_LABELS: Record<number, string> = {
-  0: "肯定不会",
-  1: "一般不会",
-  2: "偶尔会",
-  3: "经常会",
-  4: "通常会",
-  5: "肯定会",
+  0: "完全不同意",
+  1: "不同意",
+  2: "有点不同意",
+  3: "有点同意",
+  4: "同意",
+  5: "完全同意",
 };
 
 const BATCH_LABELS = {
@@ -426,11 +426,11 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
   };
 
   return (
-    <section id="report-feedback-panel" className="scroll-mt-6 space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+    <section id="report-feedback-panel" className="scroll-mt-6 space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="mb-2 text-[12px] font-semibold uppercase text-raycast-blue">反馈入口</p>
-          <h2 className="text-[20px] font-semibold text-white">
+          <h2 className="text-[20px] font-semibold text-near-white">
             对于本次测试的问卷或者报告，感觉还算满意吗？
           </h2>
         </div>
@@ -438,7 +438,7 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-[#0f172a] px-4 py-2 text-[14px] font-semibold text-near-white transition-colors hover:border-white/20"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[8px] border border-border/70 bg-card-surface px-4 py-2 text-[14px] font-semibold text-near-white transition-colors hover:border-raycast-blue/40"
           aria-expanded={expanded}
         >
           {expanded ? "收起反馈" : "写点反馈"}
@@ -468,7 +468,7 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
                 className={`rounded-[8px] border px-4 py-2 text-[14px] font-semibold transition-colors ${
                   sentiment === item.key
                     ? "border-raycast-blue bg-[rgba(85,179,255,0.14)] text-near-white"
-                    : "border-white/10 bg-[#0f172a] text-slate-300 hover:border-white/20"
+                    : "border-border/70 bg-card-surface text-light-gray hover:border-raycast-blue/40"
                 }`}
               >
                 {item.label}
@@ -476,7 +476,7 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
             ))}
           </div>
 
-          <p className="rounded-[8px] border border-white/10 bg-white/[0.04] px-4 py-3 text-[13px] leading-relaxed text-slate-400">
+          <p className="rounded-[8px] border border-border/70 bg-surface-200/60 px-4 py-3 text-[13px] leading-relaxed text-dim-gray">
             AI 有时候也会犯迷糊，生成的问卷难免偶尔有点瑕疵。如果哪道题不像你的真实场景，直接吐槽就好。
           </p>
 
@@ -485,9 +485,9 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
             onChange={(event) => setFeedbackText(limitFeedbackText(event.target.value))}
             maxLength={FEEDBACK_TEXT_LIMIT}
             placeholder="比如：哪几道题不像人话、报告哪里说准了/没说准、或者你希望下个版本改什么。"
-            className="min-h-[112px] w-full resize-y rounded-[8px] border border-white/10 bg-[#0f172a] px-4 py-3 text-[14px] leading-relaxed text-near-white placeholder:text-slate-500 focus:border-raycast-blue focus:outline-none"
+            className="min-h-[112px] w-full resize-y rounded-[8px] border border-border/70 bg-card-surface px-4 py-3 text-[14px] leading-relaxed text-near-white placeholder:text-medium-gray focus:border-raycast-blue focus:outline-none"
           />
-          <p className="text-right text-[12px] text-slate-500">
+          <p className="text-right text-[12px] text-medium-gray">
             {feedbackLength}/{FEEDBACK_TEXT_LIMIT}
           </p>
 
@@ -499,7 +499,7 @@ function ReportFeedbackPanel({ report }: { report: ReportPageModel }) {
             type="button"
             onClick={submitFeedback}
             disabled={submitting || submitted}
-            className="inline-flex items-center justify-center rounded-[8px] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-950 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-[8px] bg-near-white px-5 py-2.5 text-[14px] font-semibold text-void transition-colors hover:bg-light-gray disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "提交中..." : submitted ? "已提交" : "提交反馈"}
           </button>
@@ -734,7 +734,7 @@ export default function ReportPage() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="px-6 py-2 bg-surface-100 border border-[rgba(255,255,255,0.06)] rounded-lg text-near-white"
+          className="px-6 py-2 bg-surface-100 border border-border/70 rounded-lg text-near-white"
         >
           返回测试首页
         </button>
@@ -755,17 +755,17 @@ export default function ReportPage() {
     <div className="space-y-6">
       {/* 新增：风格画像 */}
       {(report as any).styleProfile && (
-        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
-          <h2 className="text-[20px] font-semibold text-white">你的协作风格画像</h2>
+        <section className="space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-near-white">你的协作风格画像</h2>
 
           {/* 你是这样用AI的 */}
           {(report as any).styleProfile.behaviors && (
             <div className="space-y-3">
-              <p className="text-[14px] font-semibold text-slate-400">你是这样用AI的</p>
+              <p className="text-[14px] font-semibold text-dim-gray">你是这样用AI的</p>
               {((report as any).styleProfile.behaviors as StyleBehavior[]).map((behavior, index) => (
-                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4">
                   <p className="text-[15px] text-near-white">{behavior.behavior}</p>
-                  <p className="mt-2 text-[12px] text-slate-400">
+                  <p className="mt-2 text-[12px] text-dim-gray">
                     基于：{behavior.basedOn} · 证据：{behavior.evidence}
                   </p>
                 </div>
@@ -775,14 +775,14 @@ export default function ReportPage() {
 
           {/* 独特组合 */}
           {(report as any).styleProfile.uniqueness && (
-            <div className="rounded-[8px] border border-raycast-blue/25 bg-[#0f172a] p-4">
+            <div className="rounded-[8px] border border-raycast-blue/25 bg-card-surface p-4">
               <p className="mb-2 text-[15px] font-semibold text-near-white">
                 {((report as any).styleProfile.uniqueness as StyleUniqueness).combination}
               </p>
               {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.map((role) => (
-                    <span key={role} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-slate-300">
+                    <span key={role} className="rounded-full border border-border/70 bg-surface-200/60 px-2.5 py-1 text-[12px] text-light-gray">
                       {role}
                     </span>
                   ))}
@@ -795,26 +795,26 @@ export default function ReportPage() {
 
       {/* 新增：问题诊断 */}
       {(report as any).problems && (report as any).problems.length > 0 && (
-        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
-          <h2 className="text-[20px] font-semibold text-white">你可能遇到的问题</h2>
+        <section className="space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-near-white">你可能遇到的问题</h2>
           {(report as any).problems.map((problem: any, index: number) => (
-            <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4 space-y-3">
+            <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4 space-y-3">
               <h3 className="text-[16px] font-semibold text-near-white">{problem.title}</h3>
               <div>
-                <p className="text-[12px] font-semibold text-slate-400">症状</p>
+                <p className="text-[12px] font-semibold text-dim-gray">症状</p>
                 <p className="text-[14px] text-light-gray">{problem.symptom}</p>
               </div>
               <div>
-                <p className="text-[12px] font-semibold text-slate-400">为什么</p>
+                <p className="text-[12px] font-semibold text-dim-gray">为什么</p>
                 <p className="text-[14px] text-light-gray">{problem.why}</p>
               </div>
               <div>
-                <p className="text-[12px] font-semibold text-slate-400">怎么改</p>
+                <p className="text-[12px] font-semibold text-dim-gray">怎么改</p>
                 <p className="text-[14px] text-light-gray">{problem.howToFix.immediate}</p>
-                <pre className="mt-2 text-[13px] text-slate-300 whitespace-pre-wrap">{problem.howToFix.example}</pre>
+                <pre className="mt-2 text-[13px] text-light-gray whitespace-pre-wrap">{problem.howToFix.example}</pre>
                 <p className="mt-2 text-[13px] text-green-400">→ {problem.howToFix.expectedResult}</p>
               </div>
-              <p className="text-[12px] text-slate-500">基于：{problem.basedOn}</p>
+              <p className="text-[12px] text-medium-gray">基于：{problem.basedOn}</p>
             </div>
           ))}
         </section>
@@ -822,15 +822,15 @@ export default function ReportPage() {
 
       {/* 新增：工具箱 */}
       {(report as any).toolbox && (
-        <section className="space-y-4 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
-          <h2 className="text-[20px] font-semibold text-white">适合你的AI工具箱</h2>
+        <section className="space-y-4 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
+          <h2 className="text-[20px] font-semibold text-near-white">适合你的AI工具箱</h2>
 
           {/* Prompt模板 */}
           {(report as any).toolbox.promptTemplates && (
             <div className="space-y-3">
-              <p className="text-[14px] font-semibold text-slate-400">Prompt模板</p>
+              <p className="text-[14px] font-semibold text-dim-gray">Prompt模板</p>
               {(report as any).toolbox.promptTemplates.map((template: any, index: number) => (
-                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-[15px] font-semibold text-near-white">{template.title}</p>
                     <div className="flex gap-1">
@@ -841,8 +841,8 @@ export default function ReportPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="mb-2 text-[13px] text-slate-400">{template.useCase}</p>
-                  <pre className="rounded-[6px] bg-black/30 p-3 text-[13px] text-light-gray whitespace-pre-wrap">
+                  <p className="mb-2 text-[13px] text-dim-gray">{template.useCase}</p>
+                  <pre className="rounded-[6px] bg-surface-200/80 p-3 text-[13px] text-light-gray whitespace-pre-wrap">
                     {template.prompt}
                   </pre>
                 </div>
@@ -853,9 +853,9 @@ export default function ReportPage() {
           {/* Checklist */}
           {(report as any).toolbox.checklists && (
             <div className="space-y-3">
-              <p className="text-[14px] font-semibold text-slate-400">Checklist</p>
+              <p className="text-[14px] font-semibold text-dim-gray">Checklist</p>
               {(report as any).toolbox.checklists.map((checklist: any, index: number) => (
-                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+                <div key={index} className="rounded-[8px] border border-border/70 bg-card-surface p-4">
                   <p className="mb-2 text-[15px] font-semibold text-near-white">{checklist.title}</p>
                   <ul className="space-y-1">
                     {checklist.items.map((item: string, i: number) => (
@@ -869,7 +869,7 @@ export default function ReportPage() {
 
           {/* 工作流 */}
           {(report as any).toolbox.workflow && (
-            <div className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+            <div className="rounded-[8px] border border-border/70 bg-card-surface p-4">
               <p className="mb-3 text-[15px] font-semibold text-near-white">
                 {(report as any).toolbox.workflow.title}
               </p>
@@ -881,13 +881,13 @@ export default function ReportPage() {
                     </span>
                     <div className="flex-1">
                       <p className="text-[14px] font-semibold text-near-white">{step.action}</p>
-                      <p className="text-[13px] text-slate-400">{step.detail}</p>
-                      <p className="text-[12px] text-slate-500">{step.time}</p>
+                      <p className="text-[13px] text-dim-gray">{step.detail}</p>
+                      <p className="text-[12px] text-medium-gray">{step.time}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-[13px] text-slate-400">
+              <p className="mt-3 text-[13px] text-dim-gray">
                 总时间：{(report as any).toolbox.workflow.totalTime} · 基于：{(report as any).toolbox.workflow.basedOn}
               </p>
             </div>
@@ -896,15 +896,15 @@ export default function ReportPage() {
       )}
 
       <section className="space-y-4">
-        <h2 className="text-[20px] font-semibold text-white">深度维度解析</h2>
+        <h2 className="text-[20px] font-semibold text-near-white">深度维度解析</h2>
         {report.dimensions.map((dim, i) => (
           <DimensionCard key={dim.dimension} report={dim} index={i} />
         ))}
       </section>
 
-      <section className="space-y-6 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+      <section className="space-y-6 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
         <div>
-          <p className="mb-2 text-[12px] font-semibold uppercase text-slate-400">下一次可以怎么用</p>
+          <p className="mb-2 text-[12px] font-semibold uppercase text-dim-gray">下一次可以怎么用</p>
           {uiReport.overallAdvice ? (
             <MarkdownText content={uiReport.overallAdvice} variant="body" />
           ) : (
@@ -919,7 +919,7 @@ export default function ReportPage() {
             {uiReport.recommendations.map((item, index) => (
               <div
                 key={`${item.title}-${index}`}
-                className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4"
+                className="rounded-[8px] border border-border/70 bg-card-surface p-4"
               >
                 <p className="mb-2 text-[15px] font-semibold text-near-white">{item.title}</p>
                 <MarkdownText content={item.detail} variant="compact" />
@@ -930,13 +930,13 @@ export default function ReportPage() {
         </section>
 
       {scoreAudit ? (
-        <section className="space-y-5 rounded-[8px] border border-white/10 bg-[#1e293b] p-6 shadow-card-ring sm:p-8">
+        <section className="space-y-5 rounded-[8px] border border-border/70 bg-surface-100 p-6 shadow-card-ring sm:p-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 text-[12px] font-semibold uppercase text-raycast-blue">答题与计分明细</p>
-              <h2 className="text-[20px] font-semibold text-white">两轮测试完整得分</h2>
+              <h2 className="text-[20px] font-semibold text-near-white">两轮测试完整得分</h2>
             </div>
-            <p className="text-[13px] text-slate-400">
+            <p className="text-[13px] text-dim-gray">
               共 {scoreAudit.totalQuestions} 题，有效 {scoreAudit.answeredQuestions} 题，跳过{" "}
               {scoreAudit.skippedQuestions} 题
             </p>
@@ -944,14 +944,14 @@ export default function ReportPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             {scoreAudit.dimensions.map((dimension) => (
-              <div key={dimension.dimension} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+              <div key={dimension.dimension} className="rounded-[8px] border border-border/70 bg-card-surface p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[14px] font-semibold text-near-white">{dimension.label}</p>
                   <p className="text-[18px] font-semibold text-raycast-yellow">{dimension.score}</p>
                 </div>
-                <p className="mt-1 text-[12px] text-slate-400">判定为「{dimension.tendencyLabel}」</p>
+                <p className="mt-1 text-[12px] text-dim-gray">判定为「{dimension.tendencyLabel}」</p>
                 {isObservationLabel(dimension.tendencyLabel) ? (
-                  <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+                  <p className="mt-2 text-[12px] leading-relaxed text-medium-gray">
                     正反向题得分相近，该维度信号较弱。
                   </p>
                 ) : null}
@@ -960,7 +960,7 @@ export default function ReportPage() {
           </div>
 
           {isBalancedPersonality ? (
-            <p className="rounded-[8px] border border-raycast-yellow/25 bg-raycast-yellow/10 px-4 py-3 text-[13px] leading-relaxed text-slate-300">
+            <p className="rounded-[8px] border border-raycast-yellow/25 bg-raycast-yellow/10 px-4 py-3 text-[13px] leading-relaxed text-light-gray">
               本次结果是「待观察型」，表示四个维度整体更接近中线或互相抵消。它不是负面评价，而是说明当前回答还没有形成足够强的单一倾向。
             </p>
           ) : null}
@@ -969,7 +969,7 @@ export default function ReportPage() {
             {scoreAudit.batches.map((batch) => (
               <details
                 key={batch.key}
-                className="group rounded-[8px] border border-white/10 bg-[#0f172a] p-4 open:border-raycast-blue/30"
+                className="group rounded-[8px] border border-border/70 bg-card-surface p-4 open:border-raycast-blue/30"
                 open
               >
                 <summary className="cursor-pointer list-none text-[15px] font-semibold text-near-white">
@@ -982,14 +982,14 @@ export default function ReportPage() {
                     return (
                       <div
                         key={`${batch.key}-${item.indexInBatch}-${answer.dimension}-${answer.question}`}
-                        className="rounded-[8px] border border-white/10 bg-black/15 p-4"
+                        className="rounded-[8px] border border-border/70 bg-surface-200/70 p-4"
                       >
                         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-400">
-                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim-gray">
+                            <span className="rounded-[6px] border border-border/70 px-2 py-1">
                               第 {item.indexInBatch} 题
                             </span>
-                            <span className="rounded-[6px] border border-white/10 px-2 py-1">
+                            <span className="rounded-[6px] border border-border/70 px-2 py-1">
                               {report.dimensions.find((dim) => dim.dimension === answer.dimension)?.label ?? answer.dimension}
                             </span>
                             {answer.reverse ? (
@@ -1007,10 +1007,10 @@ export default function ReportPage() {
                           </div>
                           <p className="text-[13px] text-light-gray">
                             {skipped
-                              ? <span className="text-slate-400">不了解 / 没想好</span>
+                              ? <span className="text-dim-gray">不了解 / 没想好</span>
                               : <>
                                   <span>{SCALE_LABELS[answer.score ?? 0] ?? `${answer.score} 分`}</span>
-                                  <span className="mx-1.5 text-slate-500">·</span>
+                                  <span className="mx-1.5 text-medium-gray">·</span>
                                   <span className="text-raycast-yellow">贡献 {formatScore(item.contribution)}</span>
                                 </>
                             }
@@ -1034,7 +1034,7 @@ export default function ReportPage() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="inline-flex items-center gap-2 rounded-[8px] border border-white/10 bg-[#1e293b] px-4 py-2 text-[14px] font-semibold text-light-gray transition-all hover:border-raycast-blue hover:text-near-white"
+          className="inline-flex items-center gap-2 rounded-[8px] border border-border/70 bg-surface-100 px-4 py-2 text-[14px] font-semibold text-light-gray transition-all hover:border-raycast-blue hover:text-near-white"
         >
           <ArrowLeft className="h-4 w-4" />
           返回首页

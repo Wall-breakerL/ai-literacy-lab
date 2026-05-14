@@ -108,15 +108,15 @@ export default function LandingPage() {
   const router = useRouter();
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gradient-to-br from-[#07080a] via-[#0a0d14] to-[#0c0f15]">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gradient-to-br from-void via-surface-100 to-surface-200">
       <a
         href="https://github.com/Wall-breakerL/human-ai-performance-lab"
         target="_blank"
         rel="noreferrer"
-        className="group absolute right-4 top-4 z-20 flex items-center justify-center gap-2 rounded-full border border-white/10 bg-surface-100/70 px-4 py-2 text-sm font-semibold text-slate-200 shadow-card-ring backdrop-blur-sm transition-all hover:border-white/20 hover:bg-surface-100 hover:text-white sm:right-6 sm:top-6"
+        className="group absolute right-4 top-16 z-20 flex items-center justify-center gap-2 rounded-full border border-border/70 bg-surface-100/70 px-4 py-2 text-sm font-semibold text-light-gray shadow-card-ring backdrop-blur-sm transition-all hover:border-raycast-blue/40 hover:bg-surface-100 hover:text-near-white sm:right-6 sm:top-20"
         aria-label="打开 GitHub 仓库"
       >
-        <Github className="h-4 w-4 text-slate-400 transition-colors group-hover:text-white" />
+        <Github className="h-4 w-4 text-dim-gray transition-colors group-hover:text-near-white" />
         <span className="hidden sm:inline">GitHub 仓库</span>
       </a>
 
@@ -158,7 +158,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-2xl sm:text-3xl font-medium text-slate-300 h-12"
+            className="text-2xl sm:text-3xl font-medium text-light-gray h-12"
           >
             <TypingText />
           </motion.div>
@@ -166,7 +166,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.6 }}
-            className="text-slate-400 text-base max-w-2xl mx-auto leading-relaxed"
+            className="text-dim-gray text-base max-w-2xl mx-auto leading-relaxed"
           >
             通过轻量访谈、定制问卷和个性化报告，了解你与 AI 协作时的习惯、优势和下一步可尝试的工作方式
           </motion.p>
@@ -185,7 +185,7 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.9 + index * 0.1 }}
-              className="relative bg-surface-100/50 backdrop-blur-sm p-6 rounded-2xl border border-white/5"
+              className="relative bg-surface-100/50 backdrop-blur-sm p-6 rounded-2xl border border-border/60"
               style={{
                 boxShadow: `0 0 0 1px ${feature.color}15, 0 8px 24px rgba(0,0,0,0.4)`,
               }}
@@ -196,7 +196,7 @@ export default function LandingPage() {
                   style={{ color: feature.color }}
                 />
                 <h3 className="text-near-white font-semibold text-lg mb-2">{feature.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+                <p className="text-dim-gray text-sm leading-relaxed">{feature.description}</p>
               </div>
             </motion.div>
           ))}
@@ -223,11 +223,11 @@ export default function LandingPage() {
             </div>
           </button>
 
-          <p className="text-slate-500 text-xs tracking-wide">
+          <p className="text-medium-gray text-xs tracking-wide">
             完全匿名 · 约 5-10 分钟 · 即刻获得报告
           </p>
           <AnalyticsSummary />
-          <p className="max-w-[520px] text-center text-xs leading-relaxed text-slate-500">
+          <p className="max-w-[520px] text-center text-xs leading-relaxed text-medium-gray">
             程序内置浏览器跳转可能不稳定，建议复制当前地址到外部浏览器打开后再进行测评。
           </p>
         </motion.div>
@@ -238,7 +238,7 @@ export default function LandingPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 0.3 }}
         transition={{ duration: 1, delay: 2 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-600 text-xs"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-dark-gray text-xs"
       >
         Powered by an OpenAI-compatible LLM
       </motion.div>
