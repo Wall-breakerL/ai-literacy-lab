@@ -115,6 +115,17 @@ interface ScoreAudit {
   skippedQuestions: number;
 }
 
+type StyleBehavior = {
+  behavior?: string;
+  basedOn?: string;
+  evidence?: string;
+};
+
+type StyleUniqueness = {
+  combination?: string;
+  similarRoles?: string[];
+};
+
 function firstText(...values: Array<string | undefined | null>) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim() ?? "";
 }
@@ -150,6 +161,10 @@ function dimensionAverageFormula(dimension: DimensionScoreDetail) {
   if (!dimension.contributions.length) return "无题目，使用默认中点 10/20";
   const sum = dimension.contributions.reduce((total, score) => total + score, 0);
   return `${dimension.contributions.map((score) => formatScore(score)).join(" + ")} = ${formatScore(sum)} / 20`;
+}
+
+function isObservationLabel(label?: string) {
+  return Boolean(label && /待观察|信号较弱|不明显/.test(label));
 }
 
 function resolveAnswerBatchEntries(
@@ -734,6 +749,7 @@ export default function ReportPage() {
   const styleOverview = buildStyleOverview(uiReport, strongest);
   const manifestoText = buildManifestoText(uiReport);
   const signature = buildSignature(uiReport);
+  const isBalancedPersonality = report.personality?.code === "BALANCED" || report.personality?.name?.includes("待观察");
 
   const fullReport = (
     <div className="space-y-6">
@@ -746,7 +762,7 @@ export default function ReportPage() {
           {(report as any).styleProfile.behaviors && (
             <div className="space-y-3">
               <p className="text-[14px] font-semibold text-slate-400">你是这样用AI的</p>
-              {(report as any).styleProfile.behaviors.map((behavior: any, index: number) => (
+              {((report as any).styleProfile.behaviors as StyleBehavior[]).map((behavior, index) => (
                 <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
                   <p className="text-[15px] text-near-white">{behavior.behavior}</p>
                   <p className="mt-2 text-[12px] text-slate-400">
@@ -757,34 +773,21 @@ export default function ReportPage() {
             </div>
           )}
 
-          {/* 对比 */}
-          {(report as any).styleProfile.comparison && (
-            <div className="space-y-3">
-              <p className="text-[14px] font-semibold text-slate-400">
-                对比：{(report as any).styleProfile.comparison.scenario}
-              </p>
-              {(report as any).styleProfile.comparison.styles.map((style: any, index: number) => (
-                <div key={index} className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
-                  <p className="mb-2 text-[15px] font-semibold text-near-white">{style.type}</p>
-                  <p className="mb-2 text-[14px] text-light-gray">{style.approach}</p>
-                  <div className="flex gap-4 text-[13px]">
-                    <span className="text-green-400">✓ {style.pros}</span>
-                    <span className="text-orange-400">✗ {style.cons}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* 独特组合 */}
           {(report as any).styleProfile.uniqueness && (
-            <div className="rounded-[8px] border border-white/10 bg-[#0f172a] p-4">
+            <div className="rounded-[8px] border border-raycast-blue/25 bg-[#0f172a] p-4">
               <p className="mb-2 text-[15px] font-semibold text-near-white">
-                {(report as any).styleProfile.uniqueness.combination}
+                {((report as any).styleProfile.uniqueness as StyleUniqueness).combination}
               </p>
-              <p className="text-[13px] text-slate-400">
-                相似用户：{(report as any).styleProfile.uniqueness.similarRoles.join('、')}
-              </p>
+              {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {((report as any).styleProfile.uniqueness as StyleUniqueness).similarRoles?.map((role) => (
+                    <span key={role} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-slate-300">
+                      {role}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
         </section>
@@ -947,9 +950,20 @@ export default function ReportPage() {
                   <p className="text-[18px] font-semibold text-raycast-yellow">{dimension.score}</p>
                 </div>
                 <p className="mt-1 text-[12px] text-slate-400">判定为「{dimension.tendencyLabel}」</p>
+                {isObservationLabel(dimension.tendencyLabel) ? (
+                  <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+                    正反向题得分相近，该维度信号较弱。
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
+
+          {isBalancedPersonality ? (
+            <p className="rounded-[8px] border border-raycast-yellow/25 bg-raycast-yellow/10 px-4 py-3 text-[13px] leading-relaxed text-slate-300">
+              本次结果是「待观察型」，表示四个维度整体更接近中线或互相抵消。它不是负面评价，而是说明当前回答还没有形成足够强的单一倾向。
+            </p>
+          ) : null}
 
           <div className="space-y-4">
             {scoreAudit.batches.map((batch) => (
