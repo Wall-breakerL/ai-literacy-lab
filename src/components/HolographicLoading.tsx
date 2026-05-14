@@ -35,12 +35,15 @@ function MatrixRain() {
     []
   );
   return (
-    <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+    <div
+      className="absolute inset-0 overflow-hidden pointer-events-none"
+      style={{ opacity: "var(--loading-matrix-opacity)" }}
+    >
       {rainColumns.map((column) => (
         <motion.div
           key={column.id}
           className="absolute top-0 text-[10px] font-mono text-raycast-blue whitespace-pre"
-          style={{ left: column.left }}
+          style={{ left: column.left, color: "rgb(var(--color-loading-grid))" }}
           animate={{
             y: ["0vh", "100vh"],
           }}
@@ -247,10 +250,11 @@ function DataStream() {
           key={particle.id}
           className="absolute w-1 h-1 rounded-full"
           style={{
-            background: `rgba(85, 179, 255, ${particle.alpha})`,
-            boxShadow: "0 0 4px rgba(85, 179, 255, 0.8)",
+            background: `rgb(var(--color-loading-grid) / ${particle.alpha})`,
+            boxShadow: "0 0 4px rgb(var(--color-loading-grid) / 0.8)",
             left: particle.left,
             top: particle.top,
+            opacity: "var(--loading-particle-opacity)",
           }}
           animate={{
             x: [0, particle.x],
@@ -379,7 +383,8 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          className="fixed inset-0 bg-void z-50 flex flex-col items-center justify-center overflow-hidden"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
+          style={{ backgroundColor: "rgb(var(--color-loading-bg))" }}
         >
           {/* Matrix rain background */}
           {mounted && !prefersReducedMotion ? <MatrixRain /> : null}
@@ -505,10 +510,15 @@ export function HolographicLoading({ onComplete, reportReady }: HolographicLoadi
           ].map((pos, i) => (
             <motion.div
               key={i}
-              className="absolute w-8 h-8 border-l-2 border-t-2 border-raycast-blue/30"
-              style={{ ...pos, transform: `rotate(${pos.rotate}deg)` }}
+              className="absolute w-8 h-8 border-l-2 border-t-2"
+              style={{
+                ...pos,
+                borderColor: "rgb(var(--color-loading-grid) / 0.34)",
+                transform: `rotate(${pos.rotate}deg)`,
+                opacity: "var(--loading-corner-opacity)",
+              }}
               animate={{
-                opacity: [0.3, 0.6, 0.3],
+                opacity: [0.24, 0.55, 0.24],
               }}
               transition={{
                 duration: 2,

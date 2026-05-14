@@ -60,18 +60,17 @@ export default function MidFeedbackPage() {
     setIssueText((current) => current ? `${current} 第 ${number} 题` : `第 ${number} 题`);
   };
 
-  const submit = (skip = false) => {
+  const submit = () => {
     if (!sessionState) {
       router.replace("/intake");
       return;
     }
-    const feeling = skip ? "close" : overallFeeling;
-    if (!feeling) {
-      setError("请选择第一轮整体感受，或直接跳过反馈。");
+    if (!overallFeeling) {
+      setError("请选择第一轮整体感受。");
       return;
     }
     const guidance = buildScenarioGuidanceFromForm(
-      { overallFeeling: feeling, issueText, focusScenario },
+      { overallFeeling, issueText, focusScenario },
       sessionState.background.recentUse
     );
     const refinedTargetContext = buildRefinedTargetContextFromFeedback(sessionState, guidance);
@@ -234,14 +233,7 @@ export default function MidFeedbackPage() {
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => submit(true)}
-              className="h-12 rounded-[12px] border border-border/70 px-5 text-sm font-semibold text-dim-gray transition hover:text-light-gray"
-            >
-              跳过反馈
-            </button>
-            <button
-              type="button"
-              onClick={() => submit(false)}
+              onClick={submit}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-[12px] bg-near-white px-5 text-sm font-semibold text-void shadow-button-native transition hover:bg-light-gray"
             >
               继续第二轮

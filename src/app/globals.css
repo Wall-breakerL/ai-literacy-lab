@@ -20,6 +20,11 @@
   --color-dark-gray: 67 67 69;
   --color-border: 37 40 41;
   --color-dark-border: 47 48 49;
+  --color-loading-bg: 7 8 10;
+  --color-loading-grid: 85 179 255;
+  --loading-matrix-opacity: 0.1;
+  --loading-particle-opacity: 1;
+  --loading-corner-opacity: 0.3;
   --shadow-card-ring: rgb(27, 28, 30) 0px 0px 0px 1px, rgb(7, 8, 10) 0px 0px 0px 1px inset;
   --shadow-button-native: rgba(255,255,255,0.05) 0px 1px 0px 0px inset, rgba(255,255,255,0.25) 0px 0px 0px 1px, rgba(0,0,0,0.2) 0px -1px 0px 0px inset;
   color-scheme: dark;
@@ -38,6 +43,11 @@
   --color-dark-gray: 148 163 184;
   --color-border: 203 213 225;
   --color-dark-border: 148 163 184;
+  --color-loading-bg: 245 240 232;
+  --color-loading-grid: 30 64 105;
+  --loading-matrix-opacity: 0.08;
+  --loading-particle-opacity: 0.65;
+  --loading-corner-opacity: 0.22;
   --shadow-card-ring: rgba(15,23,42,0.08) 0px 1px 0px, rgba(15,23,42,0.10) 0px 0px 0px 1px;
   --shadow-button-native: rgba(15,23,42,0.08) 0px 1px 0px 0px inset, rgba(15,23,42,0.14) 0px 0px 0px 1px, rgba(15,23,42,0.08) 0px -1px 0px 0px inset;
   color-scheme: light;

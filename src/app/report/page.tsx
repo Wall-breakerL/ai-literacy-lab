@@ -1028,8 +1028,6 @@ export default function ReportPage() {
         </section>
       ) : null}
 
-      <ReportFeedbackPanel report={uiReport} />
-
       <div className="flex justify-start">
         <button
           type="button"
@@ -1050,6 +1048,7 @@ export default function ReportPage() {
       manifestoText={manifestoText}
       signature={signature}
       fullReport={fullReport}
+      feedbackPanel={<ReportFeedbackPanel report={uiReport} />}
     />
   );
 }
