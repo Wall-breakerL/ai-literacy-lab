@@ -35,6 +35,7 @@ import { buildStyleProfileDisplay } from "@/lib/styleProfileDisplay";
 const REPORT_MAX_ATTEMPTS = 2;
 const REPORT_REQUEST_TIMEOUT_MS = 75_000;
 const REPORT_RETRY_DELAY_MS = 15_000;
+const REPORT_FORMAT_RETRY_DELAY_MS = 1_500;
 const FEEDBACK_TEXT_LIMIT = 60;
 
 function isFinalReport(data: unknown): data is FinalReport {
@@ -252,6 +253,134 @@ function timeoutSignal(ms: number): AbortSignal {
   }, ms);
   controller.signal.addEventListener("abort", () => window.clearTimeout(id), { once: true });
   return controller.signal;
+}
+
+type ReportRequestPayload = {
+  messages: Message[];
+  identity: string;
+  questionnaireAnswers: QuestionnaireAnswer[];
+  targetContext?: TargetContext;
+  sessionState?: SessionState;
+};
+
+const reportRequestCache = new Map<string, Promise<FinalReport>>();
+
+function buildReportRequestCacheKey(payload: ReportRequestPayload) {
+  return JSON.stringify({
+    sessionId: payload.sessionState?.sessionId ?? null,
+    identity: payload.identity,
+    targetContext: payload.targetContext ?? null,
+    answerCount: payload.questionnaireAnswers.length,
+    answers: payload.questionnaireAnswers.map((answer) => ({
+      dimension: answer.dimension,
+      question: answer.question,
+      scenario: answer.scenario,
+      reverse: answer.reverse ?? false,
+      score: answer.score,
+      skipped: Boolean(answer.skipped || answer.score == null),
+    })),
+  });
+}
+
+function getReportRequest(payload: ReportRequestPayload) {
+  const key = buildReportRequestCacheKey(payload);
+  const existing = reportRequestCache.get(key);
+  if (existing) return existing;
+
+  const request = fetchReportWithRetry(payload).finally(() => {
+    window.setTimeout(() => {
+      if (reportRequestCache.get(key) === request) reportRequestCache.delete(key);
+    }, 1000);
+  });
+  reportRequestCache.set(key, request);
+  return request;
+}
+
+async function fetchReportWithRetry(payload: ReportRequestPayload): Promise<FinalReport> {
+  let failureCount = 0;
+  let lastErr = "生成报告失败，请稍后再试。";
+
+  for (let attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: timeoutSignal(REPORT_REQUEST_TIMEOUT_MS),
+      });
+
+      let data: unknown = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      const d = data as Record<string, unknown>;
+      const detail =
+        typeof d?.detail === "string" && d.detail.trim()
+          ? d.detail.trim()
+          : typeof d?.error === "string"
+            ? d.error
+            : `HTTP ${res.status}`;
+
+      if (!res.ok) {
+        lastErr = detail;
+        failureCount += 1;
+        const isFormatRetry = d.error === "REPORT_MODEL_JSON_PARSE_FAILED";
+        console.error("Report API error:", res.status, data, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
+        const retry = isRetryableApiFailure(res.status, detail) && attempt < REPORT_MAX_ATTEMPTS - 1;
+        if (retry) {
+          await sleepAbortable(isFormatRetry ? REPORT_FORMAT_RETRY_DELAY_MS : REPORT_RETRY_DELAY_MS);
+          continue;
+        }
+        break;
+      }
+
+      if (typeof d.error === "string" && d.error && !isFinalReport(data)) {
+        lastErr = d.error;
+        failureCount += 1;
+        const retry = attempt < REPORT_MAX_ATTEMPTS - 1;
+        if (retry) {
+          await sleepAbortable(REPORT_RETRY_DELAY_MS);
+          continue;
+        }
+        break;
+      }
+
+      if (!isFinalReport(data)) {
+        lastErr = "报告格式异常，正在重试…";
+        failureCount += 1;
+        if (attempt < REPORT_MAX_ATTEMPTS - 1) {
+          await sleepAbortable(REPORT_RETRY_DELAY_MS);
+          continue;
+        }
+        break;
+      }
+
+      return data;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastErr = msg;
+      console.error("Report fetch error:", err, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
+      const networkLike =
+        err instanceof TypeError ||
+        err instanceof DOMException && err.name === "TimeoutError" ||
+        /fetch|network|Failed to fetch|Load failed|ECONNRESET|ETIMEDOUT|timed out/i.test(msg);
+      if (networkLike) failureCount += 1;
+      const retry = networkLike && attempt < REPORT_MAX_ATTEMPTS - 1;
+      if (retry) {
+        await sleepAbortable(REPORT_RETRY_DELAY_MS);
+        continue;
+      }
+      break;
+    }
+  }
+
+  if (failureCount >= 3) {
+    throw new Error("网络较差，报告生成失败，请稍后再试。");
+  }
+  throw new Error(lastErr);
 }
 
 function buildStyleOverview(report: ReportPageModel, strongest: DimensionItem) {
@@ -506,7 +635,6 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [reportReady, setReportReady] = useState(false);
   const [error, setError] = useState("");
-  const [waitHint, setWaitHint] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
@@ -521,7 +649,6 @@ export default function ReportPage() {
 
       setLoading(true);
       setError("");
-      setWaitHint(null);
 
       let messages: Message[] = [];
       let questionnaireAnswers: QuestionnaireAnswer[] = [];
@@ -587,115 +714,39 @@ export default function ReportPage() {
           }
         : undefined;
 
-      let failureCount = 0;
-      let lastErr = "生成报告失败，请稍后再试。";
-      for (let attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
+      try {
+        const data = await getReportRequest({
+          messages,
+          identity: identityStr,
+          questionnaireAnswers,
+          targetContext,
+          sessionState,
+        });
         if (cancelled) return;
-        try {
-          const res = await fetch("/api/report", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages, identity: identityStr, questionnaireAnswers, targetContext, sessionState }),
-            signal: timeoutSignal(REPORT_REQUEST_TIMEOUT_MS),
+        setReport(data);
+        setScoreAudit(buildScoreAudit({ report: data, questionnaireAnswers, sessionState }));
+        if (sessionState && data.personality) {
+          recordTestResult({
+            sessionId: sessionState.sessionId,
+            role: targetContext?.role ?? sessionState.background.role,
+            tools: targetContext?.tools ?? sessionState.background.tools,
+            personalityCode: data.personality.code,
+            personalityName: data.personality.name,
+            dimensions: data.dimensions.map((dimension) => ({
+              dimension: dimension.dimension,
+              score: dimension.score,
+              scorePercent: dimension.scorePercent,
+              tendencyLabel: dimension.tendencyLabel,
+            })),
+            questionnaireSamples: buildQuestionnaireSamples(questionnaireAnswers, sessionState),
           });
-
-          let data: unknown = {};
-          try {
-            data = await res.json();
-          } catch {
-            data = {};
-          }
-
-          const d = data as Record<string, unknown>;
-          const detail =
-            typeof d?.detail === "string" && d.detail.trim()
-              ? d.detail.trim()
-              : typeof d?.error === "string"
-                ? d.error
-                : `HTTP ${res.status}`;
-
-          if (!res.ok) {
-            lastErr = detail;
-            failureCount += 1;
-            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            console.error("Report API error:", res.status, data, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
-            const retry = isRetryableApiFailure(res.status, detail) && attempt < REPORT_MAX_ATTEMPTS - 1;
-            if (retry) {
-              await sleepAbortable(REPORT_RETRY_DELAY_MS);
-              continue;
-            }
-            break;
-          }
-
-          if (typeof d.error === "string" && d.error && !isFinalReport(data)) {
-            lastErr = d.error;
-            failureCount += 1;
-            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            const retry = attempt < REPORT_MAX_ATTEMPTS - 1;
-            if (retry) {
-              await sleepAbortable(REPORT_RETRY_DELAY_MS);
-              continue;
-            }
-            break;
-          }
-
-          if (!isFinalReport(data)) {
-            lastErr = "报告格式异常，正在重试…";
-            failureCount += 1;
-            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-            if (attempt < REPORT_MAX_ATTEMPTS - 1) {
-              await sleepAbortable(REPORT_RETRY_DELAY_MS);
-              continue;
-            }
-            break;
-          }
-
-          if (cancelled) return;
-          setReport(data);
-          setScoreAudit(buildScoreAudit({ report: data, questionnaireAnswers, sessionState }));
-          if (sessionState && data.personality) {
-            recordTestResult({
-              sessionId: sessionState.sessionId,
-              role: targetContext?.role ?? sessionState.background.role,
-              tools: targetContext?.tools ?? sessionState.background.tools,
-              personalityCode: data.personality.code,
-              personalityName: data.personality.name,
-              dimensions: data.dimensions.map((dimension) => ({
-                dimension: dimension.dimension,
-                score: dimension.score,
-                scorePercent: dimension.scorePercent,
-                tendencyLabel: dimension.tendencyLabel,
-              })),
-              questionnaireSamples: buildQuestionnaireSamples(questionnaireAnswers, sessionState),
-            });
-          }
-          setReportReady(true);
-          return;
-        } catch (err) {
-          if (cancelled) return;
-          const msg = err instanceof Error ? err.message : String(err);
-          lastErr = msg;
-          console.error("Report fetch error:", err, `attempt ${attempt + 1}/${REPORT_MAX_ATTEMPTS}`);
-          const networkLike =
-            err instanceof TypeError ||
-            err instanceof DOMException && err.name === "TimeoutError" ||
-            /fetch|network|Failed to fetch|Load failed|ECONNRESET|ETIMEDOUT|timed out/i.test(msg);
-          if (networkLike) {
-            failureCount += 1;
-            if (failureCount >= 3) setWaitHint("网络较差，正在重试…");
-          }
-          const retry = networkLike && attempt < REPORT_MAX_ATTEMPTS - 1;
-          if (retry) {
-            await sleepAbortable(REPORT_RETRY_DELAY_MS);
-            continue;
-          }
-          break;
         }
-      }
-
-      if (!cancelled) {
-        setError(lastErr);
-        setLoading(false);
+        setReportReady(true);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "生成报告失败，请稍后再试。");
+          setLoading(false);
+        }
       }
     };
 
