@@ -25,6 +25,10 @@
   --loading-matrix-opacity: 0.1;
   --loading-particle-opacity: 1;
   --loading-corner-opacity: 0.3;
+  --report-story-bg: radial-gradient(circle at 18% 0%, rgba(85,179,255,0.16), transparent 34%), linear-gradient(135deg, rgb(15, 23, 42), rgb(30, 41, 59));
+  --report-slide-bg: rgba(15, 23, 42, 0.98);
+  --report-slide-border: rgba(255,255,255,0.08);
+  --report-slide-shadow: 0 24px 80px rgba(0,0,0,0.5);
   --shadow-card-ring: rgb(27, 28, 30) 0px 0px 0px 1px, rgb(7, 8, 10) 0px 0px 0px 1px inset;
   --shadow-button-native: rgba(255,255,255,0.05) 0px 1px 0px 0px inset, rgba(255,255,255,0.25) 0px 0px 0px 1px, rgba(0,0,0,0.2) 0px -1px 0px 0px inset;
   color-scheme: dark;
@@ -48,6 +52,10 @@
   --loading-matrix-opacity: 0.08;
   --loading-particle-opacity: 0.65;
   --loading-corner-opacity: 0.22;
+  --report-story-bg: radial-gradient(circle at 18% 0%, rgba(85,179,255,0.16), transparent 34%), linear-gradient(135deg, rgb(246, 248, 251), rgb(229, 236, 246));
+  --report-slide-bg: rgba(255, 255, 255, 0.96);
+  --report-slide-border: rgba(148,163,184,0.32);
+  --report-slide-shadow: 0 24px 70px rgba(15,23,42,0.14);
   --shadow-card-ring: rgba(15,23,42,0.08) 0px 1px 0px, rgba(15,23,42,0.10) 0px 0px 0px 1px;
   --shadow-button-native: rgba(15,23,42,0.08) 0px 1px 0px 0px inset, rgba(15,23,42,0.14) 0px 0px 0px 1px, rgba(15,23,42,0.08) 0px -1px 0px 0px inset;
   color-scheme: light;
@@ -133,4 +141,23 @@ body {
   background: rgba(85, 179, 255, 0.4);
   pointer-events: none;
   animation: ripple 0.6s ease-out;
+}
+
+.report-story-card {
+  background: var(--report-slide-bg);
+  border-color: var(--report-slide-border);
+  box-shadow: var(--report-slide-shadow);
+  color: rgb(var(--color-near-white));
+}
+
+:root[data-theme="light"] .report-story-card [class*="text-white"] {
+  color: rgb(var(--color-near-white));
+}
+
+:root[data-theme="light"] .report-story-card [class*="text-slate-"] {
+  color: rgb(var(--color-dim-gray));
+}
+
+:root[data-theme="light"] .report-story-card [class*="border-white/"] {
+  border-color: rgba(148, 163, 184, 0.34);
 }

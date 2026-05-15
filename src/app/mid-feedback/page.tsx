@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronDown, ListChecks } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ListChecks } from "lucide-react";
 import { ParticleBackground } from "@/components/ParticleBackground";
 import {
   buildRefinedTargetContextFromFeedback,
   buildScenarioGuidanceFromForm,
   type MidFeedbackForm,
 } from "@/lib/midFeedbackState";
+import { scenarioOptionsForRole } from "@/lib/scenarioOptions";
 import { applySessionStatePatch } from "@/lib/sessionState";
 import type { QuestionnaireAnswer, SessionState } from "@/lib/types";
 
@@ -41,6 +42,7 @@ export default function MidFeedbackPage() {
   const [sessionState] = useState<SessionState | null>(() => readSessionState());
   const [overallFeeling, setOverallFeeling] = useState<MidFeedbackForm["overallFeeling"] | "">("");
   const [issueText, setIssueText] = useState("");
+  const [selectedFocusScenarios, setSelectedFocusScenarios] = useState<string[]>([]);
   const [focusScenario, setFocusScenario] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [issueExpanded, setIssueExpanded] = useState(false);
@@ -50,6 +52,16 @@ export default function MidFeedbackPage() {
   const questions = useMemo(() => sessionState?.questionnaireBatches?.batch1 ?? [], [sessionState]);
   const answers = useMemo(() => sessionState?.batchAnswers?.batch1 ?? [], [sessionState]);
   const skippedCount = answers.filter((answer) => answer.skipped || answer.score == null).length;
+  const scenarioOptions = useMemo(
+    () => scenarioOptionsForRole(sessionState?.background.role),
+    [sessionState?.background.role]
+  );
+  const focusScenarioText = useMemo(() => {
+    const values = [...selectedFocusScenarios];
+    const custom = focusScenario.trim();
+    if (custom) values.push(custom);
+    return values.join("、");
+  }, [focusScenario, selectedFocusScenarios]);
 
   const reviewItems = useMemo(() => questions.map((question, index) => ({
     question,
@@ -58,6 +70,13 @@ export default function MidFeedbackPage() {
 
   const insertQuestionRef = (number: number) => {
     setIssueText((current) => current ? `${current} 第 ${number} 题` : `第 ${number} 题`);
+  };
+
+  const toggleFocusScenario = (scenario: string) => {
+    setSelectedFocusScenarios((current) => {
+      if (current.includes(scenario)) return current.filter((item) => item !== scenario);
+      return [...current, scenario].slice(0, 2);
+    });
   };
 
   const submit = () => {
@@ -70,7 +89,7 @@ export default function MidFeedbackPage() {
       return;
     }
     const guidance = buildScenarioGuidanceFromForm(
-      { overallFeeling, issueText, focusScenario },
+      { overallFeeling, issueText, focusScenario: focusScenarioText },
       sessionState.background.recentUse
     );
     const refinedTargetContext = buildRefinedTargetContextFromFeedback(sessionState, guidance);
@@ -215,16 +234,41 @@ export default function MidFeedbackPage() {
             </button>
 
             {focusExpanded ? (
-              <label className="grid gap-2 rounded-[16px] border border-border/70 bg-card-surface p-4">
-                <span className="text-sm font-semibold text-light-gray">第二轮你希望多看到哪类场景？</span>
+              <div className="grid gap-3 rounded-[16px] border border-border/70 bg-card-surface p-4">
+                <div>
+                  <span className="text-sm font-semibold text-light-gray">第二轮你希望多看到哪类场景？</span>
+                  <p className="mt-1 text-xs leading-relaxed text-dim-gray">
+                    这些词条会作为第二轮题目的方向提示，让问题更集中地围绕你想校准的 AI 使用场景。最多选 2 个，也可以自己补充。
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {scenarioOptions.map((scenario) => {
+                    const selected = selectedFocusScenarios.includes(scenario);
+                    return (
+                      <button
+                        key={scenario}
+                        type="button"
+                        onClick={() => toggleFocusScenario(scenario)}
+                        className={`inline-flex h-9 items-center gap-2 rounded-[10px] border px-3 text-sm transition ${
+                          selected
+                            ? "border-raycast-green bg-raycast-green/15 text-near-white shadow-[0_0_18px_rgba(95,201,146,0.16)]"
+                            : "border-border/70 bg-surface-100 text-dim-gray hover:border-raycast-blue/40 hover:text-light-gray"
+                        }`}
+                      >
+                        {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                        {scenario}
+                      </button>
+                    );
+                  })}
+                </div>
                 <textarea
                   value={focusScenario}
                   onChange={(event) => setFocusScenario(event.target.value)}
-                  placeholder="比如：写需求文档、调试代码、做数据分析、和客户沟通..."
+                  placeholder="也可以补充更具体的方向，比如：调试代码、和客户沟通..."
                   rows={3}
                   className="resize-none rounded-[10px] border border-border/70 bg-card-surface px-4 py-3 text-sm leading-relaxed text-near-white outline-none transition focus:border-raycast-blue"
                 />
-              </label>
+              </div>
             ) : null}
           </div>
 
