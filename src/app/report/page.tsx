@@ -155,7 +155,7 @@ function dimensionAverageFormula(dimension: DimensionScoreDetail) {
 }
 
 function isObservationLabel(label?: string) {
-  return Boolean(label && /待观察|信号较弱|不明显/.test(label));
+  return Boolean(label && /信号较弱|不明显/.test(label));
 }
 
 function resolveAnswerBatchEntries(
@@ -791,7 +791,6 @@ export default function ReportPage() {
   const styleProfileDisplay = buildStyleProfileDisplay(uiReport);
   const manifestoText = buildManifestoText(uiReport);
   const signature = buildSignature(uiReport);
-  const isBalancedPersonality = report.personality?.code === "BALANCED" || report.personality?.name?.includes("待观察");
 
   const fullReport = (
     <div className="space-y-6">
@@ -967,12 +966,6 @@ export default function ReportPage() {
               </div>
             ))}
           </div>
-
-          {isBalancedPersonality ? (
-            <p className="rounded-[8px] border border-raycast-yellow/25 bg-raycast-yellow/10 px-4 py-3 text-[13px] leading-relaxed text-light-gray">
-              本次结果是「待观察型」，表示四个维度整体更接近中线或互相抵消。它不是负面评价，而是说明当前回答还没有形成足够强的单一倾向。
-            </p>
-          ) : null}
 
           <div className="space-y-4">
             {scoreAudit.batches.map((batch) => (

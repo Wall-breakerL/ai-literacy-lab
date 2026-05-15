@@ -70,7 +70,7 @@ function DimensionSpectrumBar({ report, index }: { report: DimensionReport; inde
 }
 
 function isObservationLabel(label?: string) {
-  return Boolean(label && /待观察|信号较弱|不明显/.test(label));
+  return Boolean(label && /信号较弱|不明显/.test(label));
 }
 
 export function DimensionCard({ report, index }: DimensionCardProps) {
