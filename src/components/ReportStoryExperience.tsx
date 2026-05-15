@@ -115,6 +115,147 @@ function visibleTags(report: ReportPageModel) {
   return report.tags.slice(0, 4).map((tag) => ({ label: tag, color: "#55b3ff" }));
 }
 
+function drawWrappedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines = 3
+) {
+  const chars = Array.from(text);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const char of chars) {
+    const next = current + char;
+    if (context.measureText(next).width > maxWidth && current) {
+      lines.push(current);
+      current = char;
+      if (lines.length >= maxLines) break;
+    } else {
+      current = next;
+    }
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+
+  lines.forEach((line, index) => {
+    context.fillText(line, x, y + index * lineHeight);
+  });
+  return y + lines.length * lineHeight;
+}
+
+function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    image.src = src;
+  });
+}
+
+async function renderFallbackPosterCanvas(
+  report: ReportPageModel,
+  tags: Array<{ label: string; color: string }>
+) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 900;
+  canvas.height = 1600;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas context unavailable");
+
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#0a0d14");
+  gradient.addColorStop(0.5, "#11151c");
+  gradient.addColorStop(1, "#0c0f15");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  context.strokeStyle = "rgba(255,255,255,0.14)";
+  context.lineWidth = 2;
+  context.strokeRect(28, 28, canvas.width - 56, canvas.height - 56);
+
+  const code = report.personality?.code ?? "AI-MBTI";
+  const name = report.personality?.name ?? "AI 协作画像";
+  const tagline = report.personality?.tagline ?? compactText(report.summary, 42);
+  const traits = getPersonalityTraits(report.personality?.code ?? "CEAL");
+
+  try {
+    const avatar = await loadImageElement(`/avatars/avatar-choices/${/^[A-Z]{4}$/.test(code) ? code : "CEAL"}.png`);
+    context.drawImage(avatar, 72, 76, 188, 188);
+  } catch {
+    context.fillStyle = "rgba(85,179,255,0.16)";
+    context.fillRect(72, 76, 188, 188);
+  }
+
+  context.fillStyle = "#c0392b";
+  context.fillRect(290, 82, 112, 40);
+  context.fillStyle = "#ffffff";
+  context.font = "700 24px Arial, sans-serif";
+  context.fillText(code, 310, 110);
+  context.fillStyle = "rgba(255,255,255,0.45)";
+  context.font = "600 20px Arial, sans-serif";
+  context.fillText("AI · MBTI", 422, 110);
+
+  context.fillStyle = "#f1e3c0";
+  context.font = "700 72px KaiTi, STKaiti, serif";
+  drawWrappedText(context, name, 290, 190, 540, 78, 2);
+
+  context.fillStyle = "rgba(255,248,220,0.9)";
+  context.font = "italic 30px Songti SC, serif";
+  context.textAlign = "center";
+  drawWrappedText(context, `「${tagline}」`, canvas.width / 2, 340, 720, 44, 2);
+  context.textAlign = "left";
+
+  let y = 470;
+  context.font = "600 24px Arial, sans-serif";
+  for (const dimension of report.dimensions) {
+    const score = displayScore(dimension);
+    const meta = DIMENSION_META[dimension.dimension];
+    const accent = getSpectrumAccent(dimension);
+    context.fillStyle = "rgba(255,255,255,0.7)";
+    context.fillText(`${meta.lowLabel} ${meta.lowLetter}`, 88, y);
+    context.textAlign = "right";
+    context.fillText(`${meta.highLabel} ${meta.highLetter}`, 812, y);
+    context.textAlign = "left";
+    context.fillStyle = "rgba(255,255,255,0.14)";
+    context.fillRect(190, y - 12, 520, 10);
+    context.fillStyle = accent;
+    context.fillRect(190, y - 12, 520 * (score / 100), 10);
+    context.fillStyle = "#ffffff";
+    context.font = "700 20px Arial, sans-serif";
+    context.fillText(`${score}%`, 730, y);
+    context.font = "600 24px Arial, sans-serif";
+    y += 92;
+  }
+
+  let tagX = 92;
+  y += 8;
+  context.font = "700 24px Arial, sans-serif";
+  tags.slice(0, 3).forEach((tag) => {
+    const width = Math.min(220, context.measureText(tag.label).width + 48);
+    context.fillStyle = `${tag.color}33`;
+    context.fillRect(tagX, y, width, 44);
+    context.fillStyle = tag.color;
+    context.fillText(tag.label, tagX + 24, y + 30);
+    tagX += width + 18;
+  });
+
+  context.fillStyle = "rgba(255,248,220,0.55)";
+  context.font = "700 22px Arial, sans-serif";
+  context.fillText("Golden Line", 92, 1260);
+  context.fillStyle = "rgba(255,248,220,0.92)";
+  context.font = "32px Songti SC, serif";
+  drawWrappedText(context, `「${traits.goldenLine}」`, 92, 1320, 716, 48, 2);
+
+  context.fillStyle = "rgba(255,255,255,0.62)";
+  context.font = "22px Songti SC, serif";
+  context.fillText("AI-MBTI · 协作画像", 92, 1480);
+
+  return canvas;
+}
+
 function compactText(text?: string, maxLength = 92) {
   const clean = (text ?? "").replace(/[#*_`>\[\]()]/g, "").replace(/\s+/g, " ").trim();
   return clean.length > maxLength ? `${clean.slice(0, maxLength)}...` : clean;
@@ -162,6 +303,16 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function openBlobImage(url: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function isMobileBrowser() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia("(pointer: coarse)").matches;
 }
@@ -173,6 +324,30 @@ function withShareTimeout(promise: Promise<void>, timeoutMs = 45_000) {
       window.setTimeout(() => reject(new Error("share_timeout")), timeoutMs);
     }),
   ]);
+}
+
+function withPosterRenderTimeout(promise: Promise<HTMLCanvasElement>, timeoutMs = 18_000) {
+  return Promise.race([
+    promise,
+    new Promise<HTMLCanvasElement>((_, reject) => {
+      window.setTimeout(() => reject(new Error("poster_render_timeout")), timeoutMs);
+    }),
+  ]);
+}
+
+function preparePosterCloneForCanvas(clonedDocument: Document) {
+  const style = clonedDocument.createElement("style");
+  style.textContent = `
+    [data-poster-capture-root],
+    [data-poster-capture-root] * {
+      font-family: Inter, Arial, "PingFang SC", "Microsoft YaHei", sans-serif !important;
+    }
+    [data-poster-capture-root] .font-brush,
+    [data-poster-capture-root] .font-serif-cn {
+      font-family: "STKaiti", "KaiTi", "Songti SC", serif !important;
+    }
+  `;
+  clonedDocument.head.appendChild(style);
 }
 
 function SpectrumBar({
@@ -391,9 +566,11 @@ export function ReportStoryExperience({
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [sharingPoster, setSharingPoster] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
+  const [posterImageUrl, setPosterImageUrl] = useState("");
   const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
   const posterRef = useRef<HTMLElement | null>(null);
+  const posterImageUrlRef = useRef("");
 
   const strongest = useMemo(() => strongestDimension(report.dimensions), [report.dimensions]);
   const strongestAccent = getSpectrumAccent(strongest);
@@ -422,6 +599,16 @@ export function ReportStoryExperience({
     window.setTimeout(() => setCopiedPrompt(false), 1500);
   };
 
+  useEffect(() => {
+    posterImageUrlRef.current = posterImageUrl;
+  }, [posterImageUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (posterImageUrlRef.current) URL.revokeObjectURL(posterImageUrlRef.current);
+    };
+  }, []);
+
   const handlePointerUp = (x: number) => {
     if (touchStartX.current == null || showPoster) return;
     const delta = x - touchStartX.current;
@@ -442,16 +629,32 @@ export function ReportStoryExperience({
     if (!posterRef.current || sharingPoster) return;
     setSharingPoster(true);
     setShareStatus("");
+    if (posterImageUrlRef.current) {
+      URL.revokeObjectURL(posterImageUrlRef.current);
+      setPosterImageUrl("");
+    }
     const mobileBrowser = isMobileBrowser();
-    let downloaded = false;
 
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(posterRef.current, {
-        backgroundColor: null,
-        scale: Math.min(mobileBrowser ? 2 : 3, window.devicePixelRatio || 2),
-        useCORS: true,
-      });
+      let usedFallbackRenderer = false;
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await withPosterRenderTimeout(
+          html2canvas(posterRef.current, {
+            backgroundColor: null,
+            imageTimeout: 8000,
+            logging: false,
+            onclone: preparePosterCloneForCanvas,
+            scale: Math.min(mobileBrowser ? 1.75 : 2.5, window.devicePixelRatio || 2),
+            useCORS: true,
+          })
+        );
+      } catch (renderError) {
+        console.warn("Poster DOM capture failed; using canvas fallback:", renderError);
+        usedFallbackRenderer = true;
+        canvas = await renderFallbackPosterCanvas(report, tags.slice(0, 3));
+      }
       const blob = await canvasToBlob(canvas);
       const filename = `${posterFileName(report)}.png`;
       const file = new File([blob], filename, { type: "image/png" });
@@ -461,37 +664,49 @@ export function ReportStoryExperience({
         files: [file],
       };
       const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+      const showMobileImageFallback = (status: string) => {
+        const imageUrl = URL.createObjectURL(blob);
+        setPosterImageUrl(imageUrl);
+        try {
+          openBlobImage(imageUrl);
+          setShareStatus(status);
+        } catch {
+          setShareStatus("已生成图片，可点下方入口打开后长按保存。");
+        }
+      };
 
-      if (navigator.share && nav.canShare?.(shareData)) {
-        await withShareTimeout(navigator.share(shareData));
-        setShareStatus("已打开系统分享面板。");
-      } else if (mobileBrowser) {
-        setShareStatus("当前手机浏览器不支持直接分享图片，请使用系统截图保存海报。");
-      } else {
-        downloadBlob(blob, filename);
-        downloaded = true;
-        setShareStatus("当前浏览器不支持直接分享，已下载海报图片。");
+      if (mobileBrowser && navigator.share && nav.canShare?.(shareData)) {
+        try {
+          await withShareTimeout(navigator.share(shareData));
+          setShareStatus("已打开系统分享面板。");
+        } catch (shareError) {
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            setShareStatus("已取消分享。");
+          } else {
+            console.error("Poster native share failed:", shareError);
+            showMobileImageFallback("系统分享失败，已打开图片页，可长按保存或转发。");
+          }
+        }
+        return;
       }
+
+      if (!mobileBrowser) {
+        downloadBlob(blob, filename);
+        setShareStatus(usedFallbackRenderer ? "已使用兼容模式生成并下载海报图片。" : "已下载海报图片。");
+        return;
+      }
+
+      showMobileImageFallback(
+        usedFallbackRenderer
+          ? "已使用兼容模式生成图片，并打开图片页，可长按保存或转发。"
+          : "当前手机浏览器不支持直接分享图片，已打开图片页，可长按保存或转发。"
+      );
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setShareStatus("已取消分享。");
       } else {
         console.error("Poster share failed:", error);
-        if (mobileBrowser) {
-          setShareStatus("海报图片生成或分享失败，请使用系统截图保存海报。");
-          return;
-        }
-        if (downloaded) return;
-        setShareStatus("分享失败，已尝试下载海报图片。");
-        try {
-          if (posterRef.current) {
-            const html2canvas = (await import("html2canvas")).default;
-            const canvas = await html2canvas(posterRef.current, { backgroundColor: null, scale: 2, useCORS: true });
-            downloadBlob(await canvasToBlob(canvas), `${posterFileName(report)}.png`);
-          }
-        } catch {
-          setShareStatus("海报图片生成失败，请稍后再试。");
-        }
+        setShareStatus(mobileBrowser ? "海报图片生成或分享失败，请使用系统截图保存海报。" : "海报图片生成失败，请稍后再试。");
       }
     } finally {
       setSharingPoster(false);
@@ -804,6 +1019,16 @@ export function ReportStoryExperience({
               </button>
             </div>
             {shareStatus ? <p className="mt-2 text-center text-[11px] leading-relaxed text-dim-gray">{shareStatus}</p> : null}
+            {posterImageUrl ? (
+              <a
+                href={posterImageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex h-9 items-center justify-center rounded-full border border-border/70 bg-card-surface px-3 text-[12px] font-semibold text-light-gray transition hover:border-raycast-blue/40 hover:text-near-white"
+              >
+                打开已生成图片
+              </a>
+            ) : null}
           </section>
         )}
       </div>
@@ -831,6 +1056,7 @@ function PosterPreview({
   return (
     <article
       ref={posterRef}
+      data-poster-capture-root
       className="relative aspect-[9/16] overflow-hidden rounded-[10px] border border-white/10 bg-gradient-to-b from-[#0a0d14] via-[#11151c] to-[#0c0f15] text-white shadow-[0_30px_90px_rgba(8,10,16,0.55)]"
       style={{ width: "min(100%, calc((100svh - 144px) * 9 / 16))" }}
       onContextMenu={(event) => {
