@@ -1,4 +1,8 @@
-import type { TestResultPayload, VisitPayload } from "@/lib/analytics/shared";
+import {
+  FALLBACK_BATCHES_STORAGE_PREFIX,
+  type TestResultPayload,
+  type VisitPayload,
+} from "@/lib/analytics/shared";
 import { trackObservabilityEvent } from "@/lib/observability/browser";
 
 const VISITOR_ID_KEY = "ai_mbti_visitor_id";
@@ -60,7 +64,9 @@ export function recordTestResult(payload: Omit<TestResultPayload, "resultId" | "
 
   let fallbackBatches: string[] = [];
   try {
-    const raw = sessionStorage.getItem("ai_mbti_fallback_batches");
+    const raw =
+      sessionStorage.getItem(`${FALLBACK_BATCHES_STORAGE_PREFIX}:${payload.sessionId}`) ??
+      sessionStorage.getItem(FALLBACK_BATCHES_STORAGE_PREFIX);
     if (raw) fallbackBatches = JSON.parse(raw) as string[];
   } catch {
     // ignore

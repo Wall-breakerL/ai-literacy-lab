@@ -406,6 +406,11 @@ export function ReportStoryExperience({
   const fitScenario = insights[1]?.value ?? report.targetContext?.recentUse ?? "复杂任务推进";
   const nextAction = insights[2]?.value ?? "下次先让 AI 复述目标，再列出关键假设。";
   const styleProfileDisplay = useMemo(() => buildStyleProfileDisplay(report), [report]);
+  const reportToolbox = (report as any).toolbox;
+  const toolboxPromptTemplates = Array.isArray(reportToolbox?.promptTemplates) ? reportToolbox.promptTemplates : [];
+  const toolboxChecklists = Array.isArray(reportToolbox?.checklists) ? reportToolbox.checklists : [];
+  const toolboxWorkflow = reportToolbox?.workflow;
+  const toolboxMissingMessage = "工具箱内容生成失败，请重新生成报告。";
 
   // 人格主题色
   const pPrimary = report.personality?.colors?.primary ?? "#55b3ff";
@@ -414,7 +419,7 @@ export function ReportStoryExperience({
 
   const copyPrompt = async () => {
     // 优先使用toolbox中的第一个prompt模板
-    const promptText = (report as any).toolbox?.promptTemplates?.[0]?.prompt ?? promptTemplate.prompt;
+    const promptText = toolboxPromptTemplates[0]?.prompt ?? promptTemplate.prompt;
     await navigator.clipboard.writeText(promptText);
     setCopiedPrompt(true);
     window.setTimeout(() => setCopiedPrompt(false), 1500);
@@ -581,7 +586,7 @@ export function ReportStoryExperience({
         </div>
 
         {/* Prompt模板 */}
-        {(report as any).toolbox?.promptTemplates && (report as any).toolbox.promptTemplates.length > 0 && (
+        {toolboxPromptTemplates.length > 0 ? (
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-[13px] font-semibold text-white">Prompt 模板</p>
@@ -598,21 +603,25 @@ export function ReportStoryExperience({
               className="rounded-[8px] p-3"
               style={{ background: "rgba(255,255,255,0.05)", borderLeft: `3px solid ${strongestAccent}`, border: `1px solid rgba(255,255,255,0.08)`, borderLeftWidth: 3, borderLeftColor: strongestAccent }}
             >
-              <p className="text-[13px] font-semibold text-white">{(report as any).toolbox.promptTemplates[0].title}</p>
-              <p className="mt-1 text-[11px] text-slate-400">{(report as any).toolbox.promptTemplates[0].useCase}</p>
+              <p className="text-[13px] font-semibold text-white">{toolboxPromptTemplates[0].title}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{toolboxPromptTemplates[0].useCase}</p>
               <p className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-[1.65] text-slate-200">
-                &ldquo;{(report as any).toolbox.promptTemplates[0].prompt}&rdquo;
+                &ldquo;{toolboxPromptTemplates[0].prompt}&rdquo;
               </p>
             </div>
           </section>
+        ) : (
+          <p className="rounded-[8px] border border-white/10 bg-white/5 p-3 text-[13px] text-slate-300">
+            {toolboxMissingMessage}
+          </p>
         )}
 
         {/* Checklist */}
-        {(report as any).toolbox?.checklists && (report as any).toolbox.checklists.length > 0 && (
+        {toolboxChecklists.length > 0 ? (
           <section>
-            <p className="mb-2 text-[13px] font-semibold text-white">{(report as any).toolbox.checklists[0].title}</p>
+            <p className="mb-2 text-[13px] font-semibold text-white">{toolboxChecklists[0].title}</p>
             <div className="space-y-1.5">
-              {(report as any).toolbox.checklists[0].items.slice(0, 3).map((item: string, i: number) => (
+              {toolboxChecklists[0].items.slice(0, 3).map((item: string, i: number) => (
                 <div key={i} className="flex items-start gap-2">
                   <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-white/20 text-[10px] text-slate-400">
                     {i + 1}
@@ -622,6 +631,10 @@ export function ReportStoryExperience({
               ))}
             </div>
           </section>
+        ) : (
+          <p className="rounded-[8px] border border-white/10 bg-white/5 p-3 text-[13px] text-slate-300">
+            {toolboxMissingMessage}
+          </p>
         )}
       </div>
     </SlideShell>,
@@ -632,13 +645,13 @@ export function ReportStoryExperience({
         <div>
           <p className="text-[12px] font-semibold text-slate-400">WORKFLOW</p>
           <h2 className="mt-2 text-[24px] font-semibold text-white">
-            {(report as any).toolbox?.workflow?.title ?? "适合你的AI协作流程"}
+            {toolboxWorkflow?.title ?? "适合你的AI协作流程"}
           </h2>
         </div>
 
-        {(report as any).toolbox?.workflow?.steps && (report as any).toolbox.workflow.steps.length > 0 ? (
+        {toolboxWorkflow?.steps && toolboxWorkflow.steps.length > 0 ? (
           <div className="space-y-3">
-            {(report as any).toolbox.workflow.steps.map((step: any, index: number) => (
+            {toolboxWorkflow.steps.map((step: any, index: number) => (
               <div key={index} className="flex gap-3">
                 <span
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white"
@@ -655,13 +668,15 @@ export function ReportStoryExperience({
             ))}
           </div>
         ) : (
-          <p className="text-[13px] text-slate-400">暂无工作流</p>
+          <p className="rounded-[8px] border border-white/10 bg-white/5 p-3 text-[13px] text-slate-300">
+            {toolboxMissingMessage}
+          </p>
         )}
 
-        {(report as any).toolbox?.workflow?.totalTime && (
+        {toolboxWorkflow?.totalTime && (
           <div className="rounded-[8px] p-3 text-center" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
             <p className="text-[12px] text-slate-300">
-              总时间：{(report as any).toolbox.workflow.totalTime}
+              总时间：{toolboxWorkflow.totalTime}
             </p>
           </div>
         )}
