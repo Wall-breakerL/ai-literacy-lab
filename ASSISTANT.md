@@ -57,7 +57,7 @@ The current AI-MBTI pipeline is a single researcher flow, not the older two-agen
 - `src/lib/researcher.ts` — researcher system prompt, tool schemas, questionnaire prompts, mid-dialogue prompts, and tool-use parsing.
 - `src/lib/sessionState.ts` — canonical `SessionState`, phase helper, batch answers, mid-dialogues, `refinedTargetContext`, and `scenarioGuidance`.
 - `src/lib/targetContext.ts` — infers and normalizes the user's role, recent use, and goal.
-- `src/lib/fallbackQuestionnaire.ts` and `src/lib/questionnaireValidation.ts` — fallback batches and validation for 8+16 questionnaire generation.
+- `src/lib/fallbackQuestionnaire.ts` and `src/lib/questionnaireValidation.ts` — fallback batches and validation for the 8+8 active questionnaire flow.
 - `src/lib/reportScoring.ts` — deterministic server-side scoring. The model never computes scores.
 - `src/lib/reportAgent.ts` — report-writing system prompt.
 - `src/lib/personalityProfiles.ts` — fixed 16-type map and profile metadata.
@@ -65,16 +65,14 @@ The current AI-MBTI pipeline is a single researcher flow, not the older two-agen
 
 ### API Routes
 
-- `chat/route.ts` and `chat/stream/route.ts` — main AI-MBTI conversation endpoints.
-- `questionnaire/generate/route.ts` — 8+16 batch generation.
-- `mid-dialog/opening/route.ts` — mid-dialogue opening prompt generation.
+- `questionnaire/generate/route.ts` — active 8+8 questionnaire batch generation.
 - `report/route.ts` — scoring plus report generation.
 - `feedback/route.ts` — structured feedback save.
 - `local-debug/interview-run/route.ts` — dev-only debug log access.
 
 ### Pages
 
-`/`, `/interview`, `/report`, `/test-lab`, `/avatar-preview`, and `/mock-report`.
+`/`, `/intake`, `/interview`, `/mid-feedback`, `/report`, `/test-lab`, `/avatar-preview`, `/debug-report`, and `/admin/analytics`.
 
 ### Local Debug Data
 

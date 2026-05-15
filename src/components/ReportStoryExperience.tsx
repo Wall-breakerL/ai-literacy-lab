@@ -88,6 +88,28 @@ const DIMENSION_META: Record<Dimension, DimensionMeta> = {
   },
 };
 
+const POSTER_CANVAS = {
+  width: 900,
+  height: 1600,
+  avatarSize: 188,
+};
+
+const POSTER_SPECTRUM = {
+  rowHeight: 86,
+  barX: 226,
+  barWidth: 448,
+  rightLabelX: 812,
+  barYFromRowTop: 27,
+  labelYFromRowTop: 0,
+  scoreYFromRowTop: 28,
+};
+
+const POSTER_TYPE = {
+  sans: "Inter, Arial, sans-serif",
+  serif: "Noto Serif SC, ZCOOL XiaoWei, Songti SC, STSong, serif",
+  brush: "Ma Shan Zheng, ZCOOL XiaoWei, Noto Serif SC, STKaiti, KaiTi, serif",
+};
+
 function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -151,6 +173,141 @@ function drawWrappedText(
   return y + lines.length * lineHeight;
 }
 
+function drawDivider(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  color = "rgba(255,255,255,0.18)"
+) {
+  context.save();
+  const left = context.createLinearGradient(x, y, x + width / 2, y);
+  left.addColorStop(0, "rgba(255,255,255,0)");
+  left.addColorStop(1, color);
+  context.fillStyle = left;
+  context.fillRect(x, y, width / 2 - 12, 2);
+  context.translate(x + width / 2, y + 1);
+  context.rotate(Math.PI / 4);
+  context.fillStyle = "rgba(253,230,138,0.55)";
+  context.fillRect(-5, -5, 10, 10);
+  context.restore();
+
+  context.save();
+  const right = context.createLinearGradient(x + width / 2, y, x + width, y);
+  right.addColorStop(0, color);
+  right.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = right;
+  context.fillRect(x + width / 2 + 12, y, width / 2 - 12, 2);
+  context.restore();
+}
+
+function drawRoundRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fillStyle: string | CanvasGradient,
+  strokeStyle?: string
+) {
+  context.save();
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
+  context.fillStyle = fillStyle;
+  context.fill();
+  if (strokeStyle) {
+    context.strokeStyle = strokeStyle;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawGlowCircle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  color: string
+) {
+  const glow = context.createRadialGradient(x, y, 0, x, y, radius);
+  glow.addColorStop(0, color);
+  glow.addColorStop(0.65, color.replace(/[\d.]+\)$/g, "0.04)"));
+  glow.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawPosterSpectrumBar(
+  context: CanvasRenderingContext2D,
+  dimension: DimensionReport,
+  rowTop: number,
+  index: number
+) {
+  const score = displayScore(dimension);
+  const meta = DIMENSION_META[dimension.dimension];
+  const accent = getSpectrumAccent(dimension);
+  const rowY = rowTop + index * POSTER_SPECTRUM.rowHeight;
+  const labelY = rowY + POSTER_SPECTRUM.labelYFromRowTop;
+  const scoreY = rowY + POSTER_SPECTRUM.scoreYFromRowTop;
+  const barY = rowY + POSTER_SPECTRUM.barYFromRowTop;
+  const barHeight = 10;
+
+  context.save();
+  context.textBaseline = "top";
+  context.font = `700 22px ${POSTER_TYPE.sans}`;
+  context.textAlign = "left";
+  context.fillStyle = meta.lowColor;
+  context.fillText(`${meta.lowLetter} ${meta.lowLabel}`, 88, labelY);
+  context.font = `600 18px ${POSTER_TYPE.sans}`;
+  context.fillStyle = "rgba(148,163,184,0.92)";
+  context.fillText(`${100 - score}%`, 88, scoreY);
+
+  context.font = `700 22px ${POSTER_TYPE.sans}`;
+  context.textAlign = "right";
+  context.fillStyle = meta.highColor;
+  context.fillText(`${meta.highLabel} ${meta.highLetter}`, POSTER_SPECTRUM.rightLabelX, labelY);
+  context.font = `600 18px ${POSTER_TYPE.sans}`;
+  context.fillStyle = "rgba(148,163,184,0.92)";
+  context.fillText(`${score}%`, POSTER_SPECTRUM.rightLabelX, scoreY);
+
+  const barGradient = context.createLinearGradient(
+    POSTER_SPECTRUM.barX,
+    barY,
+    POSTER_SPECTRUM.barX + POSTER_SPECTRUM.barWidth,
+    barY
+  );
+  barGradient.addColorStop(0, meta.lowColor);
+  barGradient.addColorStop(1, meta.highColor);
+  drawRoundRect(context, POSTER_SPECTRUM.barX, barY, POSTER_SPECTRUM.barWidth, barHeight, 99, barGradient);
+
+  context.fillStyle = meta.lowColor;
+  context.beginPath();
+  context.arc(POSTER_SPECTRUM.barX, barY + barHeight / 2, 9, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = meta.highColor;
+  context.beginPath();
+  context.arc(POSTER_SPECTRUM.barX + POSTER_SPECTRUM.barWidth, barY + barHeight / 2, 9, 0, Math.PI * 2);
+  context.fill();
+
+  const markerX = POSTER_SPECTRUM.barX + POSTER_SPECTRUM.barWidth * (score / 100);
+  context.save();
+  context.translate(markerX, barY + barHeight / 2);
+  context.rotate(Math.PI / 4);
+  context.shadowColor = `${accent}88`;
+  context.shadowBlur = 22;
+  context.fillStyle = accent;
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = 4;
+  context.fillRect(-11, -11, 22, 22);
+  context.strokeRect(-11, -11, 22, 22);
+  context.restore();
+  context.restore();
+}
+
 function loadImageElement(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -164,9 +321,10 @@ async function renderPosterImageCanvas(
   report: ReportPageModel,
   tags: Array<{ label: string; color: string }>
 ) {
+  await document.fonts?.ready?.catch(() => undefined);
   const canvas = document.createElement("canvas");
-  canvas.width = 900;
-  canvas.height = 1600;
+  canvas.width = POSTER_CANVAS.width;
+  canvas.height = POSTER_CANVAS.height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas context unavailable");
 
@@ -177,9 +335,24 @@ async function renderPosterImageCanvas(
   context.fillStyle = gradient;
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  drawGlowCircle(context, canvas.width + 10, 30, 300, "rgba(178,34,34,0.18)");
+  drawGlowCircle(context, 10, canvas.height - 110, 340, "rgba(85,179,255,0.14)");
+
+  context.save();
+  context.globalAlpha = 0.055;
+  context.fillStyle = "#ffffff";
+  for (let x = 0; x < canvas.width; x += 18) {
+    for (let y = (x / 18) % 2 === 0 ? 0 : 9; y < canvas.height; y += 18) {
+      context.fillRect(x, y, 1, 1);
+    }
+  }
+  context.restore();
+
   context.strokeStyle = "rgba(255,255,255,0.14)";
   context.lineWidth = 2;
-  context.strokeRect(28, 28, canvas.width - 56, canvas.height - 56);
+  context.beginPath();
+  context.roundRect(24, 24, canvas.width - 48, canvas.height - 48, 20);
+  context.stroke();
 
   const code = report.personality?.code ?? "AI-MBTI";
   const name = report.personality?.name ?? "AI 协作画像";
@@ -188,74 +361,84 @@ async function renderPosterImageCanvas(
 
   try {
     const avatar = await loadImageElement(`/avatars/avatar-choices/${/^[A-Z]{4}$/.test(code) ? code : "CEAL"}.png`);
-    context.drawImage(avatar, 72, 76, 188, 188);
+    context.drawImage(avatar, 72, 76, POSTER_CANVAS.avatarSize, POSTER_CANVAS.avatarSize);
   } catch {
     context.fillStyle = "rgba(85,179,255,0.16)";
-    context.fillRect(72, 76, 188, 188);
+    drawRoundRect(context, 72, 76, POSTER_CANVAS.avatarSize, POSTER_CANVAS.avatarSize, 18, "rgba(85,179,255,0.16)");
   }
 
-  context.fillStyle = "#c0392b";
-  context.fillRect(290, 82, 112, 40);
+  context.save();
+  context.translate(290, 82);
+  context.rotate(-2 * Math.PI / 180);
+  const sealGradient = context.createLinearGradient(0, 0, 112, 40);
+  sealGradient.addColorStop(0, "#c0392b");
+  sealGradient.addColorStop(1, "#8b1e1e");
+  drawRoundRect(context, 0, 0, 112, 40, 6, sealGradient, "rgba(255,255,255,0.12)");
   context.fillStyle = "#ffffff";
-  context.font = "700 24px Arial, sans-serif";
-  context.fillText(code, 310, 110);
-  context.fillStyle = "rgba(255,255,255,0.45)";
-  context.font = "600 20px Arial, sans-serif";
-  context.fillText("AI · MBTI", 422, 110);
+  context.font = `700 24px ${POSTER_TYPE.serif}`;
+  context.textBaseline = "middle";
+  context.textAlign = "center";
+  context.fillText(code, 56, 22);
+  context.restore();
 
-  context.fillStyle = "#f1e3c0";
-  context.font = "700 72px KaiTi, STKaiti, serif";
-  drawWrappedText(context, name, 290, 190, 540, 78, 2);
+  context.fillStyle = "rgba(255,255,255,0.45)";
+  context.font = `600 20px ${POSTER_TYPE.sans}`;
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.fillText("AI · MBTI", 424, 110);
+
+  const nameGradient = context.createLinearGradient(290, 130, 290, 238);
+  nameGradient.addColorStop(0, "#fdf6e3");
+  nameGradient.addColorStop(0.52, "#f1e3c0");
+  nameGradient.addColorStop(1, "#cdb27d");
+  context.fillStyle = nameGradient;
+  context.font = `400 74px ${POSTER_TYPE.brush}`;
+  context.textBaseline = "alphabetic";
+  drawWrappedText(context, name, 290, 186, 540, 78, 2);
 
   context.fillStyle = "rgba(255,248,220,0.9)";
-  context.font = "italic 30px Songti SC, serif";
+  context.font = `italic 30px ${POSTER_TYPE.serif}`;
   context.textAlign = "center";
-  drawWrappedText(context, `「${tagline}」`, canvas.width / 2, 340, 720, 44, 2);
+  drawDivider(context, 92, 320, 716, "rgba(253,230,138,0.30)");
+  context.fillStyle = "#0c0f15";
+  context.fillRect(196, 298, 508, 66);
+  context.fillStyle = "rgba(255,248,220,0.9)";
+  drawWrappedText(context, `「${tagline}」`, canvas.width / 2, 340, 610, 40, 2);
   context.textAlign = "left";
 
-  let y = 470;
-  context.font = "600 24px Arial, sans-serif";
-  for (const dimension of report.dimensions) {
-    const score = displayScore(dimension);
-    const meta = DIMENSION_META[dimension.dimension];
-    const accent = getSpectrumAccent(dimension);
-    context.fillStyle = "rgba(255,255,255,0.7)";
-    context.fillText(`${meta.lowLabel} ${meta.lowLetter}`, 88, y);
-    context.textAlign = "right";
-    context.fillText(`${meta.highLabel} ${meta.highLetter}`, 812, y);
-    context.textAlign = "left";
-    context.fillStyle = "rgba(255,255,255,0.14)";
-    context.fillRect(190, y - 12, 520, 10);
-    context.fillStyle = accent;
-    context.fillRect(190, y - 12, 520 * (score / 100), 10);
-    context.fillStyle = "#ffffff";
-    context.font = "700 20px Arial, sans-serif";
-    context.fillText(`${score}%`, 730, y);
-    context.font = "600 24px Arial, sans-serif";
-    y += 92;
-  }
+  drawDivider(context, 92, 440, 716, "rgba(255,255,255,0.18)");
+
+  const spectrumTop = 490;
+  report.dimensions.forEach((dimension, index) => {
+    drawPosterSpectrumBar(context, dimension, spectrumTop, index);
+  });
 
   let tagX = 92;
-  y += 8;
-  context.font = "700 24px Arial, sans-serif";
+  let y = spectrumTop + report.dimensions.length * POSTER_SPECTRUM.rowHeight + 24;
+  context.font = `700 24px ${POSTER_TYPE.sans}`;
+  context.textBaseline = "alphabetic";
   tags.slice(0, 3).forEach((tag) => {
-    const width = Math.min(220, context.measureText(tag.label).width + 48);
-    context.fillStyle = `${tag.color}33`;
-    context.fillRect(tagX, y, width, 44);
+    const width = Math.min(220, context.measureText(tag.label).width + 52);
+    drawRoundRect(context, tagX, y, width, 44, 22, `${tag.color}24`, `${tag.color}55`);
     context.fillStyle = tag.color;
     context.fillText(tag.label, tagX + 24, y + 30);
     tagX += width + 18;
   });
 
+  drawDivider(context, 92, 1225, 716, "rgba(255,255,255,0.15)");
+  const goldenFill = context.createLinearGradient(92, 1262, 92, 1422);
+  goldenFill.addColorStop(0, "rgba(253,230,138,0.06)");
+  goldenFill.addColorStop(1, "rgba(253,230,138,0)");
+  drawRoundRect(context, 92, 1260, 716, 160, 18, goldenFill, "rgba(253,230,138,0.12)");
   context.fillStyle = "rgba(255,248,220,0.55)";
-  context.font = "700 22px Arial, sans-serif";
-  context.fillText("Golden Line", 92, 1260);
+  context.font = `700 20px ${POSTER_TYPE.sans}`;
+  context.fillText("Golden Line", 124, 1302);
   context.fillStyle = "rgba(255,248,220,0.92)";
-  context.font = "32px Songti SC, serif";
-  drawWrappedText(context, `「${traits.goldenLine}」`, 92, 1320, 716, 48, 2);
+  context.font = `30px ${POSTER_TYPE.serif}`;
+  drawWrappedText(context, `「${traits.goldenLine}」`, 124, 1360, 652, 44, 2);
 
   context.fillStyle = "rgba(255,255,255,0.62)";
-  context.font = "22px Songti SC, serif";
+  context.font = `22px ${POSTER_TYPE.serif}`;
   context.fillText("AI-MBTI · 协作画像", 92, 1480);
 
   return canvas;
@@ -564,6 +747,7 @@ export function ReportStoryExperience({
       report.personality?.name ?? "",
       report.personality?.tagline ?? "",
       report.summary,
+      report.dimensions.map((dimension) => `${dimension.dimension}:${displayScore(dimension)}`).join(","),
       tags.map((tag) => tag.label).join(","),
     ].join("|");
 

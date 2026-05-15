@@ -1,5 +1,6 @@
 import { PERSONALITY_PROFILES, getPersonalityCode, getPersonalityProfile } from "@/lib/personalityProfiles";
 import {
+  FALLBACK_QUESTIONNAIRE,
   FALLBACK_QUESTIONNAIRE_BATCHES,
   FALLBACK_QUESTIONNAIRE_TOTAL,
 } from "@/lib/fallbackQuestionnaire";
@@ -233,6 +234,104 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(highWorkflow?.score === 20, `高端锚定应为 20/20，实际 ${highWorkflow?.score}`);
       assert(lowWorkflow?.tendencyLabel === "探索型", `低端锚定应判为探索型，实际 ${lowWorkflow?.tendencyLabel}`);
       assert(lowWorkflow?.score === 0, `低端锚定应为 0/20，实际 ${lowWorkflow?.score}`);
+    }),
+    test("AI-MBTI", "四维极端行为应落到正确分数端", () => {
+      const cases: Array<{
+        label: string;
+        dimension: Dimension;
+        answers: QuestionnaireAnswer[];
+        expectedScore: number;
+        expectedLabel: string;
+      }> = [
+        {
+          label: "工具型",
+          dimension: "Relation",
+          answers: [answer("Relation", 0, false), answer("Relation", 0, false), answer("Relation", 5, true), answer("Relation", 5, true)],
+          expectedScore: 0,
+          expectedLabel: "工具型",
+        },
+        {
+          label: "伙伴型",
+          dimension: "Relation",
+          answers: [answer("Relation", 5, false), answer("Relation", 5, false), answer("Relation", 0, true), answer("Relation", 0, true)],
+          expectedScore: 20,
+          expectedLabel: "伙伴型",
+        },
+        {
+          label: "探索型",
+          dimension: "Workflow",
+          answers: [answer("Workflow", 0, false), answer("Workflow", 0, false), answer("Workflow", 5, true), answer("Workflow", 5, true)],
+          expectedScore: 0,
+          expectedLabel: "探索型",
+        },
+        {
+          label: "框架型",
+          dimension: "Workflow",
+          answers: [answer("Workflow", 5, false), answer("Workflow", 5, false), answer("Workflow", 0, true), answer("Workflow", 0, true)],
+          expectedScore: 20,
+          expectedLabel: "框架型",
+        },
+        {
+          label: "信任型",
+          dimension: "Epistemic",
+          answers: [answer("Epistemic", 0, false), answer("Epistemic", 0, false), answer("Epistemic", 5, true), answer("Epistemic", 5, true)],
+          expectedScore: 0,
+          expectedLabel: "信任型",
+        },
+        {
+          label: "审计型",
+          dimension: "Epistemic",
+          answers: [answer("Epistemic", 5, false), answer("Epistemic", 5, false), answer("Epistemic", 0, true), answer("Epistemic", 0, true)],
+          expectedScore: 20,
+          expectedLabel: "审计型",
+        },
+        {
+          label: "局部调整型",
+          dimension: "RepairScope",
+          answers: [answer("RepairScope", 0, false), answer("RepairScope", 0, false), answer("RepairScope", 5, true), answer("RepairScope", 5, true)],
+          expectedScore: 0,
+          expectedLabel: "局部调整型",
+        },
+        {
+          label: "全局重评型",
+          dimension: "RepairScope",
+          answers: [answer("RepairScope", 5, false), answer("RepairScope", 5, false), answer("RepairScope", 0, true), answer("RepairScope", 0, true)],
+          expectedScore: 20,
+          expectedLabel: "全局重评型",
+        },
+      ];
+
+      for (const item of cases) {
+        const dimension = scoreQuestionnaireAnswers(item.answers).find((result) => result.dimension === item.dimension);
+        assert(dimension?.score === item.expectedScore, `${item.label} 应为 ${item.expectedScore}/20，实际 ${dimension?.score}`);
+        assert(dimension?.tendencyLabel === item.expectedLabel, `${item.label} 应判为 ${item.expectedLabel}，实际 ${dimension?.tendencyLabel}`);
+      }
+    }),
+    test("AI-MBTI", "legacy 16 题 fallback reverse 标记匹配维度方向", () => {
+      const expected: Array<[string, boolean]> = [
+        ["一起讨论、打磨思路", false],
+        ["照我说的做就行", true],
+        ["主动帮我拆解、追问", false],
+        ["很少关心「协作过程」", true],
+        ["目标、步骤和约束写清楚", false],
+        ["先扔一个大概想法给 AI", true],
+        ["先定目录/接口/清单", false],
+        ["快速试几种提法", true],
+        ["再查证、对比其他来源", false],
+        ["直接使用 AI 的答案", true],
+        ["检查 AI 的推理链条", false],
+        ["相信 AI 的表述", true],
+        ["局部修改、迭代", true],
+        ["清空上下文、重新描述问题", false],
+        ["一块块改", true],
+        ["整段删掉、换提问方式重来", false],
+      ];
+
+      for (const [keyword, reverse] of expected) {
+        const question = FALLBACK_QUESTIONNAIRE.find((item) => item.question.includes(keyword));
+        assert(question, `应找到 legacy fallback 题：${keyword}`);
+        assert(question.reverse === reverse, `${keyword} reverse 应为 ${String(reverse)}，实际 ${String(question.reverse)}`);
+      }
     }),
     test("AI-MBTI", "Phase 6 confidence 阈值", () => {
       const scored = scoreQuestionnaireAnswers([
