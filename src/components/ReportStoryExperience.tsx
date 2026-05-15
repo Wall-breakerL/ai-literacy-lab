@@ -1094,10 +1094,32 @@ export function ReportStoryExperience({
                 type="button"
                 onClick={handleSavePoster}
                 disabled={sharingPoster}
-                className="col-span-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-raycast-blue/40 bg-raycast-blue/15 px-2 text-[12px] font-semibold text-raycast-blue transition hover:border-raycast-blue/60 hover:bg-raycast-blue/20 disabled:cursor-wait disabled:opacity-60"
+                aria-busy={sharingPoster}
+                className={`relative col-span-2 inline-flex h-10 items-center justify-center gap-1.5 overflow-hidden rounded-full border px-2 text-[12px] font-semibold transition ${
+                  sharingPoster
+                    ? "cursor-wait border-raycast-blue/60 bg-raycast-blue/20 text-near-white shadow-[0_0_22px_rgba(85,179,255,0.22)]"
+                    : "border-raycast-blue/40 bg-raycast-blue/15 text-raycast-blue hover:border-raycast-blue/60 hover:bg-raycast-blue/20"
+                }`}
               >
-                <Download className="h-3.5 w-3.5" />
-                {sharingPoster ? "生成中" : "保存图片"}
+                {sharingPoster ? (
+                  <>
+                    <motion.span
+                      className="absolute inset-0 bg-[linear-gradient(110deg,rgba(85,179,255,0.08),rgba(95,201,146,0.28),rgba(255,188,51,0.18),rgba(85,179,255,0.08))]"
+                      animate={{ x: ["-120%", "120%"] }}
+                      transition={{ duration: 1.45, repeat: Infinity, ease: "linear" }}
+                    />
+                    <motion.span
+                      className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-raycast-blue via-raycast-green to-raycast-yellow"
+                      initial={{ width: "18%" }}
+                      animate={{ width: ["18%", "82%", "18%"], x: ["0%", "18%", "0%"] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  </>
+                ) : null}
+                <span className="relative z-10 inline-flex items-center gap-1.5">
+                  <Download className={`h-3.5 w-3.5 ${sharingPoster ? "animate-pulse" : ""}`} />
+                  {sharingPoster ? "海报生成中..." : "保存图片"}
+                </span>
               </button>
               <button
                 type="button"
