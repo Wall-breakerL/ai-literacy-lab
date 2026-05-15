@@ -125,12 +125,29 @@ export async function readAdminAnalyticsSummary(input: {
       (select count(*) from analytics_visit_days where metric_date = date('now', 'localtime')) as today_visitors,
       (select coalesce(sum(visit_count), 0) from analytics_visitors) as total_visits,
       (select count(*) from test_results where date(completed_at, 'localtime') between date(?) and date(?)) as completed_tests,
+      (select count(*) from test_results where date(completed_at, 'localtime') between date(?) and date(?) and fallback_batches <> '[]') as fallback_tests,
+      (select count(*) from test_results where date(completed_at, 'localtime') between date(?) and date(?) and fallback_batches like '%"batch1"%') as fallback_batch1,
+      (select count(*) from test_results where date(completed_at, 'localtime') between date(?) and date(?) and fallback_batches like '%"batch2"%') as fallback_batch2,
       (select count(*) from questionnaire_samples where date(created_at, 'localtime') between date(?) and date(?)) as questionnaire_samples
-  `).get(range.from, range.to, range.from, range.to) as {
+  `).get(
+    range.from,
+    range.to,
+    range.from,
+    range.to,
+    range.from,
+    range.to,
+    range.from,
+    range.to,
+    range.from,
+    range.to
+  ) as {
     total_visitors?: number;
     today_visitors?: number;
     total_visits?: number;
     completed_tests?: number;
+    fallback_tests?: number;
+    fallback_batch1?: number;
+    fallback_batch2?: number;
     questionnaire_samples?: number;
   } | undefined;
 
@@ -174,6 +191,9 @@ export async function readAdminAnalyticsSummary(input: {
       totalVisits: Number(totals?.total_visits ?? 0),
       completedTests,
       questionnaireSamples: Number(totals?.questionnaire_samples ?? 0),
+      fallbackTests: Number(totals?.fallback_tests ?? 0),
+      fallbackBatch1: Number(totals?.fallback_batch1 ?? 0),
+      fallbackBatch2: Number(totals?.fallback_batch2 ?? 0),
       completionRate: totalVisitors > 0 ? completedTests / totalVisitors : 0,
     },
     personalityDistribution: personalityRows.map((row) => ({
@@ -216,6 +236,7 @@ function ensureAnalyticsSchema(database: AnalyticsDb) {
   const migrationPath = path.join(process.cwd(), "db", "migrations", "001_analytics.sql");
   if (!existsSync(migrationPath)) throw new Error(`Missing analytics migration: ${migrationPath}`);
   database.exec(readFileSync(migrationPath, "utf8"));
+  ensureColumn(database, "test_results", "fallback_batches", "text not null default '[]'");
 }
 
 function upsertVisitor(database: AnalyticsDb, visit: SanitizedVisit, visitorHash: string) {
@@ -260,9 +281,10 @@ function upsertTestResult(database: AnalyticsDb, result: SanitizedTestResult, vi
       personality_code,
       personality_name,
       dimension_scores,
+      fallback_batches,
       completed_at
     )
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(session_id) do update set
       result_id = excluded.result_id,
       role = excluded.role,
@@ -270,6 +292,7 @@ function upsertTestResult(database: AnalyticsDb, result: SanitizedTestResult, vi
       personality_code = excluded.personality_code,
       personality_name = excluded.personality_name,
       dimension_scores = excluded.dimension_scores,
+      fallback_batches = excluded.fallback_batches,
       completed_at = excluded.completed_at
   `).run(
     result.resultId,
@@ -280,6 +303,7 @@ function upsertTestResult(database: AnalyticsDb, result: SanitizedTestResult, vi
     result.personalityCode,
     result.personalityName,
     JSON.stringify(result.dimensions),
+    JSON.stringify(result.fallbackBatches ?? []),
     result.completedAt
   );
 
@@ -354,6 +378,9 @@ function emptyAdminSummary(from: string, to: string): AdminAnalyticsSummary {
       totalVisits: 0,
       completedTests: 0,
       questionnaireSamples: 0,
+      fallbackTests: 0,
+      fallbackBatch1: 0,
+      fallbackBatch2: 0,
       completionRate: 0,
     },
     personalityDistribution: [],
@@ -364,6 +391,12 @@ function emptyAdminSummary(from: string, to: string): AdminAnalyticsSummary {
 
 function isAnalyticsEnabled() {
   return Boolean(process.env.ANALYTICS_SALT);
+}
+
+function ensureColumn(database: AnalyticsDb, tableName: string, columnName: string, columnDefinition: string) {
+  const rows = database.prepare(`pragma table_info(${tableName})`).all() as Array<{ name?: string }>;
+  if (rows.some((row) => row.name === columnName)) return;
+  database.exec(`alter table ${tableName} add column ${columnName} ${columnDefinition}`);
 }
 
 function hashVisitorId(visitorId: string) {

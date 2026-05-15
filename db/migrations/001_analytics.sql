@@ -41,6 +41,7 @@ create table if not exists test_results (
   personality_code text not null,
   personality_name text not null,
   dimension_scores text not null default '[]',
+  fallback_batches text not null default '[]',
   completed_at text not null,
   created_at text not null default (datetime('now'))
 );

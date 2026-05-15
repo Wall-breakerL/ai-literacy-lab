@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check } from "lucide-react";
 import { ParticleBackground } from "@/components/ParticleBackground";
+import { FALLBACK_BATCHES_STORAGE_PREFIX } from "@/lib/analytics/shared";
 import {
   createSessionStateFromIntake,
   validateIntakeForm,
@@ -107,6 +108,7 @@ export default function IntakePage() {
       goal: state.background.goal,
     }));
     sessionStorage.removeItem("ai_mbti_answers");
+    sessionStorage.removeItem(FALLBACK_BATCHES_STORAGE_PREFIX);
     router.push("/interview?phase=generating&batch=1");
   };
 

@@ -1,5 +1,7 @@
 import type { Dimension } from "@/lib/types";
 
+export const FALLBACK_BATCHES_STORAGE_PREFIX = "ai_mbti_fallback_batches";
+
 export type VisitPayload = {
   visitId: string;
   visitorId: string;
@@ -32,6 +34,8 @@ export type TestResultPayload = {
   }>;
   questionnaireSamples: QuestionnaireSamplePayload[];
   completedAt: string;
+  /** 走了 fallback 问卷的 batch 列表，如 ["batch1"]、["batch2"]，未走 fallback 时为空数组 */
+  fallbackBatches?: string[];
 };
 
 export type QuestionnaireSamplePayload = {
@@ -79,6 +83,9 @@ export type AdminAnalyticsSummary = {
     totalVisits: number;
     completedTests: number;
     questionnaireSamples: number;
+    fallbackTests: number;
+    fallbackBatch1: number;
+    fallbackBatch2: number;
     completionRate: number;
   };
   personalityDistribution: AdminPersonalityMetric[];
@@ -92,6 +99,7 @@ const MAX_SHORT_TEXT_LENGTH = 120;
 const MAX_QUESTION_LENGTH = 420;
 const MAX_SCENARIO_LENGTH = 160;
 const DIMENSION_SET = new Set(["Relation", "Workflow", "Epistemic", "RepairScope"]);
+const FALLBACK_BATCH_SET = new Set(["batch1", "batch2"]);
 
 export function sanitizeVisitPayload(value: unknown):
   | { ok: true; visit: SanitizedVisit }
@@ -152,6 +160,14 @@ export function sanitizeTestResultPayload(value: unknown):
   if (!completedAt) return { ok: false, error: "invalid completedAt" };
   if (!dimensions.length) return { ok: false, error: "missing dimensions" };
 
+  const fallbackBatches = Array.isArray(input.fallbackBatches)
+    ? Array.from(new Set(
+        input.fallbackBatches
+          .map((batch) => cleanString(batch, 24))
+          .filter((batch) => FALLBACK_BATCH_SET.has(batch))
+      ))
+    : [];
+
   return {
     ok: true,
     result: {
@@ -165,6 +181,7 @@ export function sanitizeTestResultPayload(value: unknown):
       dimensions,
       questionnaireSamples,
       completedAt,
+      fallbackBatches,
     },
   };
 }

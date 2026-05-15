@@ -6,6 +6,7 @@ import { AlertCircle } from "lucide-react";
 import { ParticleBackground } from "@/components/ParticleBackground";
 import { QuestionnaireCard } from "@/components/QuestionnaireCard";
 import { QuestionnaireGenerating } from "@/components/QuestionnaireGenerating";
+import { FALLBACK_BATCHES_STORAGE_PREFIX } from "@/lib/analytics/shared";
 import {
   applySessionStatePatch,
   flattenBatchAnswers,
@@ -28,6 +29,7 @@ type GenerateResponse = {
   sessionState?: SessionState;
   message?: string;
   warnings?: string[];
+  source?: "model" | "fallback";
 };
 
 function storageGetSessionState(): SessionState | null {
@@ -139,6 +141,20 @@ export default function InterviewPage() {
       setSessionState(nextState);
       setQuestions((data as GenerateResponse).questions);
       setAnswers(nextState.batchAnswers?.[batchKey] ?? []);
+
+      // 记录 fallback 使用情况到 sessionStorage，供 report 页 recordTestResult 上报
+      if ((data as GenerateResponse).source === "fallback") {
+        try {
+          const fallbackKey = `${FALLBACK_BATCHES_STORAGE_PREFIX}:${nextState.sessionId}`;
+          const existing = JSON.parse(sessionStorage.getItem(fallbackKey) ?? "[]") as string[];
+          if (!existing.includes(batchKey)) {
+            sessionStorage.setItem(fallbackKey, JSON.stringify([...existing, batchKey]));
+          }
+        } catch {
+          // ignore storage errors
+        }
+      }
+
       setIsQuestionnaireReady(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "问卷生成失败。");

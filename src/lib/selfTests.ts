@@ -17,6 +17,7 @@ import { questionnaireReadyMessageForBatchKey, questionnaireReadyMessageForBatch
 import { flattenBatchAnswers, getBatchKeyForPhase, getNextBatchKey } from "@/lib/sessionState";
 import { completePortableArtifacts, normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
 import { getFallbackPromptTemplate, getPersonalityNextAction, normalizeReportTaskLabel } from "@/lib/reportDisplayContext";
+import { completeReportToolbox } from "@/lib/reportToolbox";
 import {
   buildMidDialoguePrompt,
   buildQuestionnaireBatchPrompt,
@@ -842,8 +843,41 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         assert(sanitized.result.personalityCode === "CEAL", "测试结果应保留人格 code");
         assert(sanitized.result.questionnaireSamples.length === 1, "测试结果应保留问卷样本");
         assert(sanitized.result.questionnaireSamples[0].score === 4, "问卷样本应保留选择分数");
+        assert(Array.isArray(sanitized.result.fallbackBatches), "fallbackBatches 应规范成数组");
         assert(!("feedbackText" in sanitized.result), "测试结果不应保留反馈正文");
       }
+    }),
+    test("AI-MBTI", "analytics 测试结果保留合法 fallback 批次", () => {
+      const sanitized = sanitizeTestResultPayload({
+        resultId: "result-2",
+        visitorId: "visitor-2",
+        sessionId: "session_2_abc",
+        role: "学生",
+        tools: ["ChatGPT"],
+        personalityCode: "IFAG",
+        personalityName: "系统架构师",
+        dimensions: [{ dimension: "Workflow", score: 12, scorePercent: 60 }],
+        questionnaireSamples: [],
+        fallbackBatches: ["batch1", "batch1", "batch2", "unknown"],
+        completedAt: "2026-05-13T10:00:00.000Z",
+      });
+
+      assert(sanitized.ok, sanitized.ok ? "OK" : sanitized.error);
+      if (sanitized.ok) {
+        assert(sanitized.result.fallbackBatches?.join(",") === "batch1,batch2", "应去重并过滤非法 fallback 批次");
+      }
+    }),
+    test("AI-MBTI", "报告工具箱缺失时服务端补齐可展示内容", () => {
+      const toolbox = completeReportToolbox(undefined, {
+        role: "产品经理",
+        tools: ["Claude"],
+        recentUse: "整理用户反馈",
+        goal: "提高需求判断质量",
+      });
+
+      assert(toolbox.promptTemplates.length > 0, "缺失 toolbox 时应补齐 prompt 模板");
+      assert(toolbox.checklists.length > 0, "缺失 toolbox 时应补齐 checklist");
+      assert(toolbox.workflow.steps.length >= 5, "缺失 toolbox 时应补齐工作流步骤");
     }),
     test("AI-MBTI", "analytics summary 使用访问人数作为公开主数字", () => {
       const summary = buildPublicAnalyticsSummary({

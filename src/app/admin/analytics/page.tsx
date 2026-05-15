@@ -79,12 +79,15 @@ export default function AdminAnalyticsPage() {
 
         {summary ? (
           <div className="mt-6 space-y-6">
-            <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+            <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-9">
               <Metric label="累计访客" value={summary.totals.totalVisitors} highlight />
               <Metric label="今日访客" value={summary.totals.todayVisitors} />
               <Metric label="访问次数" value={summary.totals.totalVisits} />
               <Metric label="完成测试" value={summary.totals.completedTests} highlight />
               <Metric label="问卷样本" value={summary.totals.questionnaireSamples} />
+              <Metric label="Fallback 测试" value={summary.totals.fallbackTests} />
+              <Metric label="B1 fallback" value={summary.totals.fallbackBatch1} />
+              <Metric label="B2 fallback" value={summary.totals.fallbackBatch2} />
               <Metric label="完成/访客" value={`${Math.round(summary.totals.completionRate * 100)}%`} />
             </section>
 

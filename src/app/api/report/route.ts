@@ -15,6 +15,7 @@ import {
 import { getPersonalityCode, getPersonalityProfile } from "@/lib/personalityProfiles";
 import { getDisplayGoalLabel, getFallbackPromptTemplate, getReportTaskLabel } from "@/lib/reportDisplayContext";
 import { completePortableArtifacts } from "@/lib/reportPortableArtifacts";
+import { completeReportToolbox } from "@/lib/reportToolbox";
 import {
   mergeScoredDimensions,
   resolveReportQuestionnaireAnswers,
@@ -56,6 +57,7 @@ const GENERATE_REPORT_TOOL: LlmTool = {
       "recommendations",
       "promptTemplates",
       "dimensions",
+      "toolbox",
     ],
     properties: {
       selectedScenario: {
@@ -479,12 +481,13 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
         scoredDimensions
       );
       const advice = completeAdviceBundle(report, normalizedTargetContext);
+      const toolbox = completeReportToolbox(report.toolbox, normalizedTargetContext);
 
       const responseData = {
         selectedScenario: report.selectedScenario,
         styleProfile: report.styleProfile,
         problems: report.problems,
-        toolbox: report.toolbox,
+        toolbox,
         summary: report.summary,
         tags: report.tags,
         styleOverview: portableArtifacts.styleOverview,
@@ -581,6 +584,7 @@ function buildFallbackReport(
       },
     ],
     promptTemplates: [getFallbackPromptTemplate(normalizedTargetContext)],
+    toolbox: completeReportToolbox(undefined, normalizedTargetContext),
     dimensions: scoredDimensions.map((dimension) => ({
       ...dimension,
       analysis: `该维度得分为 ${dimension.score}，当前更接近「${dimension.tendencyLabel}」。`,
