@@ -17,6 +17,7 @@ import { questionnaireReadyMessageForBatchKey, questionnaireReadyMessageForBatch
 import { flattenBatchAnswers, getBatchKeyForPhase, getNextBatchKey } from "@/lib/sessionState";
 import { completePortableArtifacts, normalizeSignatureDetailText } from "@/lib/reportPortableArtifacts";
 import { getFallbackPromptTemplate, getPersonalityNextAction, normalizeReportTaskLabel } from "@/lib/reportDisplayContext";
+import { normalizeGeneratedReportDraft } from "@/lib/reportModelOutput";
 import { completeReportToolbox } from "@/lib/reportToolbox";
 import {
   buildMidDialoguePrompt,
@@ -878,6 +879,27 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       assert(toolbox.promptTemplates.length > 0, "缺失 toolbox 时应补齐 prompt 模板");
       assert(toolbox.checklists.length > 0, "缺失 toolbox 时应补齐 checklist");
       assert(toolbox.workflow.steps.length >= 5, "缺失 toolbox 时应补齐工作流步骤");
+    }),
+    test("AI-MBTI", "报告模型 partial draft 缺 summary 时仍可进入服务端补齐", () => {
+      const partial = normalizeGeneratedReportDraft({
+        selectedScenario: "解释复杂教学概念",
+        styleProfile: {
+          behaviors: [{ behavior: "你会先定教学目标框架，再让 AI 发散类比和案例。" }],
+          strengths: ["目标导向明确，能让 AI 输出围绕核心教学意图展开。"],
+          weaknesses: ["如果框架和发散边界没有说清，AI 可能既受限又缺少惊喜。"],
+        },
+      }, { allowMissingSummary: true });
+      const strict = normalizeGeneratedReportDraft({
+        selectedScenario: "解释复杂教学概念",
+        styleProfile: {
+          behaviors: [{ behavior: "你会先定教学目标框架，再让 AI 发散类比和案例。" }],
+        },
+      });
+
+      assert(partial, "partial draft 应该被保留以便 route 使用服务端 fallback 补齐");
+      assert(partial.summary === undefined, "partial draft 应显式保留 summary 缺失状态");
+      assert(partial.selectedScenario === "解释复杂教学概念", "应保留模型已经生成的场景");
+      assert(strict === null, "严格解析仍应拒绝缺 summary 的完整报告");
     }),
     test("AI-MBTI", "analytics summary 使用访问人数作为公开主数字", () => {
       const summary = buildPublicAnalyticsSummary({

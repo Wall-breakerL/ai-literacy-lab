@@ -15,6 +15,11 @@ import {
 import { getPersonalityCode, getPersonalityProfile } from "@/lib/personalityProfiles";
 import { getDisplayGoalLabel, getFallbackPromptTemplate, getReportTaskLabel } from "@/lib/reportDisplayContext";
 import { completePortableArtifacts } from "@/lib/reportPortableArtifacts";
+import {
+  normalizeGeneratedReportDraft,
+  summarizeReportToolInputShape,
+  type GeneratedReportDraft,
+} from "@/lib/reportModelOutput";
 import { completeReportToolbox } from "@/lib/reportToolbox";
 import {
   mergeScoredDimensions,
@@ -25,14 +30,12 @@ import { stripHiddenReasoning } from "@/lib/sanitizeAssistantContent";
 import { getEffectiveTargetContext, isSessionState, summarizeSessionStateForPrompt } from "@/lib/sessionState";
 import { inferTargetContextFromMessages, normalizeTargetContext } from "@/lib/targetContext";
 import {
-  CollaborationSignature,
   Dimension,
   FinalReport,
   Message,
   PromptTemplate,
   QuestionnaireAnswer,
   ReportRecommendation,
-  ReportStyleOverview,
   SessionState,
   TargetContext,
 } from "@/lib/types";
@@ -230,23 +233,6 @@ const GENERATE_REPORT_TOOL: LlmTool = {
   },
 };
 
-const REPORT_DIMENSIONS: Dimension[] = ["Relation", "Workflow", "Epistemic", "RepairScope"];
-const DIMENSION_ALIASES: Record<string, Dimension> = {
-  Relation: "Relation",
-  relation: "Relation",
-  "关系定位": "Relation",
-  Workflow: "Workflow",
-  workflow: "Workflow",
-  "工作流程": "Workflow",
-  Epistemic: "Epistemic",
-  epistemic: "Epistemic",
-  "认知态度": "Epistemic",
-  RepairScope: "RepairScope",
-  repairscope: "RepairScope",
-  repair_scope: "RepairScope",
-  "修复范围": "RepairScope",
-};
-
 export async function POST(req: NextRequest) {
   const missing = assertLlmConfig();
   if (missing) {
@@ -361,10 +347,23 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
     }
 
     try {
-      const report =
+      const modelDraft =
         generatedReportFromToolUses(toolResult.toolUses) ??
         generatedReportFromText(stripHiddenReasoning(toolResult.textBlocks.join("\n") || "{}"));
-      if (!report) throw new Error("Model report did not contain a usable summary");
+      const report = completeGeneratedReportDraft(
+        modelDraft,
+        personality,
+        normalizedTargetContext,
+        scoredDimensions
+      );
+      if (!modelDraft?.summary) {
+        console.warn("[report] Model report draft was incomplete; returning server-completed report", {
+          stopReason: toolResult.stopReason,
+          hasToolUse: toolResult.toolUses.length > 0,
+          hasSelectedScenario: !!modelDraft?.selectedScenario,
+          hasStyleProfile: !!modelDraft?.styleProfile,
+        });
+      }
       const portableArtifacts = completePortableArtifacts(
         report,
         personality,
@@ -401,7 +400,10 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
 
       return NextResponse.json(responseData);
     } catch (parseError) {
-      console.warn("[report] Failed to parse report model JSON; asking client to retry", {
+      if (!(parseError instanceof ReportModelJsonError)) {
+        throw parseError;
+      }
+      console.warn("[report] Failed to parse report model JSON; returning deterministic fallback", {
         error: parseError instanceof Error ? parseError.message : String(parseError),
         stopReason: toolResult.stopReason,
         textPreview: toolResult.textBlocks.join("\n").slice(0, 600),
@@ -417,15 +419,9 @@ dimensions 中只需要输出 dimension 与 analysis；分数、倾向、证据�
             toolUse.input && typeof toolUse.input === "object"
               ? summarizeReportToolInputShape(toolUse.input as Record<string, unknown>)
               : undefined,
-        })),
+          })),
       });
-      return NextResponse.json(
-        {
-          error: "REPORT_MODEL_JSON_PARSE_FAILED",
-          detail: "模型报告格式异常，正在重试生成报告。",
-        },
-        { status: 502 }
-      );
+      return NextResponse.json(buildFallbackReport(personality, normalizedTargetContext, scoredDimensions));
     }
   } catch (error) {
     console.error("Report API error:", error);
@@ -622,7 +618,7 @@ function generatedReportFromToolUses(toolUses: LlmToolUse[]): GeneratedReportDra
   }
 
   try {
-    return normalizeGeneratedReportDraft(input);
+    return normalizeGeneratedReportDraft(input, { allowMissingSummary: true });
   } catch (error) {
     throw new ReportModelJsonError(error instanceof Error ? error.message : "Report tool input did not match schema");
   }
@@ -630,77 +626,58 @@ function generatedReportFromToolUses(toolUses: LlmToolUse[]): GeneratedReportDra
 
 function generatedReportFromText(raw: string): GeneratedReportDraft | null {
   try {
-    return normalizeGeneratedReportDraft(parseJsonObjectFromModel<unknown>(raw));
+    return normalizeGeneratedReportDraft(parseJsonObjectFromModel<unknown>(raw), {
+      allowMissingSummary: true,
+    });
   } catch {
     return null;
   }
 }
 
-function summarizeReportToolInputShape(input: Record<string, unknown>) {
-  const dimensions = Array.isArray(input.dimensions) ? input.dimensions : [];
+type CompletedGeneratedReportDraft = GeneratedReportDraft & {
+  summary: string;
+  tags: string[];
+};
+
+function completeGeneratedReportDraft(
+  draft: GeneratedReportDraft | null,
+  personality: ReturnType<typeof getPersonalityProfile>,
+  normalizedTargetContext: TargetContext,
+  scoredDimensions: ReturnType<typeof scoreQuestionnaireAnswers>
+): CompletedGeneratedReportDraft {
+  const fallback = buildFallbackReport(personality, normalizedTargetContext, scoredDimensions);
+  const fallbackDimensions = fallback.dimensions.map((dimension) => ({
+    dimension: dimension.dimension,
+    analysis: dimension.analysis,
+    evidence: dimension.evidence,
+  }));
+
   return {
-    summary: typeof input.summary,
-    tags: Array.isArray(input.tags) ? "array" : typeof input.tags,
-    styleOverview:
-      input.styleOverview && typeof input.styleOverview === "object"
-        ? Object.keys(input.styleOverview as Record<string, unknown>).join(",")
-        : typeof input.styleOverview,
-    collaborationManifesto: typeof input.collaborationManifesto,
-    collaborationSignature:
-      input.collaborationSignature && typeof input.collaborationSignature === "object"
-        ? Object.keys(input.collaborationSignature as Record<string, unknown>).join(",")
-        : typeof input.collaborationSignature,
-    overallAdvice: typeof input.overallAdvice,
-    recommendations: Array.isArray(input.recommendations) ? "array" : typeof input.recommendations,
-    promptTemplates: Array.isArray(input.promptTemplates) ? "array" : typeof input.promptTemplates,
-    dimensions: Array.isArray(input.dimensions) ? `array:${input.dimensions.length}` : typeof input.dimensions,
-    firstDimension:
-      dimensions[0] && typeof dimensions[0] === "object"
-        ? Object.keys(dimensions[0] as Record<string, unknown>).join(",")
-        : typeof dimensions[0],
+    selectedScenario: draft?.selectedScenario ?? fallback.selectedScenario ?? getReportTaskLabel(normalizedTargetContext),
+    styleProfile: draft?.styleProfile && isUsefulStyleProfile(draft.styleProfile)
+      ? draft.styleProfile
+      : fallback.styleProfile,
+    problems: draft?.problems?.length ? draft.problems : fallback.problems,
+    summary: draft?.summary?.trim() || fallback.summary,
+    tags: draft?.tags?.length ? draft.tags : fallback.tags,
+    styleOverview: draft?.styleOverview ?? fallback.styleOverview,
+    collaborationManifesto: draft?.collaborationManifesto ?? fallback.collaborationManifesto,
+    collaborationSignature: draft?.collaborationSignature ?? fallback.collaborationSignature,
+    overallAdvice: draft?.overallAdvice ?? fallback.overallAdvice,
+    recommendations: draft?.recommendations?.length ? draft.recommendations : fallback.recommendations,
+    promptTemplates: draft?.promptTemplates?.length ? draft.promptTemplates : fallback.promptTemplates,
+    dimensions: draft?.dimensions?.length ? draft.dimensions : fallbackDimensions,
   };
 }
 
-type GeneratedReportDraft = {
-  selectedScenario?: string;
-  styleProfile?: {
-    behaviors?: Array<{behavior: string; basedOn?: string; evidence?: string}>;
-    strengths?: string[];
-    weaknesses?: string[];
-    comparison?: {
-      scenario: string;
-      styles: Array<{type: string; approach: string; pros: string; cons: string}>;
-    };
-    uniqueness?: {
-      combination?: string;
-      similarRoles: string[];
-    };
-  };
-  problems?: Array<{
-    title: string;
-    symptom: string;
-    why: string;
-    howToFix: {
-      immediate: string;
-      example: string;
-      expectedResult: string;
-    };
-    basedOn: string;
-  }>;
-  summary: string;
-  tags: string[];
-  styleOverview?: Partial<ReportStyleOverview>;
-  collaborationManifesto?: string;
-  collaborationSignature?: Partial<CollaborationSignature>;
-  overallAdvice?: string;
-  recommendations?: ReportRecommendation[];
-  promptTemplates?: PromptTemplate[];
-  dimensions?: {
-    dimension: Dimension;
-    analysis?: string;
-    evidence?: string[];
-  }[];
-};
+function isUsefulStyleProfile(value: GeneratedReportDraft["styleProfile"]): boolean {
+  return Boolean(
+    value &&
+      ((value.behaviors?.length ?? 0) > 0 ||
+        (value.strengths?.length ?? 0) > 0 ||
+        (value.weaknesses?.length ?? 0) > 0)
+  );
+}
 
 function completeAdviceBundle(
   report: GeneratedReportDraft,
@@ -733,201 +710,4 @@ function completeAdviceBundle(
       ? report.promptTemplates
       : [getFallbackPromptTemplate(targetContext)],
   };
-}
-
-function normalizeGeneratedReportDraft(value: unknown): GeneratedReportDraft | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  const summary = toText(record.summary ?? record.overallSummary ?? record.overview ?? record.title);
-  if (!summary) return null;
-  return {
-    selectedScenario: toText(record.selectedScenario),
-    styleProfile: normalizeStyleProfile(record.styleProfile),
-    problems: Array.isArray(record.problems)
-      ? record.problems as GeneratedReportDraft["problems"]
-      : undefined,
-    summary,
-    tags: normalizeTextList(record.tags).slice(0, 4),
-    styleOverview: normalizeStyleOverview(record.styleOverview ?? record.glance ?? record.overviewCards),
-    collaborationManifesto: toText(record.collaborationManifesto ?? record.manifesto),
-    collaborationSignature: normalizeCollaborationSignature(
-      record.collaborationSignature ?? record.signature ?? record.funEnding
-    ),
-    overallAdvice: toText(record.overallAdvice ?? record.advice ?? record.nextStep),
-    recommendations: normalizeRecommendations(record.recommendations),
-    promptTemplates: normalizePromptTemplates(record.promptTemplates ?? record.prompts),
-    dimensions: normalizeGeneratedDimensions(record.dimensions),
-  };
-}
-
-function normalizeStyleProfile(value: unknown): GeneratedReportDraft["styleProfile"] | undefined {
-  const record = asRecord(value);
-  if (!record) return undefined;
-  const behaviors = Array.isArray(record.behaviors)
-    ? record.behaviors
-        .map((item) => {
-          const behaviorRecord = asRecord(item);
-          const behavior = toText(behaviorRecord?.behavior);
-          if (!behavior) return null;
-          return {
-            behavior,
-            basedOn: toText(behaviorRecord?.basedOn),
-            evidence: toText(behaviorRecord?.evidence),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-        .slice(0, 4)
-    : undefined;
-  const uniqueness = asRecord(record.uniqueness);
-  return {
-    behaviors,
-    strengths: normalizeTextList(record.strengths).slice(0, 3),
-    weaknesses: normalizeTextList(record.weaknesses).slice(0, 3),
-    uniqueness: uniqueness
-      ? {
-          combination: toText(uniqueness.combination),
-          similarRoles: normalizeTextList(uniqueness.similarRoles).slice(0, 4),
-        }
-      : undefined,
-  };
-}
-
-function normalizeStyleOverview(value: unknown): Partial<ReportStyleOverview> | undefined {
-  const record = asRecord(value);
-  if (!record) return undefined;
-  return {
-    corePattern: toText(record.corePattern ?? record.core ?? record.pattern),
-    strengthArea: toText(record.strengthArea ?? record.strength ?? record.scenario),
-    growthDirection: toText(record.growthDirection ?? record.growth ?? record.nextStep),
-  };
-}
-
-function normalizeCollaborationSignature(value: unknown): Partial<CollaborationSignature> | undefined {
-  const record = asRecord(value);
-  if (!record) {
-    const detail = toText(value);
-    return detail ? { detail } : undefined;
-  }
-  return {
-    detail: toText(record.detail ?? record.description ?? record.content ?? record.summary),
-  };
-}
-
-function normalizeGeneratedDimensions(value: unknown): GeneratedReportDraft["dimensions"] {
-  if (!Array.isArray(value)) return undefined;
-  const normalized = value.flatMap((item, index) => {
-    const record = asRecord(item);
-    if (!record) return [];
-    const dimension =
-      normalizeDimension(
-        record.dimension ?? record.dimensionKey ?? record.key ?? record.name ?? record.label ?? record.title
-      ) ?? REPORT_DIMENSIONS[index];
-    if (!dimension) return [];
-    const analysis =
-      toText(
-        record.analysis ??
-          record.detail ??
-          record.explanation ??
-          record.summary ??
-          record.description ??
-          record.reasoning ??
-          record.basis ??
-          record.insight ??
-          record.interpretation ??
-          record.finding ??
-          record.text ??
-          record.content
-      ) ?? collectRecordText(record, ["dimension", "dimensionKey", "key", "name", "label", "title"]);
-    return [{ dimension, analysis }];
-  });
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function normalizeRecommendations(value: unknown): ReportRecommendation[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const normalized = value.flatMap((item) => {
-    if (typeof item === "string") {
-      const detail = item.trim();
-      return detail ? [{ title: detail.slice(0, 24), detail }] : [];
-    }
-    const record = asRecord(item);
-    if (!record) return [];
-    const detail = toText(record.detail ?? record.description ?? record.content ?? record.advice);
-    const title = toText(record.title ?? record.name) ?? detail?.slice(0, 24);
-    return title && detail ? [{ title, detail }] : [];
-  });
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function normalizePromptTemplates(value: unknown): PromptTemplate[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const normalized = value.flatMap((item) => {
-    if (typeof item === "string") {
-      const prompt = item.trim();
-      return prompt ? [{ title: "可直接尝试的 Prompt", useCase: "下次使用 AI 时", prompt }] : [];
-    }
-    const record = asRecord(item);
-    if (!record) return [];
-    const prompt = toText(record.prompt ?? record.template ?? record.content);
-    if (!prompt) return [];
-    return [
-      {
-        title: toText(record.title ?? record.name) ?? "可直接尝试的 Prompt",
-        useCase: toText(record.useCase ?? record.scenario ?? record.when) ?? "下次使用 AI 时",
-        prompt,
-      },
-    ];
-  });
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function normalizeDimension(value: unknown): Dimension | undefined {
-  const text = toText(value);
-  if (!text) return undefined;
-  const compact = text.replace(/\s+/g, "");
-  return DIMENSION_ALIASES[text] ?? DIMENSION_ALIASES[compact] ?? DIMENSION_ALIASES[compact.toLowerCase()];
-}
-
-function collectRecordText(record: Record<string, unknown>, excludedKeys: string[]): string {
-  const excluded = new Set(excludedKeys);
-  return Object.entries(record)
-    .flatMap(([key, value]) => {
-      if (excluded.has(key)) return [];
-      const text = toText(value);
-      return text ? [text] : [];
-    })
-    .join("\n\n")
-    .trim();
-}
-
-function normalizeTextList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const text = toText(item);
-      return text ? [text] : [];
-    });
-  }
-  const text = toText(value);
-  return text ? text.split(/[、,，/|]/).map((item) => item.trim()).filter(Boolean) : [];
-}
-
-function toText(value: unknown): string | undefined {
-  if (typeof value === "string") return value.trim() || undefined;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  const record = asRecord(value);
-  if (!record) return undefined;
-  return (
-    toText(record.text) ??
-    toText(record.content) ??
-    toText(record.summary) ??
-    toText(record.title) ??
-    toText(record.detail) ??
-    toText(record.analysis)
-  );
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
