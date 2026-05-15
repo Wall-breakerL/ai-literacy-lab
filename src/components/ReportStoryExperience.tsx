@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, Download, FileText, MessageCircle, Share2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, Download, FileText, MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -41,9 +41,7 @@ type ReportStoryExperienceProps = {
 
 type PosterAsset = {
   blob: Blob;
-  file: File;
   filename: string;
-  url: string;
 };
 
 type DimensionMeta = {
@@ -310,29 +308,6 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openBlobImage(url: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-function isMobileBrowser() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia("(pointer: coarse)").matches;
-}
-
-function withShareTimeout(promise: Promise<void>, timeoutMs = 45_000) {
-  return Promise.race([
-    promise,
-    new Promise<void>((_, reject) => {
-      window.setTimeout(() => reject(new Error("share_timeout")), timeoutMs);
-    }),
-  ]);
-}
-
 function SpectrumBar({
   dimension,
   showScore = false,
@@ -548,9 +523,7 @@ export function ReportStoryExperience({
   const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [sharingPoster, setSharingPoster] = useState(false);
-  const [isMobileShareTarget, setIsMobileShareTarget] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
-  const [posterImageUrl, setPosterImageUrl] = useState("");
   const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
   const posterAssetRef = useRef<PosterAsset | null>(null);
@@ -585,13 +558,6 @@ export function ReportStoryExperience({
     window.setTimeout(() => setCopiedPrompt(false), 1500);
   };
 
-  useEffect(() => {
-    setIsMobileShareTarget(isMobileBrowser());
-    return () => {
-      if (posterAssetRef.current) URL.revokeObjectURL(posterAssetRef.current.url);
-    };
-  }, []);
-
   const getPosterAsset = async () => {
     const assetKey = [
       report.personality?.code ?? "",
@@ -603,9 +569,7 @@ export function ReportStoryExperience({
 
     if (posterAssetRef.current && posterAssetKeyRef.current === assetKey) return posterAssetRef.current;
     if (posterAssetRef.current) {
-      URL.revokeObjectURL(posterAssetRef.current.url);
       posterAssetRef.current = null;
-      setPosterImageUrl("");
     }
     if (posterAssetPromiseRef.current && posterAssetPromiseKeyRef.current === assetKey) {
       return posterAssetPromiseRef.current;
@@ -617,13 +581,10 @@ export function ReportStoryExperience({
       const filename = `${posterFileName(report)}.png`;
       const asset = {
         blob,
-        file: new File([blob], filename, { type: "image/png" }),
         filename,
-        url: URL.createObjectURL(blob),
       };
       posterAssetRef.current = asset;
       posterAssetKeyRef.current = assetKey;
-      setPosterImageUrl(asset.url);
       return asset;
     })().finally(() => {
       posterAssetPromiseRef.current = null;
@@ -633,18 +594,6 @@ export function ReportStoryExperience({
     posterAssetPromiseRef.current = promise;
     posterAssetPromiseKeyRef.current = assetKey;
     return promise;
-  };
-
-  const copyResultText = async () => {
-    const code = report.personality?.code ?? "AI-MBTI";
-    const name = report.personality?.name ?? "AI 协作画像";
-    const tagline = report.personality?.tagline ?? compactText(report.summary, 80);
-    const shareText = [
-      `我的 AI-MBTI 协作画像：${name}（${code}）`,
-      tagline,
-      typeof window !== "undefined" ? window.location.href : "",
-    ].filter(Boolean).join("\n");
-    await navigator.clipboard.writeText(shareText);
   };
 
   const handlePointerUp = (x: number) => {
@@ -676,59 +625,6 @@ export function ReportStoryExperience({
       setShareStatus("海报图片生成失败，请稍后再试。");
     } finally {
       setSharingPoster(false);
-    }
-  };
-
-  const handleNativeSharePoster = async () => {
-    if (sharingPoster) return;
-    setSharingPoster(true);
-    try {
-      setShareStatus("正在准备系统分享...");
-      const asset = await getPosterAsset();
-      const shareData: ShareData = {
-        title: `${report.personality?.name ?? "AI-MBTI"} · AI-MBTI 协作画像`,
-        text: "我的 AI-MBTI 协作画像",
-        files: [asset.file],
-      };
-      const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-
-      if (navigator.share && nav.canShare?.(shareData)) {
-        try {
-          await withShareTimeout(navigator.share(shareData));
-          setShareStatus("已打开系统分享面板。");
-        } catch (shareError) {
-          if (shareError instanceof DOMException && shareError.name === "AbortError") {
-            setShareStatus("已取消分享。");
-          } else {
-            console.error("Poster native share failed:", shareError);
-            openBlobImage(asset.url);
-            setShareStatus("系统分享失败，已打开图片页，可长按保存或转发。");
-          }
-        }
-        return;
-      }
-
-      openBlobImage(asset.url);
-      setShareStatus("当前浏览器不支持系统图片分享，已打开图片页，可长按保存或转发。");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setShareStatus("已取消分享。");
-      } else {
-        console.error("Poster native share failed:", error);
-        setShareStatus("海报图片生成或分享失败，请稍后再试。");
-      }
-    } finally {
-      setSharingPoster(false);
-    }
-  };
-
-  const handleCopyResult = async () => {
-    try {
-      await copyResultText();
-      setShareStatus("已复制结果文案。");
-    } catch (error) {
-      console.error("Copy result failed:", error);
-      setShareStatus("复制失败，请稍后再试。");
     }
   };
 
@@ -1014,31 +910,11 @@ export function ReportStoryExperience({
                 type="button"
                 onClick={handleSavePoster}
                 disabled={sharingPoster}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-raycast-blue/40 bg-raycast-blue/15 px-2 text-[12px] font-semibold text-raycast-blue transition hover:border-raycast-blue/60 hover:bg-raycast-blue/20 disabled:cursor-wait disabled:opacity-60"
+                className="col-span-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-raycast-blue/40 bg-raycast-blue/15 px-2 text-[12px] font-semibold text-raycast-blue transition hover:border-raycast-blue/60 hover:bg-raycast-blue/20 disabled:cursor-wait disabled:opacity-60"
               >
                 <Download className="h-3.5 w-3.5" />
                 {sharingPoster ? "生成中" : "保存图片"}
               </button>
-              {isMobileShareTarget ? (
-                <button
-                  type="button"
-                  onClick={handleNativeSharePoster}
-                  disabled={sharingPoster}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-[rgba(95,201,146,0.4)] bg-[rgba(95,201,146,0.15)] px-2 text-[12px] font-semibold text-[#5fc992] transition hover:border-[rgba(95,201,146,0.62)] hover:bg-[rgba(95,201,146,0.2)] disabled:cursor-wait disabled:opacity-60"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  系统分享
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleCopyResult}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-card-surface px-2 text-[12px] font-semibold text-light-gray transition hover:border-raycast-blue/40 hover:text-near-white"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  复制结果
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => setShowFullReport((value) => !value)}
@@ -1057,16 +933,6 @@ export function ReportStoryExperience({
               </button>
             </div>
             {shareStatus ? <p className="mt-2 text-center text-[11px] leading-relaxed text-dim-gray">{shareStatus}</p> : null}
-            {posterImageUrl ? (
-              <a
-                href={posterImageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex h-9 items-center justify-center rounded-full border border-border/70 bg-card-surface px-3 text-[12px] font-semibold text-light-gray transition hover:border-raycast-blue/40 hover:text-near-white"
-              >
-                打开已生成图片
-              </a>
-            ) : null}
           </section>
         )}
       </div>
