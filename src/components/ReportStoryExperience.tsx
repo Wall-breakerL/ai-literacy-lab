@@ -269,7 +269,6 @@ function TagBadge({ label, color }: { label: string; color: string }) {
 function SlideShell({
   children,
   primary = "#55b3ff",
-  secondary = "#0f172a",
 }: {
   children: ReactNode;
   primary?: string;
@@ -281,12 +280,10 @@ function SlideShell({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: -36, opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className="min-h-[560px] rounded-[8px] p-6 sm:p-8"
+      className="report-story-card min-h-[560px] rounded-[8px] border p-6 sm:p-8"
       style={{
-        backgroundColor: secondary,
-        border: `1px solid ${primary}28`,
-        color: "#f1f5f9",
-        boxShadow: `0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px ${primary}18`,
+        borderColor: `color-mix(in srgb, ${primary} 26%, var(--report-slide-border))`,
+        boxShadow: `var(--report-slide-shadow), 0 0 0 1px ${primary}18`,
       }}
     >
       {children}
@@ -713,7 +710,7 @@ export function ReportStoryExperience({
   }, [lastSlideIndex, showPoster]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#0f172a] to-[#1e293b] px-4 py-8 sm:px-6">
+    <main className="report-story-shell min-h-screen px-4 py-8 text-near-white sm:px-6" style={{ background: "var(--report-story-bg)" }}>
       <div className="mx-auto max-w-[430px]">
         {!showPoster ? (
           <section
@@ -728,7 +725,7 @@ export function ReportStoryExperience({
                 type="button"
                 onClick={() => setSlideIndex((value) => Math.max(0, value - 1))}
                 disabled={slideIndex === 0}
-                className="flex h-10 items-center gap-2 rounded-full border border-white/20 px-4 text-[13px] font-semibold text-white/70 hover:text-white disabled:invisible"
+                className="flex h-10 items-center gap-2 rounded-full border border-border/70 bg-card-surface px-4 text-[13px] font-semibold text-dim-gray hover:text-light-gray disabled:invisible"
               >
                 <ArrowLeft className="h-4 w-4" />
                 上一页
@@ -743,7 +740,7 @@ export function ReportStoryExperience({
                     className="h-2 rounded-full transition-all"
                     style={{
                       width: slideIndex === index ? 28 : 8,
-                      backgroundColor: slideIndex === index ? pPrimary : "rgba(255,255,255,0.25)",
+                      backgroundColor: slideIndex === index ? pPrimary : "rgb(var(--color-border))",
                     }}
                   />
                 ))}
@@ -765,12 +762,12 @@ export function ReportStoryExperience({
               <button
                 type="button"
                 onClick={() => router.push("/")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 text-[12px] font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card-surface px-3 text-[12px] font-semibold text-dim-gray transition hover:border-raycast-blue/40 hover:text-light-gray"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 首页
               </button>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/35">Result Poster</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-dim-gray">Result Poster</span>
             </div>
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <PosterPreview
@@ -806,7 +803,7 @@ export function ReportStoryExperience({
                 反馈
               </button>
             </div>
-            {shareStatus ? <p className="mt-2 text-center text-[11px] leading-relaxed text-white/45">{shareStatus}</p> : null}
+            {shareStatus ? <p className="mt-2 text-center text-[11px] leading-relaxed text-dim-gray">{shareStatus}</p> : null}
           </section>
         )}
       </div>
@@ -852,10 +849,6 @@ function PosterPreview({
       {/* 水墨晕染 */}
       <div className="pointer-events-none absolute -right-20 -top-20 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(178,34,34,0.18),transparent_65%)] blur-2xl" />
       <div className="pointer-events-none absolute -bottom-24 -left-16 h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(85,179,255,0.14),transparent_70%)] blur-2xl" />
-
-      {/* 卷轴竖线装饰 */}
-      <div className="pointer-events-none absolute bottom-10 left-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
-      <div className="pointer-events-none absolute bottom-10 right-3 top-10 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
 
       <div className="relative flex h-full flex-col p-4">
         {/* 顶部：头像 + 印章 + 人格名 */}

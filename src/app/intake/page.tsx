@@ -10,6 +10,7 @@ import {
   validateIntakeForm,
   type IntakeForm,
 } from "@/lib/intakeState";
+import { scenarioOptionsForRole } from "@/lib/scenarioOptions";
 
 const TOOL_OPTIONS = ["ChatGPT", "Claude", "Gemini", "文心一言", "通义千问", "豆包", "Kimi", "Copilot", "Cursor"];
 
@@ -27,22 +28,6 @@ const ROLE_OPTIONS = [
   "销售/商务",
 ];
 
-const GENERIC_SCENARIOS = ["写作整理", "学习新知", "头脑风暴", "做PPT报告", "日常决策"];
-
-const ROLE_SCENARIOS: Record<string, string[]> = {
-  "程序员/开发者": ["写代码调试", "查错排障", "理解文档", "设计方案", "代码审查"],
-  "产品经理": ["写需求文档", "整理用户反馈", "竞品分析", "头脑风暴", "做汇报"],
-  "设计师": ["生成创意", "整理参考", "写设计说明", "优化文案", "做提案"],
-  "数据分析师": ["清洗数据", "写分析报告", "解释指标", "生成图表", "查询SQL"],
-  "编辑/运营": ["写文案", "改标题", "排内容计划", "整理素材", "做活动方案"],
-  "市场/营销": ["写营销文案", "用户洞察", "活动策划", "竞品分析", "复盘总结"],
-  "学生": ["课程学习", "整理笔记", "写作业", "准备考试", "做展示"],
-  "研究生/博士": ["读论文", "整理实验", "写论文", "改摘要", "准备汇报"],
-  "教师/讲师": ["备课设计", "出题批改", "整理讲义", "解释概念", "课堂活动"],
-  "咨询/顾问": ["行业研究", "写方案", "客户沟通", "整理访谈", "做汇报"],
-  "销售/商务": ["客户跟进", "写邮件", "整理话术", "分析线索", "做提案"],
-};
-
 export default function IntakePage() {
   const router = useRouter();
   const [role, setRole] = useState("");
@@ -55,12 +40,7 @@ export default function IntakePage() {
   const [customTool, setCustomTool] = useState("");
   const [error, setError] = useState("");
 
-  const scenarioOptions = useMemo(() => {
-    if (selectedRoleOption && selectedRoleOption !== "other") {
-      return ROLE_SCENARIOS[selectedRoleOption] ?? GENERIC_SCENARIOS;
-    }
-    return GENERIC_SCENARIOS;
-  }, [selectedRoleOption]);
+  const scenarioOptions = useMemo(() => scenarioOptionsForRole(selectedRoleOption), [selectedRoleOption]);
 
   const recentUse = useMemo(() => {
     const values = [...selectedScenarios];
