@@ -1,10 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, FileText, MessageCircle, Share2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, Download, FileText, MessageCircle, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MutableRefObject, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { PersonalityAvatar } from "@/components/PersonalityAvatar";
 import { getPersonalityTraits } from "@/lib/personalityProfiles";
 import { getFallbackPromptTemplate } from "@/lib/reportDisplayContext";
@@ -37,6 +37,13 @@ type ReportStoryExperienceProps = {
   signature?: { headline: string; detail: string } | null;
   fullReport: ReactNode;
   feedbackPanel?: ReactNode;
+};
+
+type PosterAsset = {
+  blob: Blob;
+  file: File;
+  filename: string;
+  url: string;
 };
 
 type DimensionMeta = {
@@ -155,7 +162,7 @@ function loadImageElement(src: string) {
   });
 }
 
-async function renderFallbackPosterCanvas(
+async function renderPosterImageCanvas(
   report: ReportPageModel,
   tags: Array<{ label: string; color: string }>
 ) {
@@ -324,30 +331,6 @@ function withShareTimeout(promise: Promise<void>, timeoutMs = 45_000) {
       window.setTimeout(() => reject(new Error("share_timeout")), timeoutMs);
     }),
   ]);
-}
-
-function withPosterRenderTimeout(promise: Promise<HTMLCanvasElement>, timeoutMs = 18_000) {
-  return Promise.race([
-    promise,
-    new Promise<HTMLCanvasElement>((_, reject) => {
-      window.setTimeout(() => reject(new Error("poster_render_timeout")), timeoutMs);
-    }),
-  ]);
-}
-
-function preparePosterCloneForCanvas(clonedDocument: Document) {
-  const style = clonedDocument.createElement("style");
-  style.textContent = `
-    [data-poster-capture-root],
-    [data-poster-capture-root] * {
-      font-family: Inter, Arial, "PingFang SC", "Microsoft YaHei", sans-serif !important;
-    }
-    [data-poster-capture-root] .font-brush,
-    [data-poster-capture-root] .font-serif-cn {
-      font-family: "STKaiti", "KaiTi", "Songti SC", serif !important;
-    }
-  `;
-  clonedDocument.head.appendChild(style);
 }
 
 function SpectrumBar({
@@ -565,12 +548,15 @@ export function ReportStoryExperience({
   const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [sharingPoster, setSharingPoster] = useState(false);
+  const [isMobileShareTarget, setIsMobileShareTarget] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
   const [posterImageUrl, setPosterImageUrl] = useState("");
   const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
-  const posterRef = useRef<HTMLElement | null>(null);
-  const posterImageUrlRef = useRef("");
+  const posterAssetRef = useRef<PosterAsset | null>(null);
+  const posterAssetKeyRef = useRef("");
+  const posterAssetPromiseRef = useRef<Promise<PosterAsset> | null>(null);
+  const posterAssetPromiseKeyRef = useRef("");
 
   const strongest = useMemo(() => strongestDimension(report.dimensions), [report.dimensions]);
   const strongestAccent = getSpectrumAccent(strongest);
@@ -600,14 +586,66 @@ export function ReportStoryExperience({
   };
 
   useEffect(() => {
-    posterImageUrlRef.current = posterImageUrl;
-  }, [posterImageUrl]);
-
-  useEffect(() => {
+    setIsMobileShareTarget(isMobileBrowser());
     return () => {
-      if (posterImageUrlRef.current) URL.revokeObjectURL(posterImageUrlRef.current);
+      if (posterAssetRef.current) URL.revokeObjectURL(posterAssetRef.current.url);
     };
   }, []);
+
+  const getPosterAsset = async () => {
+    const assetKey = [
+      report.personality?.code ?? "",
+      report.personality?.name ?? "",
+      report.personality?.tagline ?? "",
+      report.summary,
+      tags.map((tag) => tag.label).join(","),
+    ].join("|");
+
+    if (posterAssetRef.current && posterAssetKeyRef.current === assetKey) return posterAssetRef.current;
+    if (posterAssetRef.current) {
+      URL.revokeObjectURL(posterAssetRef.current.url);
+      posterAssetRef.current = null;
+      setPosterImageUrl("");
+    }
+    if (posterAssetPromiseRef.current && posterAssetPromiseKeyRef.current === assetKey) {
+      return posterAssetPromiseRef.current;
+    }
+
+    const promise = (async () => {
+      const canvas = await renderPosterImageCanvas(report, tags.slice(0, 3));
+      const blob = await canvasToBlob(canvas);
+      const filename = `${posterFileName(report)}.png`;
+      const asset = {
+        blob,
+        file: new File([blob], filename, { type: "image/png" }),
+        filename,
+        url: URL.createObjectURL(blob),
+      };
+      posterAssetRef.current = asset;
+      posterAssetKeyRef.current = assetKey;
+      setPosterImageUrl(asset.url);
+      return asset;
+    })().finally(() => {
+      posterAssetPromiseRef.current = null;
+      posterAssetPromiseKeyRef.current = "";
+    });
+
+    posterAssetPromiseRef.current = promise;
+    posterAssetPromiseKeyRef.current = assetKey;
+    return promise;
+  };
+
+  const copyResultText = async () => {
+    const code = report.personality?.code ?? "AI-MBTI";
+    const name = report.personality?.name ?? "AI 协作画像";
+    const tagline = report.personality?.tagline ?? compactText(report.summary, 80);
+    const shareText = [
+      `我的 AI-MBTI 协作画像：${name}（${code}）`,
+      tagline,
+      typeof window !== "undefined" ? window.location.href : "",
+    ].filter(Boolean).join("\n");
+    await navigator.clipboard.writeText(shareText);
+  };
 
   const handlePointerUp = (x: number) => {
     if (touchStartX.current == null || showPoster) return;
@@ -625,57 +663,36 @@ export function ReportStoryExperience({
     }, 80);
   };
 
-  const handleSharePoster = async () => {
-    if (!posterRef.current || sharingPoster) return;
+  const handleSavePoster = async () => {
+    if (sharingPoster) return;
     setSharingPoster(true);
-    setShareStatus("");
-    if (posterImageUrlRef.current) {
-      URL.revokeObjectURL(posterImageUrlRef.current);
-      setPosterImageUrl("");
-    }
-    const mobileBrowser = isMobileBrowser();
-
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      let usedFallbackRenderer = false;
-      let canvas: HTMLCanvasElement;
-      try {
-        canvas = await withPosterRenderTimeout(
-          html2canvas(posterRef.current, {
-            backgroundColor: null,
-            imageTimeout: 8000,
-            logging: false,
-            onclone: preparePosterCloneForCanvas,
-            scale: Math.min(mobileBrowser ? 1.75 : 2.5, window.devicePixelRatio || 2),
-            useCORS: true,
-          })
-        );
-      } catch (renderError) {
-        console.warn("Poster DOM capture failed; using canvas fallback:", renderError);
-        usedFallbackRenderer = true;
-        canvas = await renderFallbackPosterCanvas(report, tags.slice(0, 3));
-      }
-      const blob = await canvasToBlob(canvas);
-      const filename = `${posterFileName(report)}.png`;
-      const file = new File([blob], filename, { type: "image/png" });
+      setShareStatus("正在生成海报图片...");
+      const asset = await getPosterAsset();
+      downloadBlob(asset.blob, asset.filename);
+      setShareStatus("已下载海报图片。");
+    } catch (error) {
+      console.error("Poster save failed:", error);
+      setShareStatus("海报图片生成失败，请稍后再试。");
+    } finally {
+      setSharingPoster(false);
+    }
+  };
+
+  const handleNativeSharePoster = async () => {
+    if (sharingPoster) return;
+    setSharingPoster(true);
+    try {
+      setShareStatus("正在准备系统分享...");
+      const asset = await getPosterAsset();
       const shareData: ShareData = {
         title: `${report.personality?.name ?? "AI-MBTI"} · AI-MBTI 协作画像`,
         text: "我的 AI-MBTI 协作画像",
-        files: [file],
+        files: [asset.file],
       };
       const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-      const showMobileImageFallback = (status: string) => {
-        const imageUrl = URL.createObjectURL(blob);
-        setPosterImageUrl(imageUrl);
-        try {
-          openBlobImage(imageUrl);
-          setShareStatus(status);
-        } catch {
-          setShareStatus("已生成图片，可点下方入口打开后长按保存。");
-        }
-      };
 
-      if (mobileBrowser && navigator.share && nav.canShare?.(shareData)) {
+      if (navigator.share && nav.canShare?.(shareData)) {
         try {
           await withShareTimeout(navigator.share(shareData));
           setShareStatus("已打开系统分享面板。");
@@ -684,32 +701,34 @@ export function ReportStoryExperience({
             setShareStatus("已取消分享。");
           } else {
             console.error("Poster native share failed:", shareError);
-            showMobileImageFallback("系统分享失败，已打开图片页，可长按保存或转发。");
+            openBlobImage(asset.url);
+            setShareStatus("系统分享失败，已打开图片页，可长按保存或转发。");
           }
         }
         return;
       }
 
-      if (!mobileBrowser) {
-        downloadBlob(blob, filename);
-        setShareStatus(usedFallbackRenderer ? "已使用兼容模式生成并下载海报图片。" : "已下载海报图片。");
-        return;
-      }
-
-      showMobileImageFallback(
-        usedFallbackRenderer
-          ? "已使用兼容模式生成图片，并打开图片页，可长按保存或转发。"
-          : "当前手机浏览器不支持直接分享图片，已打开图片页，可长按保存或转发。"
-      );
+      openBlobImage(asset.url);
+      setShareStatus("当前浏览器不支持系统图片分享，已打开图片页，可长按保存或转发。");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setShareStatus("已取消分享。");
       } else {
-        console.error("Poster share failed:", error);
-        setShareStatus(mobileBrowser ? "海报图片生成或分享失败，请使用系统截图保存海报。" : "海报图片生成失败，请稍后再试。");
+        console.error("Poster native share failed:", error);
+        setShareStatus("海报图片生成或分享失败，请稍后再试。");
       }
     } finally {
       setSharingPoster(false);
+    }
+  };
+
+  const handleCopyResult = async () => {
+    try {
+      await copyResultText();
+      setShareStatus("已复制结果文案。");
+    } catch (error) {
+      console.error("Copy result failed:", error);
+      setShareStatus("复制失败，请稍后再试。");
     }
   };
 
@@ -988,19 +1007,38 @@ export function ReportStoryExperience({
               <PosterPreview
                 report={report}
                 tags={tags.slice(0, 3)}
-                posterRef={posterRef}
               />
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={handleSharePoster}
+                onClick={handleSavePoster}
                 disabled={sharingPoster}
                 className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-raycast-blue/40 bg-raycast-blue/15 px-2 text-[12px] font-semibold text-raycast-blue transition hover:border-raycast-blue/60 hover:bg-raycast-blue/20 disabled:cursor-wait disabled:opacity-60"
               >
-                <Share2 className="h-3.5 w-3.5" />
-                {sharingPoster ? "生成中" : "分享"}
+                <Download className="h-3.5 w-3.5" />
+                {sharingPoster ? "生成中" : "保存图片"}
               </button>
+              {isMobileShareTarget ? (
+                <button
+                  type="button"
+                  onClick={handleNativeSharePoster}
+                  disabled={sharingPoster}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-[rgba(95,201,146,0.4)] bg-[rgba(95,201,146,0.15)] px-2 text-[12px] font-semibold text-[#5fc992] transition hover:border-[rgba(95,201,146,0.62)] hover:bg-[rgba(95,201,146,0.2)] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  系统分享
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCopyResult}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-border/70 bg-card-surface px-2 text-[12px] font-semibold text-light-gray transition hover:border-raycast-blue/40 hover:text-near-white"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  复制结果
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowFullReport((value) => !value)}
@@ -1042,11 +1080,9 @@ export function ReportStoryExperience({
 function PosterPreview({
   report,
   tags,
-  posterRef,
 }: {
   report: ReportPageModel;
   tags: Array<{ label: string; color: string }>;
-  posterRef: MutableRefObject<HTMLElement | null>;
 }) {
   const code = report.personality?.code ?? "AI-MBTI";
   const name = report.personality?.name ?? "AI 协作画像";
@@ -1055,8 +1091,6 @@ function PosterPreview({
 
   return (
     <article
-      ref={posterRef}
-      data-poster-capture-root
       className="relative aspect-[9/16] overflow-hidden rounded-[10px] border border-white/10 bg-gradient-to-b from-[#0a0d14] via-[#11151c] to-[#0c0f15] text-white shadow-[0_30px_90px_rgba(8,10,16,0.55)]"
       style={{ width: "min(100%, calc((100svh - 144px) * 9 / 16))" }}
       onContextMenu={(event) => {
