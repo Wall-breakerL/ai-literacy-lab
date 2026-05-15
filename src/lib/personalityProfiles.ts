@@ -42,15 +42,6 @@ export const PERSONALITY_PROFILES: Record<string, PersonalityProfile> = {
   CETL: profile("CETL", "研究搭档", "一起探索，快速迭代", "#ff6363", "#07080a", "#5fc992"),
 };
 
-const BALANCED_PROFILE: PersonalityProfile = {
-  code: "BALANCED",
-  name: "待观察型",
-  tagline: "这次答案还不够分化",
-  signatureHeadline: "待观察型：先看维度，再下结论",
-  avatarPrompt: `${PROFILE_STYLE}; neutral AI collaboration archetype; balanced scores; palette #55b3ff, #07080a, #5fc992; simple friendly gender-neutral face; no exact copy of any official MBTI or 16Personalities character`,
-  colors: { primary: "#55b3ff", secondary: "#07080a", accent: "#5fc992" },
-};
-
 function profile(
   code: string,
   name: string,
@@ -77,11 +68,6 @@ export interface PersonalityTraits {
 }
 
 export const PERSONALITY_TRAITS: Record<string, PersonalityTraits> = {
-  BALANCED: {
-    essence: "先看维度，再下结论",
-    traits: ["本次答案靠近中线", "强弱倾向还不明显", "更适合先看维度明细"],
-    goldenLine: "这次结果更像一张草图，先别急着给自己贴固定标签",
-  },
   IFAG: {
     essence: "先谋全局，后动一子",
     traits: ["先画蓝图，再让 AI 上场", "不轻信结果，逐项核对", "改一处，必先看全局"],
@@ -169,12 +155,6 @@ export function getPersonalityTraits(code: string): PersonalityTraits {
 }
 
 export const PERSONALITY_WORKFLOWS: Record<string, string> = {
-  BALANCED: [
-    "1. 先让 AI 复述目标：确认任务、限制和交付物是否清楚。",
-    "2. 选一个最真实的小场景：只围绕最近一次使用 AI 的具体任务继续测试。",
-    "3. 标出你更自然的做法：看到两个都合理的选项时，选更常发生的那一个。",
-    "4. 用维度明细复盘：先看哪一维最偏离中线，再决定下次怎么调整协作方式。",
-  ].join("\n"),
   IFAG: [
     "1. 先和 AI 对齐目标：让它复述要解决的问题，并列出输入、限制、交付物和成功标准。",
     "2. 把方案画成结构图：让 AI 列模块清单，标注每个模块依赖什么、风险在哪。",
@@ -280,10 +260,6 @@ export function getPersonalityWorkflow(code: string): string {
 export function getPersonalityCode(dimensions: DimensionReport[]): string {
   const byDimension = new Map(dimensions.map((dimension) => [dimension.dimension, dimension]));
   const pct = (dimension: DimensionReport | undefined) => dimension?.scorePercent ?? dimension?.score ?? 50;
-  const scores = ["Relation", "Workflow", "Epistemic", "RepairScope"]
-    .map((dimension) => pct(byDimension.get(dimension as DimensionReport["dimension"])));
-  if (scores.every((score) => Math.abs(score - 50) <= 5)) return "BALANCED";
-
   return [
     pct(byDimension.get("Relation")) >= 50 ? "C" : "I",
     pct(byDimension.get("Workflow")) >= 50 ? "F" : "E",
@@ -293,6 +269,5 @@ export function getPersonalityCode(dimensions: DimensionReport[]): string {
 }
 
 export function getPersonalityProfile(code: string): PersonalityProfile {
-  if (code === "BALANCED") return BALANCED_PROFILE;
   return PERSONALITY_PROFILES[code] ?? PERSONALITY_PROFILES.CEAL;
 }

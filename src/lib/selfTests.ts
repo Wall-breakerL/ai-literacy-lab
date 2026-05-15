@@ -705,7 +705,7 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
       ]);
       assert(getPersonalityCode(scored) === "CFAG", `预期 CFAG，实际 ${getPersonalityCode(scored)}`);
     }),
-    test("AI-MBTI", "低区分度中点答案不强行判为董事长", () => {
+    test("AI-MBTI", "中点答案按 >= 50 规则归入 16 型", () => {
       const scored = scoreQuestionnaireAnswers(
         DIMENSIONS.flatMap((dimension) => [
           answer(dimension, 2),
@@ -715,8 +715,8 @@ export function runAiMbtiSelfTests(): SelfTestResult[] {
         ])
       );
       const code = getPersonalityCode(scored);
-      assert(code === "BALANCED", `中点答案应返回 BALANCED，实际 ${code}`);
-      assert(getPersonalityProfile(code).name === "待观察型", "BALANCED 应返回中性画像");
+      assert(code === "CFAG", `中点答案应按 >= 50 规则返回 CFAG，实际 ${code}`);
+      assert(getPersonalityProfile(code).name === "董事长", "CFAG 应返回董事长画像");
     }),
     test("AI-MBTI", "16 型人格配置完整", () => {
       const codes = Object.keys(PERSONALITY_PROFILES);
