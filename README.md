@@ -75,24 +75,24 @@
     </tr>
     <tr>
       <td><b>Workflow</b> 工作流程</td>
-      <td>F / E</td>
-      <td>🟣 Framed 框架型</td>
+      <td>E / F</td>
       <td>🩵 Exploratory 探索型</td>
-      <td>结构 → 流动</td>
+      <td>🟣 Framed 框架型</td>
+      <td>流动 → 结构</td>
     </tr>
     <tr>
       <td><b>Epistemic</b> 认知态度</td>
-      <td>A / T</td>
-      <td>⬜ Auditing 审计型</td>
+      <td>T / A</td>
       <td>🟡 Trusting 信任型</td>
-      <td>谨慎 → 信任</td>
+      <td>⬜ Auditing 审计型</td>
+      <td>信任 → 谨慎</td>
     </tr>
     <tr>
       <td><b>RepairScope</b> 修复范围</td>
-      <td>G / L</td>
-      <td>🟤 Global 全局重评</td>
+      <td>L / G</td>
       <td>🟢 Local 局部调整</td>
-      <td>宏观 → 微观</td>
+      <td>🟤 Global 全局重评</td>
+      <td>微观 → 宏观</td>
     </tr>
   </tbody>
 </table>
@@ -102,9 +102,9 @@
 | 维度 | 低分端色 | 高分端色 |
 |------|---------|---------|
 | Relation | `#2563eb` 深蓝 | `#f97316` 橙红 |
-| Workflow | `#4f46e5` 靛青 | `#14b8a6` 青绿 |
-| Epistemic | `#64748b` 石墨灰 | `#fbbf24` 金黄 |
-| RepairScope | `#8b5cf6` 紫罗兰 | `#10b981` 翠绿 |
+| Workflow | `#14b8a6` 青绿 | `#4f46e5` 靛青 |
+| Epistemic | `#fbbf24` 金黄 | `#64748b` 石墨灰 |
+| RepairScope | `#10b981` 翠绿 | `#8b5cf6` 紫罗兰 |
 
 ---
 
